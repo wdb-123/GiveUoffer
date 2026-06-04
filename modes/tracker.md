@@ -2,6 +2,18 @@
 
 Lee y muestra `data/applications.md`.
 
+Para cola de acciones, vencimientos y eventos historicos, usa:
+
+```bash
+node tracker-workflow.mjs --summary
+```
+
+Para registrar un evento sin cambiar el formato principal de `applications.md`:
+
+```bash
+node tracker-workflow.mjs --add-event {num} --event applied --next-action "Follow up" --due YYYY-MM-DD
+```
+
 **Formato del tracker:**
 ```markdown
 | # | Fecha | Empresa | Rol | Score | Estado | PDF | Report |

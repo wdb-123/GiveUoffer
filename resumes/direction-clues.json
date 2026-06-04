@@ -1,0 +1,255 @@
+{
+  "01-robotics-system-engineer.md": {
+    "direction": "机器人系统工程师",
+    "jdSignals": [
+      "机器人系统集成、整机联调、运动控制系统、机械臂/关节/底盘",
+      "EtherCAT、CANopen、CiA402、PDO/SDO、实时 Linux、1kHz 控制周期",
+      "ROS2、MoveIt、URDF、机器人软件生态、现场问题定位"
+    ],
+    "keywords": [
+      "EtherCAT",
+      "CANopen",
+      "CiA402",
+      "ROS2",
+      "MoveIt",
+      "RT-Linux",
+      "CSP/CST",
+      "多关节同步",
+      "现场问题闭环"
+    ],
+    "projectOrder": [
+      "EtherCAT 通信稳定性与多关节压力测试",
+      "eRob 机器人关节通信 SDK 与软件生态",
+      "机器人仿真与 NVIDIA / Isaac 生态探索"
+    ],
+    "strengthen": [
+      "把掉 OP、多电机 CSP、主站掉线写成复杂机器人系统问题闭环，而不是简单测试。",
+      "摘要前两句突出真实机器人系统、工业通信、实时调试和跨部门推动。",
+      "技能区优先放通信、控制模式、实时系统，再放 AI 工具。"
+    ],
+    "avoid": [
+      "不要包装成整机控制负责人或 MPC/whole-body control 专家。",
+      "不要把 RAG/Agent 放到前面抢主叙事。"
+    ],
+    "evidence": [
+      "eRob SDK 覆盖 EtherCAT/CANopen/CAN/ROS2/MoveIt/URDF。",
+      "参与 EtherCAT 掉 OP、首次启动无法进入 OP、多电机 CSP 异常、主站掉线问题定位。",
+      "熟悉 SOEM/IGH EtherCAT、CiA402、PDO/SDO、DC Sync、SM Sync。"
+    ],
+    "gaps": [
+      "C++ 深度、运动控制算法、整机控制策略需要按 JD 谨慎表述。"
+    ]
+  },
+  "02-robotics-software-sdk-engineer.md": {
+    "direction": "机器人软件 / SDK 工程师",
+    "jdSignals": [
+      "SDK 平台、接口封装、Demo 示例、开发者文档、客户接入",
+      "ROS2/MoveIt/URDF、Linux、Python/C++、开源仓库维护",
+      "机器人软件生态、技术支持工具、问题复现脚本"
+    ],
+    "keywords": [
+      "SDK",
+      "API",
+      "Demo",
+      "ROS2",
+      "MoveIt",
+      "URDF",
+      "SOEM",
+      "IGH EtherCAT",
+      "文档体系",
+      "开发者生态"
+    ],
+    "projectOrder": [
+      "eRob 机器人关节 SDK 与开源生态建设",
+      "SDK 文档与知识自动化系统",
+      "EtherCAT 复杂问题复现与工程闭环"
+    ],
+    "strengthen": [
+      "强调把底层通信能力产品化成客户可用的软件接口。",
+      "把开源仓库、周下载量、Demo、FAQ、文档写成 SDK 生态成果。",
+      "把 AI 工具能力写成研发提效和文档自动化能力。"
+    ],
+    "avoid": [
+      "不要把自己写成纯算法工程师。",
+      "不要过度强调售前/解决方案，除非 JD 明确要求客户侧工作。"
+    ],
+    "evidence": [
+      "独立推进 eRob SDK 开源，覆盖 CAN、CANopen、EtherCAT。",
+      "GitHub 仓库周下载量超过 50 次、月均约 240 次。",
+      "建设 ROS2/MoveIt/URDF 相关资源。"
+    ],
+    "gaps": [
+      "如果 JD 强 C++ 框架设计，需要补充具体模块边界、错误处理、测试和接口设计细节。"
+    ]
+  },
+  "03-embodied-ai-application-engineer.md": {
+    "direction": "具身智能应用工程师",
+    "jdSignals": [
+      "Isaac Sim/Isaac Lab、机器人仿真、ROS2、MoveIt、URDF/STL",
+      "VLA/VLM、机器人 AI 应用验证、机械臂展示与调试",
+      "仿真到真实、机器人应用 demo、具身智能生态"
+    ],
+    "keywords": [
+      "Isaac Sim",
+      "Isaac Lab",
+      "ROS2",
+      "MoveIt",
+      "URDF",
+      "STL",
+      "VLA/VLM",
+      "机器人应用验证",
+      "仿真集成"
+    ],
+    "projectOrder": [
+      "NVIDIA / Isaac 机器人仿真与具身智能生态探索",
+      "eRob 机器人关节软件生态建设",
+      "机器人行业知识数据与 AI Agent 系统"
+    ],
+    "strengthen": [
+      "先讲机器人硬件理解 + 仿真生态接入，再讲 AI 系统。",
+      "把 Isaac、ROS2、MoveIt、URDF/STL 写成具身应用验证链路。",
+      "用 NVIDIA Inception 和 AI 展区项目提升具身方向可信度。"
+    ],
+    "avoid": [
+      "不要声称有大规模强化学习或模仿学习训练经验。",
+      "不要把关注 VLA/VLM 写成已落地模型训练成果。"
+    ],
+    "evidence": [
+      "参与 eRob 关节在 NVIDIA / Isaac 生态中的导入与展示。",
+      "支持 AI 展区机械臂项目调试、实时内核系统安装和交付支持。",
+      "有 ROS2/MoveIt/URDF 和机器人关节通信基础。"
+    ],
+    "gaps": [
+      "需要补一个可展示 Isaac/ROS2 小 demo，支撑具身应用验证方向。"
+    ]
+  },
+  "04-embodied-data-infra-engineer.md": {
+    "direction": "具身智能数据基建工程师",
+    "jdSignals": [
+      "机器人训练数据、多模态数据、数据治理、数据质量、数据闭环",
+      "图像/视频/3D/轨迹/状态/动作/日志/语言指令",
+      "ETL、对象存储、数据版本、标注质检、DataOps/MLOps、Evidence API"
+    ],
+    "keywords": [
+      "多模态数据",
+      "机器人训练数据",
+      "数据治理",
+      "数据质量",
+      "Evidence API",
+      "失败样本回流",
+      "ROS bag/MCAP",
+      "MinIO",
+      "DVC",
+      "Label Studio",
+      "MLflow"
+    ],
+    "projectOrder": [
+      "ZeroErr GPT / TechChat 机器人行业知识数据平台",
+      "eRob 机器人关节软件生态与数据来源理解",
+      "EtherCAT 异常数据排查与质量闭环"
+    ],
+    "strengthen": [
+      "把 RAG 项目从问答系统包装成知识数据平台和数据治理闭环。",
+      "把 EtherCAT 日志、错误码、对象字典、状态、轨迹映射成机器人数据来源理解。",
+      "把 Top-10 召回、标准测试集、失败样本回流写成数据质量与评测体系。"
+    ],
+    "avoid": [
+      "不要写成 Spark/Flink/Hive 生产大数据工程师。",
+      "不要伪造 OpenMMLab/SAM/检测分割训练经验。",
+      "不要声称做过大规模机器人训练数据平台生产经验。"
+    ],
+    "evidence": [
+      "处理产品手册、通信协议、对象字典、错误码、FAQ、售后经验、表格和图片。",
+      "建立约 1000 条标准测试集，Top-10 召回率约 98.0%。",
+      "设计 Evidence API 和失败样本回流机制。"
+    ],
+    "gaps": [
+      "短期补 ROS bag/MCAP、DVC/MinIO、Label Studio/CVAT、PyTorch Dataset/DataLoader。",
+      "建议做机器人多模态数据集构建 Pipeline demo。"
+    ]
+  },
+  "05-ai-robotics-solution-engineer.md": {
+    "direction": "AI + 机器人解决方案工程师",
+    "jdSignals": [
+      "AI 解决方案、售前售后、客户问题闭环、技术项目推进",
+      "机器人产品、知识库、Agent、私有化部署、客户交付",
+      "跨部门协作、技术方案、生态合作、开发者支持"
+    ],
+    "keywords": [
+      "解决方案",
+      "客户问题闭环",
+      "RAG",
+      "Agent",
+      "Evidence API",
+      "售前售后",
+      "技术文档",
+      "NVIDIA Inception",
+      "开发者生态"
+    ],
+    "projectOrder": [
+      "ZeroErr GPT / TechChat 售前售后 AI 系统",
+      "eRob 机器人关节 SDK 与客户问题闭环",
+      "NVIDIA Inception 生态合作"
+    ],
+    "strengthen": [
+      "优先讲客户价值、重复咨询减少、知识回流、跨部门推进。",
+      "把技术细节压缩成支撑交付的能力，不把底层通信写太满。",
+      "强调能把研发、技术支持、客户之间的问题转成可运营系统。"
+    ],
+    "avoid": [
+      "不要写得像纯销售或纯项目管理。",
+      "不要弱化技术可信度，至少保留 SDK、协议、AI 系统架构证据。"
+    ],
+    "evidence": [
+      "售前售后重复产品咨询减少约 50%。",
+      "推动 NVIDIA Inception 申报、路演与生态合作，Top 10/340。",
+      "将客户问题转化为 FAQ、文档、Demo、知识库和技术支持话术。"
+    ],
+    "gaps": [
+      "需要根据 JD 决定是否突出商务/客户侧，避免偏离技术岗位。"
+    ]
+  },
+  "06-enterprise-ai-rag-engineer.md": {
+    "direction": "企业级 AI / RAG / Agent 工程师",
+    "jdSignals": [
+      "RAG、Agent、企业知识库、LLM 应用、OpenAI-compatible API",
+      "文档解析、混合检索、重排、Evidence、评测、失败样本回流",
+      "FastAPI、CLI、OpenWebUI、Dify、LangChain、私有化部署"
+    ],
+    "keywords": [
+      "RAG",
+      "Agent",
+      "Evidence API",
+      "OpenAI-compatible API",
+      "FastAPI",
+      "vLLM",
+      "Qwen",
+      "DeepSeek",
+      "混合检索",
+      "重排",
+      "自动化评测"
+    ],
+    "projectOrder": [
+      "ZeroErr GPT / TechChat 企业级 RAG / Agent 系统",
+      "机器人行业知识治理与客户问题闭环",
+      "AI 原生组织与数字化方案探索"
+    ],
+    "strengthen": [
+      "摘要第一段直接讲 RAG/Agent 架构、数据治理、评测体系和业务闭环。",
+      "机器人经历只作为复杂行业知识和工程资料来源，不做主线。",
+      "把 API、CLI、OpenWebUI、Dify、LangChain、Codex 接入写清楚。"
+    ],
+    "avoid": [
+      "不要让机器人通信细节占据太多篇幅。",
+      "不要只写模型调用，要突出数据治理、评测和系统工程。"
+    ],
+    "evidence": [
+      "从 0 到 1 搭建企业级售后知识问答系统。",
+      "支持 OpenAI SDK、OpenWebUI、Dify、LangChain、Codex 等生态接入。",
+      "标准测试集约 1000 条，Top-10 召回率约 98.0%。"
+    ],
+    "gaps": [
+      "如果 JD 偏平台后端，需要补充数据库、队列、权限、多租户和监控细节。"
+    ]
+  }
+}

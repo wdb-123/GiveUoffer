@@ -1,0 +1,9 @@
+/*
+ * visualizer styles (split for maintainability)
+ * Kept as ordered imports to preserve existing cascade behavior.
+ */
+@import "./styles/base.css";
+@import "./styles/workspace.css";
+@import "./styles/applications.css";
+@import "./styles/insights.css";
+@import "./styles/paper.css";

@@ -11,6 +11,7 @@ All scripts live in the project root as `.mjs` modules and are exposed via `npm 
 | `npm run normalize` | `normalize-statuses.mjs` | Fix non-canonical statuses |
 | `npm run dedup` | `dedup-tracker.mjs` | Remove duplicate tracker entries |
 | `npm run merge` | `merge-tracker.mjs` | Merge batch TSVs into applications.md |
+| `npm run tracker` | `tracker-workflow.mjs` | Summarize next actions, due dates, and tracker event log |
 | `npm run pdf` | `generate-pdf.mjs` | Convert HTML to ATS-optimized PDF |
 | `npm run sync-check` | `cv-sync-check.mjs` | Validate CV/profile consistency |
 | `npm run patterns` | `analyze-patterns.mjs` | Analyze tracker outcomes and report patterns |
@@ -89,6 +90,23 @@ npm run merge -- --verify     # merge then run verify-pipeline
 Processed TSVs are moved to `batch/tracker-additions/merged/`.
 
 **Exit codes:** `0` success, `1` verification errors (with `--verify`).
+
+---
+
+## tracker
+
+Builds a workflow layer on top of `data/applications.md` without changing the tracker table format. It reads optional events from `data/application-events.jsonl`, computes next actions and due dates, and can parse pasted recruiter emails into proposed tracker events.
+
+```bash
+npm run tracker                    # JSON output
+npm run tracker -- --summary       # human-readable action queue
+npm run tracker -- --add-event 12 --event applied --next-action "Follow up" --due 2026-06-10
+npm run tracker -- --parse-email email.txt
+```
+
+The event log is user data and is gitignored. Email parsing only proposes an event; it does not modify `applications.md`.
+
+**Exit codes:** `0` success, `1` invalid arguments or missing referenced files.
 
 ---
 

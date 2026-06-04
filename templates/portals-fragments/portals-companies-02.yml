@@ -1,0 +1,222 @@
+tracked_companies:
+  - name: Palantir
+    careers_url: https://jobs.lever.co/palantir
+    notes: FDE roles. Mostly US/London.
+    enabled: true
+  - name: Later
+    careers_url: https://job-boards.greenhouse.io/later
+    api: https://boards-api.greenhouse.io/v1/boards/later/jobs
+    notes: Vancouver/Toronto. Social media and creator platform.
+    enabled: true
+  - name: Safari AI
+    careers_url: https://job-boards.greenhouse.io/safariai
+    api: https://boards-api.greenhouse.io/v1/boards/safariai/jobs
+    notes: >-
+      Miami HQ / Vancouver engineering. Computer vision AI for operations in the
+      physical economy.
+    enabled: true
+  - name: Hootsuite
+    careers_url: https://job-boards.greenhouse.io/hootsuite
+    api: https://boards-api.greenhouse.io/v1/boards/hootsuite/jobs
+    notes: Vancouver. Social media management platform.
+    enabled: true
+  - name: Klue
+    careers_url: https://jobs.ashbyhq.com/klue
+    notes: Vancouver. Competitive intelligence SaaS.
+    enabled: true
+  - name: Glacis AI
+    careers_url: https://jobs.ashbyhq.com/glacis-ai
+    notes: Ho Chi Minh City. AI agents for supply chain and logistics workflows.
+    enabled: true
+  - name: Sanctuary AI
+    careers_url: https://jobs.lever.co/sanctuary
+    notes: Vancouver. Humanoid robotics and embodied AI.
+    enabled: true
+  - name: Semios
+    careers_url: https://apply.workable.com/semios/
+    scan_method: websearch
+    scan_query: site:apply.workable.com/semios
+    notes: Vancouver. Agtech and crop intelligence platform.
+    enabled: true
+  - name: Factorial
+    careers_url: https://job-boards.greenhouse.io/factorial
+    scan_method: websearch
+    scan_query: site:jobs.greenhouse.io/factorial
+    notes: Barcelona. HR SaaS unicorn.
+    enabled: true
+  - name: Attio
+    careers_url: https://jobs.ashbyhq.com/attio
+    scan_method: websearch
+    scan_query: site:attio.com/careers OR site:jobs.ashbyhq.com/attio
+    notes: Remote EU. AI-native CRM. Series B $52M.
+    enabled: true
+  - name: Tinybird
+    careers_url: https://jobs.ashbyhq.com/tinybird
+    scan_method: websearch
+    scan_query: site:tinybird.co/careers OR site:jobs.ashbyhq.com/tinybird
+    notes: Remote. Real-time data platform.
+    enabled: true
+  - name: Clarity AI
+    careers_url: https://jobs.lever.co/clarity-ai
+    scan_method: websearch
+    scan_query: site:clarity.ai/careers OR site:jobs.lever.co/clarity-ai
+    notes: Madrid/Remote. Sustainability analytics with AI.
+    enabled: true
+  - name: Travelperk
+    careers_url: https://jobs.ashbyhq.com/travelperk
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/travelperk
+    notes: Barcelona. Business travel unicorn.
+    enabled: true
+  - name: Aleph Alpha
+    careers_url: https://jobs.ashbyhq.com/AlephAlpha
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/AlephAlpha
+    notes: >-
+      Heidelberg DE. Sovereign European LLM provider, enterprise & government
+      focus.
+    enabled: true
+  - name: DeepL
+    careers_url: https://jobs.ashbyhq.com/DeepL
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/DeepL
+    notes: Cologne DE. Translation & language AI. 60+ open roles, EU/DACH heavy.
+    enabled: true
+  - name: Black Forest Labs
+    careers_url: https://job-boards.greenhouse.io/blackforestlabs
+    api: https://boards-api.greenhouse.io/v1/boards/blackforestlabs/jobs
+    notes: Freiburg DE / SF. FLUX image models, ex-Stable Diffusion team.
+    enabled: true
+  - name: Helsing
+    careers_url: https://job-boards.greenhouse.io/helsing
+    api: https://boards-api.greenhouse.io/v1/boards/helsing/jobs
+    notes: >-
+      Munich / Berlin / London / Paris. Defence AI unicorn. 100+ roles, ML &
+      FDE.
+    enabled: true
+  - name: Celonis
+    careers_url: https://job-boards.greenhouse.io/celonis
+    api: https://boards-api.greenhouse.io/v1/boards/celonis/jobs
+    notes: Munich / NYC. Process intelligence, Applied AI Engineer roles, Field CTOs.
+    enabled: true
+  - name: Contentful
+    careers_url: https://job-boards.greenhouse.io/contentful
+    api: https://boards-api.greenhouse.io/v1/boards/contentful/jobs
+    notes: Berlin / Denver. Headless CMS, AI content workflows.
+    enabled: true
+  - name: GetYourGuide
+    careers_url: https://job-boards.greenhouse.io/getyourguide
+    api: https://boards-api.greenhouse.io/v1/boards/getyourguide/jobs
+    notes: Berlin. Travel marketplace, ML & data platform roles.
+    enabled: true
+  - name: HelloFresh
+    careers_url: https://job-boards.greenhouse.io/hellofresh
+    api: https://boards-api.greenhouse.io/v1/boards/hellofresh/jobs
+    notes: Berlin. Meal kit unicorn, large data/ML org.
+    enabled: true
+  - name: N26
+    careers_url: https://job-boards.greenhouse.io/n26
+    api: https://boards-api.greenhouse.io/v1/boards/n26/jobs
+    notes: Berlin / Barcelona. Mobile bank, ~50 roles, ML & risk.
+    enabled: true
+  - name: Trade Republic
+    careers_url: https://job-boards.greenhouse.io/traderepublicbank
+    api: https://boards-api.greenhouse.io/v1/boards/traderepublicbank/jobs
+    notes: Berlin / London / Paris. Neobroker, ~50 roles, platform & data.
+    enabled: true
+  - name: SumUp
+    careers_url: https://job-boards.greenhouse.io/sumup
+    api: https://boards-api.greenhouse.io/v1/boards/sumup/jobs
+    notes: Berlin / London. Payments fintech, EU + LATAM hiring.
+    enabled: true
+  - name: Qonto
+    careers_url: https://jobs.lever.co/qonto
+    notes: >-
+      Paris / Berlin / Barcelona / Milan. SMB neobank, MLOps for AI Product
+      roles.
+    enabled: true
+  - name: Forto
+    careers_url: https://jobs.lever.co/forto
+    notes: >-
+      Berlin DE. Digital freight forwarder, product & data roles, German +
+      English.
+    enabled: true
+  - name: Lakera
+    careers_url: https://jobs.ashbyhq.com/lakera.ai
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/lakera.ai
+    notes: >-
+      Zurich CH / SF. AI security & guardrails. Has Forward Deployed Engineer
+      roles.
+    enabled: true
+  - name: Scandit
+    careers_url: https://job-boards.greenhouse.io/scandit
+    api: https://boards-api.greenhouse.io/v1/boards/scandit/jobs
+    notes: Zurich CH. Computer vision / smart data capture, ML roles.
+    enabled: true
+  - name: Cradle
+    careers_url: https://jobs.ashbyhq.com/cradlebio
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/cradlebio
+    notes: Zurich CH / Amsterdam. AI-guided protein design, ML researcher roles.
+    enabled: true
+  - name: Hugging Face
+    careers_url: https://apply.workable.com/huggingface/
+    scan_method: websearch
+    scan_query: site:apply.workable.com/huggingface
+    notes: Paris / NYC / Remote. ML hub & open-source models.
+    enabled: true
+  - name: Photoroom
+    careers_url: https://jobs.ashbyhq.com/photoroom
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/photoroom
+    notes: Paris FR. AI photo editor, Head of CV / Head of ML roles.
+    enabled: true
+  - name: Pigment
+    careers_url: https://jobs.lever.co/pigment
+    notes: Paris FR / NYC / London. AI-powered FP&A planning platform.
+    enabled: true
+  - name: Wayve
+    careers_url: https://job-boards.greenhouse.io/wayve
+    api: https://boards-api.greenhouse.io/v1/boards/wayve/jobs
+    notes: London UK. Embodied AI for self-driving, ML & robotics roles.
+    enabled: true
+  - name: Isomorphic Labs
+    careers_url: https://job-boards.greenhouse.io/isomorphiclabs
+    api: https://boards-api.greenhouse.io/v1/boards/isomorphiclabs/jobs
+    notes: London / Lausanne / Cambridge MA. DeepMind spin-out for drug discovery AI.
+    enabled: true
+  - name: PhysicsX
+    careers_url: https://job-boards.greenhouse.io/physicsx
+    api: https://boards-api.greenhouse.io/v1/boards/physicsx/jobs
+    notes: London UK. Physics-informed ML for engineering, ~40 roles.
+    enabled: true
+  - name: Stability AI
+    careers_url: https://job-boards.greenhouse.io/stabilityai
+    api: https://boards-api.greenhouse.io/v1/boards/stabilityai/jobs
+    notes: London / SF. Generative AI image/video research lab.
+    enabled: true
+  - name: Synthesia
+    careers_url: https://jobs.ashbyhq.com/synthesia
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/synthesia OR site:job-boards.greenhouse.io/synthesia
+    notes: London UK. AI video generation for enterprise, $4B valuation.
+    enabled: true
+  - name: Faculty
+    careers_url: https://jobs.ashbyhq.com/faculty
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/faculty
+    notes: London UK. Applied AI consultancy. 80+ roles, AI Safety / MLE / Delivery.
+    enabled: true
+  - name: Causaly
+    careers_url: https://jobs.ashbyhq.com/causaly
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/causaly
+    notes: London / Athens. Biomedical knowledge graph + AI.
+    enabled: true
+  - name: Lovable
+    careers_url: https://jobs.ashbyhq.com/lovable
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/lovable
+    notes: Stockholm SE. AI app builder (text-to-app), 80+ open roles.
+    enabled: true

@@ -49,6 +49,49 @@ mkdirSync('data', { recursive: true });
 
 const CONCURRENCY = 10;
 
+function normalizeTrackedCompanies(entries) {
+  if (!Array.isArray(entries)) return [];
+  return entries.filter((entry) => entry && typeof entry === 'object');
+}
+
+function dedupeTrackedCompanies(companies) {
+  const seen = new Set();
+  const out = [];
+  for (const company of companies) {
+    const key = `${String(company.name || '').trim().toLowerCase()}::${String(company.careers_url || '').trim().toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(company);
+  }
+  return out;
+}
+
+function loadPortalsConfig(portalsPath) {
+  const baseConfig = parseYaml(readFileSync(portalsPath, 'utf-8')) || {};
+  const baseDir = path.dirname(portalsPath);
+  const trackedCompanies = normalizeTrackedCompanies(baseConfig.tracked_companies);
+  const sources = Array.isArray(baseConfig.tracked_companies_sources) ? baseConfig.tracked_companies_sources : [];
+
+  if (!sources.length) {
+    return { ...baseConfig, tracked_companies: trackedCompanies };
+  }
+
+  const sourceCompanies = [];
+  for (const source of sources) {
+    const sourcePath = path.resolve(baseDir, String(source));
+    if (!existsSync(sourcePath)) {
+      throw new Error(`Portals source not found: ${source}`);
+    }
+    const loaded = parseYaml(readFileSync(sourcePath, 'utf-8')) || {};
+    sourceCompanies.push(...normalizeTrackedCompanies(loaded.tracked_companies || loaded.companies || []));
+  }
+
+  return {
+    ...baseConfig,
+    tracked_companies: dedupeTrackedCompanies([...trackedCompanies, ...sourceCompanies]),
+  };
+}
+
 // ── Provider loading ────────────────────────────────────────────────
 
 async function loadProviders(dir) {
@@ -394,7 +437,7 @@ async function main() {
     process.exit(1);
   }
 
-  const config = parseYaml(readFileSync(PORTALS_PATH, 'utf-8'));
+  const config = loadPortalsConfig(PORTALS_PATH);
   const companies = config.tracked_companies || [];
   const titleFilter = buildTitleFilter(config.title_filter);
   const locationFilter = buildLocationFilter(config.location_filter);

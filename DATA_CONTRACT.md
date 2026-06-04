@@ -15,6 +15,7 @@ These files contain your personal data, customizations, and work product. Update
 | `interview-prep/story-bank.md` | Your accumulated STAR+R stories |
 | `portals.yml` | Your customized company list |
 | `data/applications.md` | Your application tracker |
+| `data/application-progress.md` | Your applied jobs and application progress board |
 | `data/pipeline.md` | Your URL inbox |
 | `data/scan-history.tsv` | Your scan history |
 | `data/follow-ups.md` | Your follow-up history |

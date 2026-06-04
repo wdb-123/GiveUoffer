@@ -1,5 +1,7 @@
 # Architecture
 
+> 架构治理规范请优先参考：[docs/architecture-governance.md](/Users/don/Documents/career-ops/docs/architecture-governance.md)。
+
 ## System Overview
 
 ```

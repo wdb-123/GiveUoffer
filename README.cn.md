@@ -111,6 +111,10 @@ claude   # 在当前目录打开 Claude Code
 
 完整配置指南见 [docs/SETUP.md](docs/SETUP.md)。
 
+## 产品研发
+
+如果你想把 career-ops 当成一个持续迭代的产品来开发，而不只是一个脚本集合，可以从 [docs/PRODUCT.md](docs/PRODUCT.md) 开始。这里定义了目标用户、核心问题、MVP、北极星指标、路线图、RICE 优先级、验收标准和研发节奏。
+
 ## Gemini CLI 集成
 
 career-ops 原生支持 [Gemini CLI](https://github.com/google-gemini/gemini-cli) —— 与 Claude Code 和 OpenCode 的支持方式相同。所有 15 个斜杠命令均可使用，并基于相同的 `modes/*.md` 评估逻辑。
