@@ -52,7 +52,7 @@
 .main-chat-head h3,
 .floating-chat-head h3 {
   margin: 0;
-  color: #0f172a;
+  color: #111827;
   font-size: var(--reply-text-lg, 16px);
   line-height: 1.25;
 }
@@ -83,8 +83,8 @@
   display: grid;
   place-items: center;
   border-radius: 8px;
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #eef0f4;
+  color: #111827;
   font-size: var(--reply-text-sm, 12px);
   font-weight: 900;
 }
@@ -112,13 +112,13 @@
 
 .chat-bubble.recruiter {
   justify-self: start;
-  border-left: 4px solid #0f766e;
+  border-left: 4px solid #111827;
 }
 
 .chat-bubble.me {
   justify-self: end;
-  border-right: 4px solid #2563eb;
-  background: #eff6ff;
+  border-right: 4px solid #111827;
+  background: #eef0f4;
 }
 
 .chat-bubble.system,
@@ -155,14 +155,14 @@
 }
 
 .chat-bubble-title strong {
-  color: #0f172a;
+  color: #111827;
 }
 
 .chat-bubble-title span {
   padding: 2px 7px;
   border-radius: 999px;
-  background: #dcfce7;
-  color: #047857;
+  background: #eef0f4;
+  color: #111827;
   font-size: var(--reply-text-sm, 12px);
   line-height: 1.2;
   font-weight: 900;
@@ -218,9 +218,9 @@
 }
 
 .quick-reply-button:hover {
-  border-color: #0f766e;
-  background: #ecfdf5;
-  color: #047857;
+  border-color: #111827;
+  background: #eef0f4;
+  color: #111827;
 }
 
 .chat-actions {
@@ -271,12 +271,12 @@
 
 .chat-list-item:hover,
 .chat-list-item.is-active {
-  border-color: rgba(15, 118, 110, 0.16);
-  background: #f2fbf8;
+  border-color: rgba(17, 24, 39, 0.16);
+  background: #eef0f4;
 }
 
 .chat-list-item.is-active {
-  box-shadow: inset 3px 0 0 #0f766e;
+  box-shadow: inset 3px 0 0 #111827;
 }
 
 .chat-list-top,
@@ -291,7 +291,7 @@
 .chat-list-top strong {
   min-width: 0;
   overflow: hidden;
-  color: #0f172a;
+  color: #111827;
   font-size: var(--reply-text-sm, 12px);
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -304,8 +304,8 @@
   min-width: 34px;
   padding: 2px 6px;
   border-radius: 999px;
-  background: #dcfce7;
-  color: #047857;
+  background: #eef0f4;
+  color: #111827;
   font-size: var(--reply-text-xs, 11px);
   line-height: 1.2;
   font-weight: 900;
@@ -331,8 +331,8 @@
   max-width: 112px;
   padding: 2px 6px;
   border-radius: 999px;
-  background: #e0f2fe;
-  color: #075985;
+  background: #eef0f4;
+  color: #111827;
   font-weight: 900;
 }
 
@@ -381,17 +381,17 @@
   gap: 10px;
   padding: 14px;
   border: 1px solid var(--line);
-  border-left: 4px solid #0f766e;
+  border-left: 4px solid #111827;
   border-radius: 8px;
   background: white;
 }
 
 .reply-card.status-copied {
-  border-left-color: #2563eb;
+  border-left-color: #111827;
 }
 
 .reply-card.status-sent-manual {
-  border-left-color: #059669;
+  border-left-color: #111827;
 }
 
 .reply-card.status-archived {
@@ -444,7 +444,7 @@
   border-radius: 8px;
   padding: 10px;
   background: #fbfdff;
-  color: #17202a;
+  color: #111827;
   font: inherit;
   font-size: var(--reply-text-md, 13px);
   line-height: 1.55;
@@ -466,11 +466,11 @@
 }
 
 .evidence-card.priority-high {
-  border-left-color: #dc2626;
+  border-left-color: #6b7280;
 }
 
 .evidence-card.priority-medium {
-  border-left-color: #d97706;
+  border-left-color: #6b7280;
 }
 
 .evidence-card.priority-low {
@@ -484,7 +484,7 @@
 
 .evidence-card .gap {
   margin: 0 0 10px;
-  color: #17202a;
+  color: #111827;
   font-size: 13px;
   line-height: 1.45;
 }
@@ -569,23 +569,23 @@
 }
 
 .status-evaluated {
-  background: #e0f2fe;
-  color: #075985;
+  background: #eef0f4;
+  color: #111827;
 }
 
 .status-applied,
 .status-responded,
 .status-interview,
 .status-offer {
-  background: #dcfce7;
-  color: #166534;
+  background: #eef0f4;
+  color: #111827;
 }
 
 .status-rejected,
 .status-discarded,
 .status-skip {
-  background: #fee2e2;
-  color: #991b1b;
+  background: #eef0f4;
+  color: #6b7280;
 }
 
 .jobs-table {
@@ -598,9 +598,9 @@
   gap: 10px;
   margin-bottom: 10px;
   padding: 11px 12px;
-  border: 1px solid rgba(15, 118, 110, 0.18);
+  border: 1px solid rgba(17, 24, 39, 0.18);
   border-radius: 8px;
-  background: #f4fbf8;
+  background: #eef0f4;
 }
 
 .market-list-filters label {
@@ -620,7 +620,7 @@
   width: 100%;
   min-height: 34px;
   padding: 0 11px;
-  border: 1px solid rgba(15, 118, 110, 0.16);
+  border: 1px solid rgba(17, 24, 39, 0.16);
   border-radius: 6px;
   background: #ffffff;
   color: var(--ink);
@@ -660,13 +660,13 @@
 
 .jobs-table tbody tr.market-row-link:hover td,
 .jobs-table tbody tr.market-row-link:focus-visible td {
-  background: #dff3f1;
-  box-shadow: inset 0 1px 0 rgba(15, 118, 110, 0.1), inset 0 -1px 0 rgba(15, 118, 110, 0.1);
+  background: #eef0f4;
+  box-shadow: inset 0 1px 0 rgba(17, 24, 39, 0.1), inset 0 -1px 0 rgba(17, 24, 39, 0.1);
 }
 
 .jobs-table tbody tr.market-row-link:hover td:first-child,
 .jobs-table tbody tr.market-row-link:focus-visible td:first-child {
-  box-shadow: inset 4px 0 0 #0f766e, inset 0 1px 0 rgba(15, 118, 110, 0.1), inset 0 -1px 0 rgba(15, 118, 110, 0.1);
+  box-shadow: inset 4px 0 0 #111827, inset 0 1px 0 rgba(17, 24, 39, 0.1), inset 0 -1px 0 rgba(17, 24, 39, 0.1);
 }
 
 .jobs-table tbody tr.market-row-link:hover .market-job-title-link,
@@ -674,12 +674,11 @@
   color: var(--accent);
 }
 
-.market-col-role { width: 34%; }
+.market-col-role { width: 31%; }
 .market-col-score { width: 112px; }
 .market-col-source { width: 108px; }
-.market-col-keywords { width: 120px; }
-.market-col-summary { width: 22%; }
-.market-col-action { width: 36px; }
+.market-col-summary { width: 31%; }
+.market-col-action { width: 82px; }
 
 @media (min-width: 1920px) {
   .market-list-filters {
@@ -723,8 +722,8 @@
 
   .market-col-score { width: 132px; }
   .market-col-source { width: 126px; }
-  .market-col-keywords { width: 160px; }
-  .market-col-action { width: 44px; }
+  .market-col-summary { width: 36%; }
+  .market-col-action { width: 88px; }
 }
 
 @media (min-width: 3840px) {
@@ -755,8 +754,8 @@
 
   .market-col-score { width: 148px; }
   .market-col-source { width: 140px; }
-  .market-col-keywords { width: 184px; }
-  .market-col-action { width: 48px; }
+  .market-col-summary { width: 38%; }
+  .market-col-action { width: 96px; }
 }
 
 @media (max-width: 1600px) {
@@ -764,8 +763,8 @@
     grid-template-columns: repeat(5, minmax(92px, 1fr)) minmax(180px, 1.2fr);
   }
 
-  .market-col-role { width: 32%; }
-  .market-col-summary { width: 20%; }
+  .market-col-role { width: 30%; }
+  .market-col-summary { width: 30%; }
 }
 
 @media (max-width: 1360px) {
@@ -783,6 +782,7 @@
 
   .market-col-role { width: 300px; }
   .market-col-summary { width: 220px; }
+  .market-col-action { width: 82px; }
 }
 
 @media (max-width: 1180px) {
@@ -833,15 +833,15 @@
 }
 
 .platform-card.status-active {
-  border-left-color: #059669;
+  border-left-color: #111827;
 }
 
 .platform-card.status-login {
-  border-left-color: #d97706;
+  border-left-color: #6b7280;
 }
 
 .platform-card.status-configured {
-  border-left-color: #2563eb;
+  border-left-color: #111827;
 }
 
 .platform-card.status-todo {
@@ -860,7 +860,7 @@
 }
 
 .platform-card-head strong {
-  color: #0f172a;
+  color: #111827;
   font-size: 14px;
 }
 
@@ -912,13 +912,13 @@
 }
 
 .channel-touch-state.is-reached {
-  background: #dcfce7;
-  color: #166534;
+  background: #eef0f4;
+  color: #111827;
 }
 
 .channel-touch-state.is-unreached {
-  background: #fff7ed;
-  color: #9a3412;
+  background: #eef0f4;
+  color: #6b7280;
 }
 
 .channel-status-row small {
@@ -1049,12 +1049,12 @@
 }
 
 .market-source-page.source-manual .market-source-column-head {
-  background: #f8fffb;
+  background: #eef0f4;
 }
 
 .market-source-column-head h4 {
   margin: 0;
-  color: #17202a;
+  color: #111827;
   font-size: var(--market-text, 13px);
   line-height: 1.25;
 }
@@ -1089,7 +1089,7 @@
 }
 
 .market-source-card.is-clickable:focus-visible {
-  outline: 2px solid rgba(13, 128, 114, 0.35);
+  outline: 2px solid rgba(17, 24, 39, 0.35);
   outline-offset: -2px;
 }
 
@@ -1111,7 +1111,7 @@
 }
 
 .market-source-card-head strong {
-  color: #17202a;
+  color: #111827;
   font-size: 13px;
   line-height: 1.3;
 }
@@ -1149,9 +1149,9 @@
 }
 
 .market-delete-job-button:hover {
-  border-color: rgba(220, 38, 38, 0.18);
-  background: #fff5f5;
-  color: #dc2626;
+  border-color: rgba(134, 134, 139, 0.18);
+  background: #eef0f4;
+  color: #6b7280;
 }
 
 .market-source-card .market-job-title-link,
@@ -1159,7 +1159,7 @@
 .market-pending-title {
   display: block;
   margin-top: 5px;
-  color: #17202a;
+  color: #111827;
   font-size: 13px;
   font-weight: 750;
   line-height: 1.35;
@@ -1197,13 +1197,13 @@
   gap: 6px;
   margin-top: 10px;
   padding: 10px;
-  border: 1px solid rgba(13, 128, 114, 0.18);
+  border: 1px solid rgba(17, 24, 39, 0.18);
   border-radius: 8px;
-  background: #f7fbfa;
+  background: #eef0f4;
 }
 
 .market-pending-callout strong {
-  color: #0f766e;
+  color: #111827;
   font-size: 12px;
   line-height: 1.3;
 }
@@ -1224,7 +1224,7 @@
 .market-codex-workflow-button {
   min-height: 28px;
   padding: 0 10px;
-  border: 1px solid rgba(13, 128, 114, 0.26);
+  border: 1px solid rgba(17, 24, 39, 0.26);
   border-radius: 8px;
   background: #0d8072;
   color: #fff;
@@ -1234,7 +1234,7 @@
 }
 
 .market-codex-workflow-button:hover {
-  background: #0f766e;
+  background: #111827;
 }
 
 .market-codex-workflow-button.is-running,
@@ -1244,33 +1244,58 @@
   cursor: wait;
 }
 
+.market-generate-resume-button {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(17, 24, 39, 0.24);
+  border-radius: 8px;
+  background: #eef0f4;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.market-generate-resume-button:hover {
+  border-color: rgba(17, 24, 39, 0.42);
+  background: #eef0f4;
+}
+
+.market-generate-resume-button.is-running,
+.market-generate-resume-button:disabled {
+  border-color: rgba(71, 85, 105, 0.18);
+  background: #e2e8f0;
+  color: #64748b;
+  cursor: wait;
+}
+
 .market-workflow-feedback {
   padding: 8px 10px;
   border-radius: 8px;
-  background: #ecfdf5;
-  color: #047857;
+  background: #eef0f4;
+  color: #111827;
   font-size: 12px;
   font-weight: 750;
   line-height: 1.45;
 }
 
 .market-workflow-feedback.is-running {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: #eef0f4;
+  color: #111827;
 }
 
 .market-workflow-feedback.is-error {
   display: grid;
   gap: 6px;
-  background: #fff7ed;
-  color: #9a3412;
+  background: #eef0f4;
+  color: #6b7280;
 }
 
 .market-workflow-feedback textarea {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
-  border: 1px solid rgba(234, 88, 12, 0.24);
+  border: 1px solid rgba(134, 134, 139, 0.24);
   border-radius: 8px;
   padding: 8px;
   background: #fff;
@@ -1307,7 +1332,7 @@
 }
 
 .market-job-cell strong {
-  color: #0f172a;
+  color: #111827;
   font-size: 13px;
   font-weight: 850;
 }
@@ -1315,7 +1340,7 @@
 .market-job-cell span,
 .market-job-title-link {
   margin-top: 1px;
-  color: #17202a;
+  color: #111827;
   font-size: 12px;
   font-weight: 700;
 }
@@ -1387,13 +1412,48 @@
   margin-top: 4px;
 }
 
-.market-keywords-cell {
-  min-width: 0;
-  vertical-align: middle;
+.market-action-cell {
+  text-align: right;
 }
 
-.market-action-cell {
-  text-align: center;
+.market-table-actions {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+.market-table-actions .table-parse-button {
+  min-width: 46px;
+  height: 28px;
+  padding: 0 9px;
+}
+
+.market-focus-button {
+  min-width: 68px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(17, 24, 39, 0.22);
+  border-radius: 7px;
+  background: #eef0f4;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.market-focus-button:hover,
+.market-focus-button.is-focused {
+  border-color: rgba(17, 24, 39, 0.42);
+  background: #111827;
+  color: white;
+}
+
+.market-table-actions .market-generate-resume-button {
+  min-width: 42px;
+  height: 26px;
+  padding-inline: 8px;
 }
 
 .salary-badge {

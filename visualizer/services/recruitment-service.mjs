@@ -15,7 +15,7 @@ const recruitmentMarketPath = join(dataDir, 'recruitment-market.json');
 const recruitmentMarketMdPath = join(dataDir, 'recruitment-market.md');
 const experienceMetadataPath = join(dataDir, 'experience-metadata.json');
 const directionCluesPath = join(resumesDir, 'direction-clues.json');
-const codexBin = process.env.CODEX_BIN || '/Users/don/.local/bin/codex';
+const codexBin = process.env.CODEX_BIN || 'codex';
 const codexParseTasks = new Map();
 const extensionParseTasks = new Map();
 let extensionRegistration = {
@@ -138,8 +138,29 @@ async function addManualRecruitmentJob(req) {
   const jobs = Array.isArray(market.jobs) ? market.jobs : [];
   const job = buildManualMarketJob(hydratedInput, jobs.length);
   const key = jobIdentityKey(job);
-  const duplicate = jobs.find((item) => jobIdentityKey(item) === key);
+  const duplicate = jobs.find((item) => isDuplicateManualJob(item, job, hydratedInput));
   if (duplicate) {
+    if (shouldRefreshDuplicateJob(duplicate, job)) {
+      refreshDuplicateJob(duplicate, job);
+      market.updatedAt = todayChina();
+      market.lastManualImport = {
+        runAt: new Date().toISOString(),
+        company: duplicate.company,
+        role: duplicate.role,
+        source: duplicate.source,
+        refreshed: true,
+      };
+      await writeRecruitmentMarket(recruitmentMarketPath, market);
+      await writeFile(recruitmentMarketMdPath, recruitmentMarketMarkdown(market), 'utf8');
+      return {
+        added: false,
+        duplicate: true,
+        refreshed: true,
+        job: duplicate,
+        market,
+        message: '该岗位链接已存在，已用官网解析结果修正记录。',
+      };
+    }
     return {
       added: false,
       duplicate: true,
@@ -177,6 +198,39 @@ async function addManualRecruitmentJob(req) {
   };
 }
 
+function isDuplicateManualJob(existing, incoming, input = {}) {
+  if (jobIdentityKey(existing) && jobIdentityKey(existing) === jobIdentityKey(incoming)) return true;
+  const urls = [input.url, input.parsedUrl, incoming.url].map(normalizeUrl).filter(Boolean);
+  return urls.some((url) => normalizeUrl(existing.url) === url);
+}
+
+function shouldRefreshDuplicateJob(existing, incoming) {
+  const existingBad = /待解析|搜索\s*\|\s*腾讯|首页|所有职位|我们的文化|校园招聘|登录|blocked|failed|fallback/i.test([
+    existing.company,
+    existing.role,
+    existing.parseStatus,
+  ].filter(Boolean).join(' '));
+  const incomingGood = !/待解析|搜索\s*\|\s*腾讯|blocked|failed|fallback/i.test([
+    incoming.company,
+    incoming.role,
+    incoming.parseStatus,
+  ].filter(Boolean).join(' '));
+  return existingBad && incomingGood;
+}
+
+function refreshDuplicateJob(existing, incoming) {
+  const keep = {
+    id: existing.id,
+    importedAt: existing.importedAt,
+    manualInterest: existing.manualInterest,
+    discoveredBy: existing.discoveredBy,
+  };
+  Object.assign(existing, incoming, keep, {
+    updatedAt: todayChina(),
+    contactHint: '已用官网接口重新解析，建议打开原链接复核 JD。',
+  });
+}
+
 async function deleteRecruitmentJob(req) {
   const input = req ? await readJsonBody(req).catch(() => ({})) : {};
   const id = cleanManualText(input.id, 40);
@@ -189,16 +243,28 @@ async function deleteRecruitmentJob(req) {
     };
   }
 
-  const market = await listRecruitmentMarket();
-  const jobs = Array.isArray(market.jobs) ? market.jobs : [];
-  const targetIndex = jobs.findIndex((job) => (id && job.id === id) || (url && normalizeUrl(job.url) === url));
-  if (targetIndex < 0) {
+  const result = await removeRecruitmentJob({ id, url, reason: 'manual-delete' });
+  if (!result.deleted) {
     return {
       deleted: false,
       error: '没有找到要删除的岗位。',
-      market,
+      market: result.market,
     };
   }
+
+  return {
+    deleted: true,
+    job: result.job,
+    market: result.market,
+    message: `已删除岗位：${result.job.company || ''} ${result.job.role || ''}`.trim(),
+  };
+}
+
+async function removeRecruitmentJob({ id = '', url = '', reason = 'removed' } = {}) {
+  const market = await listRecruitmentMarket();
+  const jobs = Array.isArray(market.jobs) ? market.jobs : [];
+  const targetIndex = jobs.findIndex((job) => (id && job.id === id) || (url && normalizeUrl(job.url) === url));
+  if (targetIndex < 0) return { deleted: false, market };
 
   const [deletedJob] = jobs.splice(targetIndex, 1);
   renumberMarketJobs(jobs);
@@ -206,6 +272,7 @@ async function deleteRecruitmentJob(req) {
   market.updatedAt = todayChina();
   market.lastDeletedJob = {
     runAt: new Date().toISOString(),
+    reason,
     id: deletedJob.id,
     company: deletedJob.company,
     role: deletedJob.role,
@@ -213,13 +280,15 @@ async function deleteRecruitmentJob(req) {
   };
   await writeRecruitmentMarket(recruitmentMarketPath, market);
   await writeFile(recruitmentMarketMdPath, recruitmentMarketMarkdown(market), 'utf8');
+  return { deleted: true, job: deletedJob, market };
+}
 
-  return {
-    deleted: true,
-    job: deletedJob,
-    market,
-    message: `已删除岗位：${deletedJob.company || ''} ${deletedJob.role || ''}`.trim(),
-  };
+async function removeFailedParsedJob(id, reason) {
+  if (!id) return null;
+  const market = await listRecruitmentMarket();
+  const job = (market.jobs || []).find((item) => item.id === id);
+  if (!job || !isPendingMarketJob(job)) return null;
+  return removeRecruitmentJob({ id, reason });
 }
 
 async function updateRecruitmentJob(req) {
@@ -242,6 +311,31 @@ async function updateRecruitmentJob(req) {
     const response = {
       updated: false,
       error: '没有找到要更新的岗位。',
+    };
+    if (!input.compact) response.market = market;
+    return response;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, 'priorityFocus')) {
+    const value = Boolean(input.priorityFocus);
+    job.priorityFocus = value;
+    job.focusedAt = value ? new Date().toISOString() : '';
+    job.updatedAt = todayChina();
+    market.updatedAt = todayChina();
+    market.lastUpdatedJob = {
+      runAt: new Date().toISOString(),
+      id: job.id,
+      company: job.company,
+      role: job.role,
+      url: job.url,
+      reason: value ? 'priority-focus' : 'priority-focus-removed',
+    };
+    await writeRecruitmentMarket(recruitmentMarketPath, market);
+    await writeFile(recruitmentMarketMdPath, recruitmentMarketMarkdown(market), 'utf8');
+    const response = {
+      updated: true,
+      job,
+      message: value ? '已标记为重点关注。' : '已取消重点关注。',
     };
     if (!input.compact) response.market = market;
     return response;
@@ -462,6 +556,12 @@ async function completeExtensionParseTask(req) {
   task.message = cleanManualText(input.message, 240) || (task.status === 'done' ? 'Chrome 插件已解析并回写岗位。' : 'Chrome 插件解析失败。');
   task.output = cleanManualText(input.output, 2000);
   task.finishedAt = new Date().toISOString();
+  const removed = task.status === 'failed'
+    ? await removeFailedParsedJob(task.jobId, 'extension-parse-failed')
+    : null;
+  if (removed?.deleted) {
+    task.message = `${task.message} 已自动移除未解析岗位。`;
+  }
   return {
     ok: true,
     task,
@@ -489,7 +589,7 @@ function isChromeExtensionConnected() {
 
 async function runCodexParseTask(task, job) {
   const prompt = localCodexParsePrompt(job);
-  if (!existsSync(codexBin)) {
+  if (codexBin.includes('/') && !existsSync(codexBin)) {
     task.status = 'failed';
     task.message = `没有找到本地 Codex 命令：${codexBin}`;
     task.finishedAt = new Date().toISOString();
@@ -509,11 +609,17 @@ async function runCodexParseTask(task, job) {
       : '本地 Codex 已执行，但没有完成有效回写。可能是登录态、Chrome 插件能力或页面读取失败。';
     task.codexOutput = codexOutput;
     task.finishedAt = new Date().toISOString();
+    if (task.status === 'failed') {
+      const removed = await removeFailedParsedJob(task.jobId, 'codex-parse-failed');
+      if (removed?.deleted) task.message = `${task.message} 已自动移除未解析岗位。`;
+    }
   } catch (err) {
     task.status = 'failed';
     task.message = `本地 Codex 执行失败：${String(err?.message || err).slice(0, 240)}`;
     task.codexOutput = cleanManualText([err?.stdout, err?.stderr].filter(Boolean).join('\n'), 2000);
     task.finishedAt = new Date().toISOString();
+    const removed = await removeFailedParsedJob(task.jobId, 'codex-parse-error');
+    if (removed?.deleted) task.message = `${task.message} 已自动移除未解析岗位。`;
   }
 }
 
@@ -597,10 +703,10 @@ function localCodexParsePrompt(job) {
     '- This task requires the Chrome plugin because Boss/Zhipin often needs the user\'s logged-in Chrome session.',
     '- First load/use the chrome:control-chrome skill. If node_repl js is not visible, use tool discovery for "node_repl js".',
     '- Use the Node REPL js tool. Do not use shell, curl, WebFetch, Playwright CLI, or Computer Use for Chrome access.',
-    '- Bootstrap Chrome with exactly this JavaScript pattern in node_repl before any page work:',
+    '- Bootstrap Chrome with this JavaScript pattern in node_repl before any page work. Replace <chrome-browser-client.mjs> with the installed Chrome plugin browser-client.mjs path exposed in the current Codex environment:',
     '```js',
     'if (!globalThis.agent) {',
-    '  const { setupBrowserRuntime } = await import("/Users/don/.codex/plugins/cache/openai-bundled/chrome/26.527.60818/scripts/browser-client.mjs");',
+    '  const { setupBrowserRuntime } = await import("<chrome-browser-client.mjs>");',
     '  await setupBrowserRuntime({ globals: globalThis });',
     '}',
     'if (!globalThis.browser) {',
@@ -819,14 +925,26 @@ function buildMarketJob(result, query, existingCount, offset) {
 function buildManualMarketJob(input, existingCount) {
   const company = cleanManualText(input.company, 80) || '待解析公司';
   const role = cleanManualText(input.role, 120) || cleanManualText(input.title, 120) || '待解析岗位';
-  const url = normalizeUrl(input.url) || cleanManualText(input.url, 500);
-  const reason = cleanManualText(input.reason, 300);
+  const url = normalizeUrl(input.parsedUrl || input.url) || cleanManualText(input.parsedUrl || input.url, 500);
+  const reason = cleanManualText(input.reason || input.fitReason, 300);
   const location = cleanManualText(input.location, 40);
   const salary = cleanManualText(input.salary, 40);
   const rawText = [company, role, reason, input.direction, input.keywords, input.notes, input.rawText].filter(Boolean).join(' ');
   const keywords = splitManualKeywords(input.keywords);
   const inferredKeywords = inferKeywords(rawText);
   const direction = cleanManualText(input.direction, 80) || inferDirection(rawText, '');
+  const allKeywords = [...new Set([...keywords, ...inferredKeywords])].slice(0, 10);
+  const score = inferManualMatchScore({
+    company,
+    role,
+    location: location || inferLocation(rawText),
+    salary: salary || inferSalary(rawText),
+    direction,
+    keywords: allKeywords,
+    text: rawText,
+    parseStatus: input.parseStatus || '',
+    manualInterest: true,
+  });
 
   return {
     id: `MJ-${String(existingCount + 1).padStart(3, '0')}`,
@@ -837,8 +955,8 @@ function buildManualMarketJob(input, existingCount) {
     source: '手工导入',
     url,
     direction,
-    keywords: [...new Set([...keywords, ...inferredKeywords])].slice(0, 10),
-    matchScore: 4.2,
+    keywords: allKeywords,
+    matchScore: score,
     fitReason: reason || '用户手工标记为感兴趣岗位，优先纳入简历匹配和后续跟进。',
     evidenceGap: inferEvidenceGap(direction, [...keywords, ...inferredKeywords]),
     contactMethod: url ? '原链接投递' : '待补充投递入口',
@@ -886,13 +1004,19 @@ async function hydrateManualJobInput(input) {
     location: cleanManualText(input.location, 40) || parsed.location || '',
     salary: cleanManualText(input.salary, 40) || parsed.salary || '',
     keywords: cleanManualText(input.keywords, 200) || parsed.keywords || '',
-    rawText: [parsed.rawText, input.notes].filter(Boolean).join(' '),
+      rawText: [parsed.rawText, input.notes].filter(Boolean).join(' '),
+    parsedUrl: parsed.url || '',
+    fitReason: parsed.fitReason || '',
     parsedFromUrl: Boolean(meaningfulParsedText(parsed.company, 80) || meaningfulParsedText(parsed.role, 120) || meaningfulParsedText(parsed.title, 120)),
     parseStatus: parsed.parseStatus || (meaningfulParsedText(parsed.company, 80) || meaningfulParsedText(parsed.role, 120) || meaningfulParsedText(parsed.title, 120) ? 'parsed' : 'fallback'),
   };
 }
 
 async function parseJobUrl(url) {
+  const bytedance = await parseByteDanceJobsUrl(url).catch(() => ({}));
+  if (bytedance.company || bytedance.role || bytedance.title) return bytedance;
+  const tencent = await parseTencentCareersUrl(url).catch(() => ({}));
+  if (tencent.company || tencent.role || tencent.title) return tencent;
   const fetched = await parseJobUrlByFetch(url);
   if (fetched.company || fetched.role || fetched.title) return fetched;
   const browsed = await parseJobUrlByBrowser(url).catch(() => ({}));
@@ -901,6 +1025,159 @@ async function parseJobUrl(url) {
     ...browsed,
     rawText: [fetched.rawText, browsed.rawText].filter(Boolean).join(' '),
     parseStatus: browsed.parseStatus || fetched.parseStatus || 'fallback',
+  };
+}
+
+async function parseByteDanceJobsUrl(url) {
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return {};
+  }
+  if (!/jobs\.bytedance\.com$/i.test(parsedUrl.hostname)) return {};
+  const postId = parsedUrl.pathname.match(/\/position\/(\d+)\/detail/)?.[1]
+    || parsedUrl.searchParams.get('job_id')
+    || parsedUrl.searchParams.get('id');
+  if (!postId) return {};
+
+  const apiUrl = `https://jobs.bytedance.com/api/v1/job/posts/${postId}`;
+  const response = await fetch(apiUrl, {
+    headers: {
+      accept: 'application/json',
+      'user-agent': 'Mozilla/5.0 career-ops official-careers-parser',
+    },
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) throw new Error(`ByteDance jobs API HTTP ${response.status}`);
+  const payload = await response.json();
+  const detail = payload?.data?.job_post_detail;
+  if (!detail?.title) return {};
+  return byteDancePostToParsedJob(detail, url);
+}
+
+function byteDancePostToParsedJob(post, originalUrl) {
+  const role = cleanManualText(post.title, 120);
+  const location = cleanManualText(post.city_info?.name || post.city_info_list_for_delivery?.[0]?.name, 40);
+  const category = cleanManualText([
+    post.job_category?.parent?.name,
+    post.job_category?.name,
+  ].filter(Boolean).join(' / '), 80);
+  const recruitType = cleanManualText([
+    post.recruit_type?.parent?.name,
+    post.recruit_type?.name,
+  ].filter(Boolean).join(' / '), 60);
+  const description = cleanManualText(post.description, 3000);
+  const requirement = cleanManualText(post.requirement, 3000);
+  const rawText = [
+    role,
+    '字节跳动',
+    location,
+    category,
+    recruitType,
+    description,
+    requirement,
+  ].filter(Boolean).join(' ');
+  return {
+    title: role,
+    role,
+    company: '字节跳动',
+    salary: '待复核',
+    location,
+    keywords: inferKeywords(rawText).join(', '),
+    rawText,
+    url: originalUrl,
+    parseStatus: 'bytedance-api-parsed',
+    fitReason: [category, recruitType, '字节官网接口解析'].filter(Boolean).join(' · '),
+  };
+}
+
+async function parseTencentCareersUrl(url) {
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    return {};
+  }
+  if (!/careers\.tencent\.com$/i.test(parsedUrl.hostname)) return {};
+
+  const postIdFromUrl = parsedUrl.searchParams.get('postId') || parsedUrl.searchParams.get('postid');
+  if (postIdFromUrl) {
+    const detail = await fetchTencentPostById(postIdFromUrl);
+    return detail ? tencentPostToParsedJob(detail, url) : {};
+  }
+
+  const keyword = parsedUrl.searchParams.get('keyword') || parsedUrl.searchParams.get('keywords') || '';
+  if (!keyword) return {};
+
+  const queryUrl = new URL('https://careers.tencent.com/tencentcareer/api/post/Query');
+  queryUrl.searchParams.set('timestamp', String(Date.now()));
+  queryUrl.searchParams.set('keyword', keyword);
+  queryUrl.searchParams.set('pageIndex', '1');
+  queryUrl.searchParams.set('pageSize', '10');
+  queryUrl.searchParams.set('language', 'zh-cn');
+  const result = await fetchTencentJson(queryUrl.href);
+  const first = result?.Data?.Posts?.find((item) => item?.IsValid !== false) || result?.Data?.Posts?.[0];
+  if (!first) return {};
+  const detail = first.PostId ? await fetchTencentPostById(first.PostId).catch(() => null) : null;
+  return tencentPostToParsedJob(detail || first, url);
+}
+
+async function fetchTencentPostById(postId) {
+  const detailUrl = new URL('https://careers.tencent.com/tencentcareer/api/post/ByPostId');
+  detailUrl.searchParams.set('timestamp', String(Date.now()));
+  detailUrl.searchParams.set('postId', postId);
+  detailUrl.searchParams.set('language', 'zh-cn');
+  const payload = await fetchTencentJson(detailUrl.href);
+  return payload?.Data || null;
+}
+
+async function fetchTencentJson(url) {
+  const response = await fetch(url, {
+    headers: {
+      accept: 'application/json',
+      'user-agent': 'Mozilla/5.0 career-ops official-careers-parser',
+    },
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) throw new Error(`Tencent careers API HTTP ${response.status}`);
+  return response.json();
+}
+
+function tencentPostToParsedJob(post, originalUrl) {
+  const role = cleanManualText(post.RecruitPostName || post.PostName || post.Title, 120);
+  if (!role) return {};
+  const location = cleanManualText(post.LocationName || post.CountryName, 40);
+  const bg = cleanManualText(post.BGName, 40);
+  const product = cleanManualText(post.ProductName, 80);
+  const category = cleanManualText(post.CategoryName, 40);
+  const responsibility = cleanManualText(post.Responsibility, 3000);
+  const requirement = cleanManualText(post.Requirement || post.RequirementText, 3000);
+  const years = cleanManualText(post.RequireWorkYearsName, 40);
+  const rawText = [
+    role,
+    '腾讯',
+    bg,
+    product,
+    category,
+    location,
+    years,
+    responsibility,
+    requirement,
+  ].filter(Boolean).join(' ');
+  const postUrl = post.PostURL || (post.PostId ? `https://careers.tencent.com/jobdesc.html?postId=${post.PostId}` : originalUrl);
+  const keywords = inferKeywords(rawText).join(', ');
+  return {
+    title: role,
+    role,
+    company: bg ? `腾讯 ${bg}` : '腾讯',
+    salary: '待复核',
+    location,
+    keywords,
+    rawText,
+    url: String(postUrl || originalUrl || '').replace(/^http:\/\//i, 'https://'),
+    parseStatus: 'tencent-api-parsed',
+    fitReason: [product || category, years, '腾讯官网接口解析'].filter(Boolean).join(' · '),
   };
 }
 
@@ -1073,6 +1350,51 @@ function inferMatchScore(keywords, direction, text) {
   return Math.max(1, Math.min(5, Number(score.toFixed(1))));
 }
 
+export function inferManualMatchScore({ company = '', role = '', location = '', salary = '', direction = '', keywords = [], text = '', parseStatus = '', manualInterest = false } = {}) {
+  const fullText = [
+    company,
+    role,
+    location,
+    salary,
+    direction,
+    ...(keywords || []),
+    text,
+  ].join(' ');
+  let score = inferMatchScore(keywords || [], direction, fullText);
+
+  if (manualInterest) score += 0.12;
+  if (/深圳/.test(location || fullText)) score += 0.12;
+  if (/tencent-api-parsed|bytedance-api-parsed|codex-chrome-parsed|text-parsed|parsed/i.test(parseStatus)) score += 0.08;
+
+  const strongEngineeringSignals = [
+    /EtherCAT/i,
+    /CANopen/i,
+    /CiA402/i,
+    /ROS2?/i,
+    /MoveIt/i,
+    /URDF/i,
+    /SDK/i,
+    /RAG/i,
+    /Agent/i,
+    /机器人数据|多模态数据|数据清洗|数据标注|数据质检/,
+    /技术支持|FAE|售前技术|解决方案/,
+  ];
+  const signalHits = strongEngineeringSignals.filter((item) => item.test(fullText)).length;
+  score += Math.min(signalHits, 5) * 0.08;
+
+  if (/产品经理|产品Owner|竞品分析|需求洞察|用户调研/.test(role + fullText)) score -= 0.65;
+  if (/战略生态|生态合作|投资|孵化|商务谈判|行业洞察|生态图谱/.test(role + fullText)) score -= 0.75;
+  if (/负责人|架构负责人|专家|总监|Lead|leader/i.test(role + fullText)) score -= 0.35;
+  if (/博士优先|博士/.test(fullText)) score -= 0.25;
+  if (/5年以上|五年以上|8年以上|八年以上|10年以上|十年以上/.test(fullText)) score -= 0.35;
+  if (/猎头|代招公司/.test(fullText)) score -= 0.15;
+  if (/运营|策略专家/.test(role)) score -= 0.35;
+  if (/北京|上海|杭州/.test(location) && !/远程|深圳/.test(location)) score -= 0.15;
+  if (/待复核/.test(direction)) score -= 0.18;
+
+  return Math.max(1, Math.min(5, Number(score.toFixed(1))));
+}
+
 function inferEvidenceGap(direction, keywords) {
   if (direction.includes('数据')) return '需要补机器人数据 Pipeline、数据清洗、质检、版本管理或标注流转证据。';
   if (direction.includes('RAG')) return '需要补 RAG 架构、评测、Badcase、Evidence API 和部署细节。';
@@ -1105,6 +1427,8 @@ function inferSource(url) {
       ['liepin.com', '猎聘'],
       ['zhipin.com', 'Boss直聘'],
       ['jobs.tencent.com', '腾讯招聘'],
+      ['careers.tencent.com', '腾讯招聘'],
+      ['jobs.bytedance.com', '字节跳动招聘'],
       ['michaelpage.com.cn', 'Michael Page'],
       ['bebee.com', 'BeBee'],
       ['haitou.cc', '海投'],

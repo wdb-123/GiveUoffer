@@ -26,7 +26,7 @@
 .experience-markdown-paper h1,
 .experience-markdown-paper h2,
 .experience-markdown-paper h3 {
-  color: #0f172a;
+  color: #111827;
   line-height: 1.25;
 }
 
@@ -55,6 +55,71 @@
 
 .experience-markdown-paper ul {
   padding-left: 20px;
+}
+
+.experience-profile-overview {
+  display: grid;
+  gap: 18px;
+}
+
+.experience-profile-overview h1 {
+  max-width: 620px;
+}
+
+.experience-profile-overview .profile-summary {
+  margin: -8px 0 0;
+  padding: 14px 16px;
+  border-left: 4px solid var(--accent);
+  background: var(--soft);
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.profile-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.profile-stat-grid div {
+  min-height: 76px;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.profile-stat-grid strong {
+  color: #111827;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.profile-stat-grid span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.experience-profile-overview .experience-asset-card {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.experience-profile-overview .experience-asset-card h4 {
+  margin: 0 0 8px;
+  color: var(--accent);
+  font-size: 15px;
+}
+
+.experience-profile-overview .experience-asset-card ul {
+  margin: 0;
 }
 
 @media (min-width: 1920px) {
@@ -214,7 +279,7 @@
 .experience-source-preview h2,
 .experience-source-preview h3 {
   margin: 18px 0 9px;
-  color: #0f172a;
+  color: #111827;
   line-height: 1.25;
 }
 
@@ -444,9 +509,9 @@
   gap: 10px;
   margin-top: 0;
   padding: 9px 10px;
-  border: 1px solid rgba(15, 118, 110, 0.22);
-  background: linear-gradient(180deg, #f4fbf8 0%, #eef8f5 100%);
-  box-shadow: 0 12px 26px rgba(15, 118, 110, 0.08);
+  border: 1px solid rgba(17, 24, 39, 0.22);
+  background: linear-gradient(180deg, #eef0f4 0%, #eef0f4 100%);
+  box-shadow: 0 12px 26px rgba(17, 24, 39, 0.08);
   overflow: hidden;
   min-height: 76px;
   max-height: 92px;
@@ -516,7 +581,7 @@
 }
 
 .market-rail-tab.is-active {
-  border-color: rgba(15, 118, 110, 0.34);
+  border-color: rgba(17, 24, 39, 0.34);
   background: var(--soft);
   color: var(--accent);
 }
@@ -766,6 +831,9 @@
 
 .is-evidence-view #evidenceView {
   padding: 28px var(--workspace-pad) 28px var(--workspace-pad);
+  min-height: 100%;
+  height: 100%;
+  display: grid;
 }
 
 .is-evidence-view .context-rail {
@@ -778,6 +846,8 @@
 
 .is-applications-view #applicationsView {
   padding: var(--workspace-pad) var(--workspace-pad) 48px var(--workspace-pad);
+  min-height: 100%;
+  height: 100%;
 }
 
 .is-reply-view .context-rail {
@@ -847,18 +917,32 @@
 }
 
 .experience-asset-group summary::before {
-  content: "";
-  width: 0;
-  height: 0;
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  border-left: 6px solid var(--accent);
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  border-radius: 999px;
+  color: #334155;
+  content: "⌄";
+  display: inline-flex;
+  font-size: 14px;
+  font-weight: 900;
+  height: 22px;
+  justify-content: center;
+  line-height: 1;
   transform: rotate(0deg);
-  transition: transform 140ms ease;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease, transform 160ms ease;
+  width: 22px;
 }
 
 .experience-asset-group[open] summary::before {
-  transform: rotate(90deg);
+  background: #111827;
+  border-color: #111827;
+  color: #ffffff;
+  transform: rotate(180deg);
+}
+
+.experience-asset-group summary:hover::before {
+  border-color: #94a3b8;
 }
 
 .experience-asset-group summary h3 {
@@ -891,9 +975,11 @@
 }
 
 .ai-butler-page {
-  width: min(100%, 1520px);
-  min-height: min(900px, calc(100vh - 56px));
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  min-height: 100%;
+  height: 100%;
+  margin: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 16px;
@@ -970,7 +1056,7 @@
 }
 
 .ai-message strong {
-  color: #667085;
+  color: #6b7280;
   font-size: 12px;
   font-weight: 850;
 }
@@ -983,9 +1069,9 @@
 
 .ai-message.is-user p {
   padding: 10px 13px;
-  border: 1px solid rgba(15, 118, 110, 0.18);
+  border: 1px solid rgba(17, 24, 39, 0.18);
   border-radius: 16px 16px 4px 16px;
-  background: #eef8f6;
+  background: #eef0f4;
 }
 
 .ai-quick-prompts {
@@ -1038,7 +1124,8 @@
 }
 
 .ai-conversation-list {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   min-height: 0;
   overflow: auto;
@@ -1047,9 +1134,15 @@
 
 .ai-conversation-item {
   width: 100%;
+  flex: 0 0 64px;
   display: grid;
+  grid-template-rows: repeat(2, min-content);
+  align-content: center;
   gap: 5px;
-  padding: 12px;
+  min-height: 64px;
+  height: 64px;
+  max-height: 64px;
+  padding: 10px 12px;
   border: 1px solid rgba(214, 221, 229, 0.88);
   border-radius: 10px;
   background: #ffffff;
@@ -1059,8 +1152,8 @@
 
 .ai-conversation-item:hover,
 .ai-conversation-item.is-active {
-  border-color: rgba(15, 118, 110, 0.14);
-  background: #f2fbf8;
+  border-color: rgba(17, 24, 39, 0.14);
+  background: #eef0f4;
 }
 
 .ai-conversation-item strong,
@@ -1087,8 +1180,9 @@
   }
 
   .ai-butler-page {
-    width: min(100%, 1840px);
-    min-height: min(1080px, calc(100vh - 72px));
+    width: 100%;
+    min-height: 100%;
+    height: 100%;
     gap: 20px;
     padding: 24px;
   }
@@ -1141,8 +1235,9 @@
   }
 
   .ai-butler-page {
-    width: min(100%, 2200px);
-    min-height: min(1320px, calc(100vh - 88px));
+    width: 100%;
+    min-height: 100%;
+    height: 100%;
     gap: 24px;
     padding: 28px;
   }
@@ -1214,7 +1309,7 @@
 
 .experience-file-item:hover,
 .experience-file-item.is-active {
-  border-color: rgba(15, 118, 110, 0.32);
+  border-color: rgba(17, 24, 39, 0.32);
   background: var(--soft);
 }
 
@@ -1227,7 +1322,7 @@
 
 .experience-file-item strong {
   grid-column: 2;
-  color: #0f172a;
+  color: #111827;
   font-size: 12px;
   line-height: 1.25;
 }
@@ -1244,9 +1339,9 @@
   grid-row: 1 / span 2;
   min-width: 34px;
   padding: 3px 5px;
-  border: 1px solid rgba(15, 118, 110, 0.18);
+  border: 1px solid rgba(17, 24, 39, 0.18);
   border-radius: 999px;
-  background: rgba(15, 118, 110, 0.08);
+  background: rgba(17, 24, 39, 0.08);
   color: var(--accent);
   font-size: 9px;
   font-weight: 900;
@@ -1277,7 +1372,7 @@
 }
 
 .experience-version-item strong {
-  color: #0f172a;
+  color: #111827;
   font-size: 13px;
 }
 
@@ -1342,7 +1437,7 @@
 }
 
 .market-summary-item strong {
-  color: #0f172a;
+  color: #111827;
   font-size: 13px;
   line-height: 1.4;
 }
@@ -1473,7 +1568,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #0f766e, #2563eb);
+  background: linear-gradient(90deg, #111827, #111827);
 }
 
 .application-insights {
@@ -1501,7 +1596,7 @@
 }
 
 .insight-stats strong {
-  color: #0f172a;
+  color: #111827;
   font-size: 22px;
   line-height: 1;
 }
@@ -1523,7 +1618,7 @@
 
 .feedback-guide h4 {
   margin: 0 0 8px;
-  color: #0f172a;
+  color: #111827;
   font-size: 13px;
 }
 
@@ -1537,4 +1632,166 @@
 
 .feedback-guide li + li {
   margin-top: 6px;
+}
+
+/* Compact import workflow: keep the page task-focused without oversized cards. */
+.is-applications-view #applicationsView {
+  padding: 18px 24px 32px;
+}
+
+.is-applications-view .applications-page {
+  max-width: 1180px;
+  gap: 10px;
+}
+
+.is-applications-view .manual-import-panel {
+  grid-template-columns: minmax(0, 0.95fr) minmax(320px, 1.05fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.is-applications-view .manual-import-stage,
+.is-applications-view .manual-import-result-panel,
+.is-applications-view .progress-panel {
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.is-applications-view .manual-import-stage,
+.is-applications-view .manual-import-result-panel {
+  max-height: none;
+  padding: 12px;
+  gap: 10px;
+}
+
+.is-applications-view .manual-import-input-card,
+.is-applications-view .manual-import-workspace,
+.is-applications-view .manual-import-input {
+  gap: 8px;
+}
+
+.is-applications-view .manual-import-inline-copy {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.is-applications-view .manual-import-inline-copy strong {
+  color: #111827;
+  font-size: 16px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.is-applications-view .manual-import-inline-copy p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.is-applications-view .manual-import-input textarea {
+  min-height: 132px;
+  max-height: 170px;
+  padding: 11px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.is-applications-view .manual-import-actions {
+  gap: 6px;
+}
+
+.is-applications-view .manual-import-actions .small-button,
+.is-applications-view .small-button {
+  min-height: 34px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.is-applications-view .panel-heading {
+  align-items: start;
+  gap: 8px;
+}
+
+.is-applications-view .panel-heading h3,
+.is-applications-view .progress-panel h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.is-applications-view .panel-heading > span {
+  font-size: 12px;
+}
+
+.is-applications-view .panel-supporting-copy {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.is-applications-view .manual-import-result {
+  min-height: 0;
+}
+
+.is-applications-view .empty-state {
+  min-height: 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.is-applications-view .applications-board {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+  height: 100%;
+}
+
+.is-applications-view .application-metrics-strip,
+.is-applications-view .today-todo-panel,
+.is-applications-view .feedback-review-panel {
+  display: none !important;
+}
+
+.is-applications-view .progress-panel {
+  padding: 12px;
+}
+
+.is-applications-view .progress-flow-panel {
+  min-height: 100%;
+  height: 100%;
+}
+
+.is-applications-view .progress-flow-panel .job-list {
+  min-height: 0;
+  height: 100%;
+}
+
+.is-applications-view .progress-flow-panel .empty-state {
+  min-height: 100%;
+  display: grid;
+  align-content: center;
+}
+
+@media (max-width: 1180px) {
+  .is-applications-view .manual-import-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .is-applications-view .manual-import-inline-copy {
+    display: grid;
+    gap: 4px;
+  }
+
+  .is-applications-view .manual-import-inline-copy p {
+    text-align: left;
+  }
 }

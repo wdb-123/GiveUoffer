@@ -15,6 +15,9 @@ import {
   registerExperienceMetadataRoutes,
 } from './visualizer/services/experience-metadata-service.mjs';
 import {
+  registerExperienceProfileRoutes,
+} from './visualizer/services/experience-profile-service.mjs';
+import {
   registerWorkspaceRoutes,
 } from './visualizer/services/workspace-service.mjs';
 import { registerResumeRoutes } from './visualizer/services/resume-service.mjs';
@@ -43,6 +46,7 @@ registerReplyRoutes(registerJsonRoute);
 registerRecruitmentRoutes(registerJsonRoute);
 registerWorkspaceRoutes(registerJsonRoute);
 registerExperienceMetadataRoutes(registerJsonRoute);
+registerExperienceProfileRoutes(registerJsonRoute);
 registerEvidenceRoutes(registerJsonRoute);
 
 const mime = {
@@ -50,6 +54,7 @@ const mime = {
   '.css': 'text/css; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',

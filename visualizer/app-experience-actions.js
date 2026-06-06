@@ -78,6 +78,38 @@ function renderExperienceVersions(versions) {
     : '<div class="empty-state">还没有经历元数据版本记录。</div>';
 }
 
+function showExperienceProfile() {
+  currentExperiencePath = '__profile__';
+  currentExperienceAssetType = 'profile';
+  experienceGeneratedOutput.hidden = true;
+  renderExperienceMetadata();
+  setStatus('显示职业画像');
+}
+
+async function generateExperienceProfile() {
+  if (!experienceProfileGenerateBtn) return;
+  experienceProfileGenerateBtn.disabled = true;
+  experienceProfileGenerateBtn.textContent = '画像生成中...';
+  experienceStatus.textContent = '正在根据导入的个人信息生成职业画像...';
+  setStatus('生成职业画像');
+  try {
+    const result = await VisualizerApi.generateExperienceProfile();
+    currentExperienceProfile = result.profile || null;
+    currentExperiencePath = '__profile__';
+    currentExperienceAssetType = 'profile';
+    experienceGeneratedOutput.hidden = true;
+    renderExperienceMetadata();
+    experienceStatus.textContent = `职业画像已生成：${formatDateTime(result.updatedAt)}`;
+    setStatus('职业画像已生成');
+  } catch (err) {
+    experienceStatus.textContent = `画像生成失败：${err.message || err}`;
+    setStatus('画像生成失败');
+  } finally {
+    experienceProfileGenerateBtn.disabled = false;
+    experienceProfileGenerateBtn.textContent = '生成职业画像';
+  }
+}
+
 function versionActionLabel(action) {
   const labels = { created: '新增', updated: '更新', deleted: '删除' };
   return labels[action] || action || '变更';
@@ -202,4 +234,3 @@ function formatDateTime(value) {
   if (!value) return '';
   return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
-

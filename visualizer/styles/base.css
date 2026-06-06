@@ -2,11 +2,11 @@
   color-scheme: light;
   --bg: #eef1f4;
   --surface: #f8fafc;
-  --ink: #17202a;
-  --muted: #64707d;
-  --line: #d6dde5;
+  --ink: #111827;
+  --muted: #6b7280;
+  --line: #d9dde5;
   --panel: #ffffff;
-  --accent: #0f766e;
+  --accent: #111827;
   --accent-2: #334155;
   --soft: #edf7f5;
   --sidebar-width: 356px;
@@ -81,20 +81,24 @@ body {
 
 .context-rail {
   position: fixed;
-  top: var(--rail-top);
+  top: var(--resume-context-rail-top, var(--rail-top));
   right: var(--rail-gap);
   z-index: 30;
   width: var(--rail-width);
-  max-height: calc(100vh - var(--rail-top) - 22px);
+  max-height: calc(100vh - var(--resume-context-rail-top, var(--rail-top)) - 22px);
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
-  padding: 18px 20px;
+  padding: 30px 20px;
   border: 1px solid rgba(148, 163, 184, 0.42);
-  border-radius: 18px;
+  border-radius: 15px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: 0 22px 70px rgba(15, 23, 42, 0.18);
   backdrop-filter: blur(18px);
+}
+
+.is-resume-view .context-rail {
+  min-height: 301px;
 }
 
 .brand {
@@ -115,6 +119,7 @@ body {
   border-radius: 14px;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.16);
   font-size: 22px;
+  object-fit: cover;
 }
 
 .brand h1 {
@@ -374,7 +379,7 @@ button {
 }
 
 .resume-template-item strong {
-  color: #0f172a;
+  color: #111827;
   font-size: 12px;
 }
 
@@ -397,7 +402,7 @@ button {
 .edit-prompt-card {
   margin-top: 12px;
   padding: 12px 13px;
-  border: 1px solid #d6dde5;
+  border: 1px solid #d9dde5;
   border-left: 4px solid #94a3b8;
   border-radius: 8px;
   background: #f8fafc;
@@ -547,7 +552,7 @@ button {
   border: 1px solid var(--line);
   border-radius: 8px;
   font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color: #17202a;
+  color: #111827;
 }
 
 .resource-preview {

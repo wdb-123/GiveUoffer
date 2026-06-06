@@ -12,7 +12,13 @@
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || payload?.message || `HTTP ${response.status}`);
+      }
+      const text = await response.text().catch(() => '');
+      throw new Error(text.trim() || `HTTP ${response.status}`);
     }
 
     const contentType = response.headers.get('content-type') || '';

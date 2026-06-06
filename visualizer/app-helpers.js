@@ -28,7 +28,7 @@ function editableAttrs(lineIndex, prefix) {
 function resumeAvatar() {
   return `
     <figure class="resume-avatar" aria-label="职业照">
-      <img src="/assets/headshot.png" alt="韦东波职业照">
+      <img src="assets/headshot.png" alt="韦东波职业照">
     </figure>
   `;
 }

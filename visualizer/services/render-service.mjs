@@ -12,9 +12,12 @@ export async function renderResumePdf(file, port) {
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 1600 } });
     await page.goto(`http://localhost:${port}/`, { waitUntil: 'networkidle' });
-    await page.selectOption('#resumeSelect', file);
+    await page.evaluate(async (selected) => {
+      if (typeof window.loadResume === 'function') await window.loadResume(selected);
+    }, file);
     await page.waitForFunction((selected) => {
-      return document.querySelector('#resumeSelect')?.value === selected
+      return typeof currentFile !== 'undefined'
+        && currentFile === selected
         && document.querySelector('#paper h1')?.textContent?.trim();
     }, file);
     return await page.pdf({

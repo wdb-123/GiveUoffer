@@ -17,7 +17,7 @@ async function runRecruitmentSearch(mode = 'experience') {
     : '正在根据经历资产做粗泛岗位检索，通常需要 10-30 秒...');
   setStatus('搜索机会中');
   try {
-    const result = await VisualizerApi.searchRecruitmentMarket({ mode, resumeFile: resumeSelect.value });
+    const result = await VisualizerApi.searchRecruitmentMarket({ mode, resumeFile: currentFile || resumeOptions[0]?.file || '' });
     renderRecruitmentMarket(result.market);
     setMarketSearchStatus(result.added
       ? `本次${mode === 'resume-intent' ? '根据简历和意向' : '根据经历'}新增 ${result.added} 条候选岗位，已合并到岗位列表；匹配评分仅作初筛，请打开来源复核 JD。`
@@ -120,6 +120,28 @@ async function deleteRecruitmentJob(id) {
   }
 }
 
+async function toggleMarketPriorityFocus(id) {
+  const job = (currentMarketData.jobs || []).find((item) => item.id === id);
+  if (!job) {
+    setMarketSearchStatus('没有找到要关注的岗位。');
+    return;
+  }
+  const nextValue = !job.priorityFocus;
+  setMarketSearchStatus(nextValue ? `正在标记重点关注：${job.company || ''} ${job.role || ''}`.trim() : '正在取消重点关注');
+  try {
+    const result = await VisualizerApi.updateRecruitmentJob({
+      id,
+      priorityFocus: nextValue,
+    });
+    renderRecruitmentMarket(result.market || currentMarketData);
+    setMarketSearchStatus(result.message || (nextValue ? '已标记为重点关注。' : '已取消重点关注。'));
+    setStatus('已更新');
+  } catch (err) {
+    setMarketSearchStatus(`重点关注更新失败：${err.message || err}`);
+    setStatus('更新失败');
+  }
+}
+
 async function runLocalCodexParseJob(id) {
   const job = (currentMarketData.jobs || []).find((item) => item.id === id);
   if (!job) {
@@ -148,14 +170,13 @@ async function runLocalCodexParseJob(id) {
   } catch (extensionErr) {
     currentCodexWorkflowState = {
       jobId: job.id || '',
-      status: 'failed',
-      message: `Chrome 插件解析失败：${extensionErr.message || extensionErr}`,
-      output: '请确认 Chrome 已打开、扩展已刷新并启用，且 Boss 页面登录态可用。',
+      status: 'running',
+      message: `Chrome 插件不可用，改用本地 Codex 尝试解析：${extensionErr.message || extensionErr}`,
+      output: '',
     };
     renderRecruitmentMarket(currentMarketData);
     setMarketSearchStatus(currentCodexWorkflowState.message);
-    setStatus('插件失败');
-    return;
+    await runLocalCodexParseJobFallback(job);
   }
 }
 
@@ -275,6 +296,7 @@ async function pollLocalCodexParseTask(taskId, jobId, attempt = 0) {
 
 function renderRecruitmentMarket(data) {
   currentMarketData = data || { jobs: [] };
+  renderResumeTargetJobOptions(currentMarketData.jobs || []);
   const allJobs = data.jobs || [];
   const railScopedJobs = allJobs.filter((job) => (
     currentMarketRailMode === 'radar' ? !isManualMarketJob(job) : isManualMarketJob(job)
@@ -316,6 +338,66 @@ function renderRecruitmentMarket(data) {
   marketJobs.innerHTML = jobs.length
     ? renderMarketGroups(jobs, marketGroupSelect?.value || 'flat')
     : `<div class="empty-state">${currentMarketRailMode === 'radar' ? '暂无雷达搜索岗位。' : '暂无手工导入岗位。'}</div>`;
+}
+
+function renderResumeTargetJobOptions(jobs = []) {
+  if (!resumeTargetJobSelect) return;
+  const previous = resumeTargetJobSelect.value;
+  const validJobs = jobs
+    .filter((job) => job?.id && job.role && !/待解析|待复核岗位/.test(`${job.company || ''}${job.role || ''}`))
+    .sort((a, b) => Number(b.matchScore || 0) - Number(a.matchScore || 0))
+    .slice(0, 80);
+  resumeTargetJobSelect.innerHTML = validJobs.length
+    ? validJobs.map((job) => {
+        const label = `${job.company || '待确认公司'} - ${job.role || '待确认岗位'}${job.matchScore ? ` · ${Number(job.matchScore).toFixed(1)}` : ''}`;
+        return `<option value="${escapeAttr(job.id)}">${escapeHtml(label)}</option>`;
+      }).join('')
+    : '<option value="">暂无可选岗位</option>';
+  const remembered = readRememberedResumeTargetJob();
+  const selected = [previous, remembered, validJobs[0]?.id].find((id) => id && validJobs.some((job) => job.id === id));
+  if (selected) {
+    resumeTargetJobSelect.value = selected;
+    rememberResumeTargetJob(selected);
+    currentResumeTargetJobId = selected;
+  }
+  syncSelectedTargetResumeState({ loadExisting: currentView === 'resume' });
+}
+
+function rememberResumeTargetJob(jobId = '') {
+  if (!jobId) return;
+  currentResumeTargetJobId = jobId;
+  try {
+    localStorage.setItem('careerOpsResumeTargetJobId', jobId);
+  } catch (err) {
+    // Ignore private browsing or storage-disabled environments.
+  }
+}
+
+async function syncSelectedTargetResumeState({ loadExisting = true } = {}) {
+  if (!resumeTargetJobSelect || currentView !== 'resume') return;
+  const jobId = resumeTargetJobSelect.value || currentResumeTargetJobId || '';
+  if (!jobId) return;
+  currentResumeTargetJobId = jobId;
+  const job = (currentMarketData.jobs || []).find((item) => item.id === jobId);
+  const link = resumeJobLinks.find((item) => item.jobId === jobId && item.file);
+  if (link?.file && resumeOptions.some((item) => item.file === link.file)) {
+    if (loadExisting && (currentFile !== link.file || paper?.dataset.resumeState !== 'loaded')) {
+      setResumeGenerationStatus('');
+      await loadResume(link.file);
+    } else {
+      setResumeGenerationStatus('');
+    }
+    return;
+  }
+  if (job) renderTargetResumeState(job);
+}
+
+function readRememberedResumeTargetJob() {
+  try {
+    return localStorage.getItem('careerOpsResumeTargetJobId') || '';
+  } catch (err) {
+    return '';
+  }
 }
 
 function marketSummaryItem(label, value, hint) {
@@ -387,7 +469,7 @@ function officialCompanySuggestions(jobs, profileTerms = []) {
 }
 
 function marketProfileTerms() {
-  const resumeFile = resumeSelect?.value || '';
+  const resumeFile = currentFile || resumeOptions[0]?.file || '';
   const selectedResume = resumeOptions.find((item) => item.file === resumeFile);
   const clues = directionClues?.[resumeFile] || {};
   return uniqueMarketTerms([
@@ -498,13 +580,14 @@ function platformFallbackAction(status) {
 function renderMarketChannelStatus(data) {
   if (!data.platforms?.length) return;
   if (!marketSearchStatus) return;
-  const reachedCount = data.platforms.filter((item) => item.status === 'active' || item.status === 'configured').length;
-  const current = marketSearchStatus.textContent || '';
-  if (!current.includes('岗位雷达')) setMarketSearchStatus(`岗位雷达已汇总 ${data.platforms.length} 个渠道，其中 ${reachedCount} 个可直接查看；需要新机会时，点击开始搜索机会。`);
+  if (!marketSearchStatus.textContent) marketSearchStatus.hidden = true;
 }
 
 function setMarketSearchStatus(message) {
-  if (marketSearchStatus) marketSearchStatus.textContent = message;
+  if (marketSearchStatus) {
+    marketSearchStatus.textContent = message || '';
+    marketSearchStatus.hidden = true;
+  }
   if (currentView === 'market') setStatus(message);
 }
 
@@ -574,11 +657,12 @@ function renderMarketSourceCard(job) {
   const reason = isPending ? '' : (job.fitReason || job.evidenceGap || job.direction || '需要打开 JD 后复核。');
   const tags = isPending ? '' : renderMiniTags(job.keywords || []);
   return `
-    <article class="market-source-card${isPending ? ' is-pending-parse' : ''}${canOpen ? ' is-clickable' : ''}"${canOpen ? ` data-market-open-url="${escapeAttr(job.url)}" tabindex="0" role="link"` : ''}>
+    <article class="market-source-card${isPending ? ' is-pending-parse' : ''}${canOpen ? ' is-clickable' : ''}"${canOpen ? ` data-market-open-url="${escapeAttr(job.url)}" data-market-job-id="${escapeAttr(job.id || '')}" tabindex="0" role="link"` : ''}>
       <div class="market-source-card-head">
         <strong>${escapeHtml(job.company || '待复核')}</strong>
         <div class="market-source-card-actions">
           <span class="market-source-score">${Number(job.matchScore || 0).toFixed(1)}</span>
+          ${isPending ? '' : renderMarketFocusButton(job)}
           ${renderMarketDeleteButton(job)}
         </div>
       </div>
@@ -691,23 +775,21 @@ function renderMarketTable(jobs) {
         <col class="market-col-role">
         <col class="market-col-score">
         <col class="market-col-source">
-        <col class="market-col-keywords">
         <col class="market-col-summary">
         <col class="market-col-action">
       </colgroup>
       <thead>
         <tr>
           <th>岗位</th>
-          <th>匹配 / 薪资</th>
+          <th>初筛 / 薪资</th>
           <th>来源</th>
-          <th>关键词</th>
           <th>为什么值得看</th>
           <th>操作</th>
         </tr>
       </thead>
       <tbody>
         ${jobs.map((job) => `
-          <tr${job.url ? ` class="market-row-link" data-market-open-url="${escapeAttr(job.url)}" tabindex="0" role="link"` : ''}>
+          <tr${job.url ? ` class="market-row-link" data-market-open-url="${escapeAttr(job.url)}" data-market-job-id="${escapeAttr(job.id || '')}" tabindex="0" role="link"` : ''}>
             <td class="market-job-cell">
               <strong>${escapeHtml(job.company)}</strong>
               ${renderMarketJobTitle(job)}
@@ -721,14 +803,40 @@ function renderMarketTable(jobs) {
               <span>${escapeHtml(platformLabel(job))}</span>
               <small>${escapeHtml(marketStoredAt(job))}</small>
             </td>
-            <td class="market-keywords-cell">${renderMiniTags((job.keywords || []).slice(0, 5))}</td>
             <td class="market-reason-cell"><div class="market-summary-text">${escapeHtml(job.fitReason || job.evidenceGap || job.direction || '')}</div></td>
-            <td class="market-action-cell">${renderMarketDeleteButton(job, '删除')}</td>
+            <td class="market-action-cell">${renderMarketTableActions(job)}</td>
           </tr>
         `).join('')}
       </tbody>
     </table>
   `;
+}
+
+function renderMarketTableActions(job) {
+  const workflow = currentCodexWorkflowState.jobId === job.id ? currentCodexWorkflowState : null;
+  const isBusy = workflow?.status === 'running';
+  const parseButton = isPendingParsedJob(job) && job.url
+    ? `<button class="market-codex-workflow-button table-parse-button${isBusy ? ' is-running' : ''}" type="button" data-market-codex-job="${escapeAttr(job.id || '')}" ${isBusy ? 'disabled' : ''}>${isBusy ? '解析中' : '解析'}</button>`
+    : '';
+  return `
+    <div class="market-table-actions">
+      ${isPendingParsedJob(job) ? '' : renderMarketFocusButton(job)}
+      ${parseButton}
+      ${renderMarketDeleteButton(job, '删除')}
+    </div>
+  `;
+}
+
+function renderMarketResumeButton(job, label = '生成简历') {
+  if (!job?.id || !job.role || /待解析|待复核岗位/.test(`${job.company || ''}${job.role || ''}`)) return '';
+  const isBusy = currentResumeGenerationJobId === job.id;
+  return `<button class="market-generate-resume-button${isBusy ? ' is-running' : ''}" type="button" data-market-generate-resume="${escapeAttr(job.id)}" ${isBusy ? 'disabled' : ''}>${escapeHtml(isBusy ? '生成中' : label)}</button>`;
+}
+
+function renderMarketFocusButton(job) {
+  if (!job?.id || !job.role || /待解析|待复核岗位/.test(`${job.company || ''}${job.role || ''}`)) return '';
+  const isFocused = Boolean(job.priorityFocus);
+  return `<button class="market-focus-button${isFocused ? ' is-focused' : ''}" type="button" data-market-priority-focus="${escapeAttr(job.id)}">${escapeHtml(isFocused ? '已关注' : '重点关注')}</button>`;
 }
 
 function displaySalary(raw) {

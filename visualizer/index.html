@@ -3,20 +3,39 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Resume Visualizer</title>
-  <link rel="stylesheet" href="/styles.css">
+  <title>OfferU</title>
+  <script>
+    if (window.location.protocol === 'file:') {
+      window.location.replace('http://localhost:4173/');
+    }
+  </script>
+  <link rel="icon" type="image/png" sizes="512x512" href="assets/offeru-wide-mark-transparent.png">
+  <link rel="icon" type="image/png" sizes="180x180" href="assets/offeru-wide-icon-clean-180.png">
+  <link rel="apple-touch-icon" href="assets/offeru-wide-icon-clean-180.png">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-mark">CV</div>
+      <img class="brand-mark" src="assets/offeru-wide-brand-mark-clean.png" alt="OfferU">
       <div>
-        <h1>GiveUoffer</h1>
-        <p>简历、岗位、投递与沟通闭环</p>
+        <h1>OfferU</h1>
+        <p>Your Journey.<span>Your Offer.</span></p>
       </div>
     </div>
 
     <nav class="side-nav" aria-label="主导航">
+      <button id="resumeViewBtn" class="side-nav-item is-active" type="button">
+        <span class="side-nav-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+            <path d="M14 3v5h5" />
+            <path d="M8 13h8" />
+            <path d="M8 17h6" />
+          </svg>
+        </span>
+        <span>我的简历库</span>
+      </button>
       <button id="experienceViewBtn" class="side-nav-item" type="button">
         <span class="side-nav-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none">
@@ -39,17 +58,6 @@
           </svg>
         </span>
         <span>岗位列表</span>
-      </button>
-      <button id="resumeViewBtn" class="side-nav-item is-active" type="button">
-        <span class="side-nav-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none">
-            <path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
-            <path d="M14 3v5h5" />
-            <path d="M8 13h8" />
-            <path d="M8 17h6" />
-          </svg>
-        </span>
-        <span>我的简历库</span>
       </button>
       <button id="applicationsViewBtn" class="side-nav-item" type="button">
         <span class="side-nav-icon" aria-hidden="true">
@@ -94,25 +102,34 @@
       </p>
       <div class="toolbar-actions">
         <div id="resumeToolbarControls" class="resume-toolbar-controls">
-          <label class="primary-direction-control">
-            <span>方向简历</span>
-            <select id="resumeSelect"></select>
+          <label class="target-job-control">
+            <span>目标岗位</span>
+            <select id="resumeTargetJobSelect">
+              <option value="">自动选择岗位</option>
+            </select>
           </label>
-          <button id="autoGenerateResumeBtn" class="toolbar-icon-button" type="button">自动生成简历</button>
           <details class="export-menu">
-            <summary class="toolbar-icon-button primary-small-button">导出简历</summary>
+            <summary class="toolbar-icon-button primary-small-button">操作</summary>
             <div class="export-menu-panel">
+              <button id="autoGenerateResumeBtn" type="button">生成简历</button>
               <button type="button" data-export-format="pdf">导出 PDF</button>
               <button type="button" data-export-format="docx">导出 DOCX</button>
             </div>
           </details>
+          <span id="resumeGenerationStatus" class="resume-generation-status" hidden></span>
         </div>
-        <div id="experienceToolbarControls" class="resume-toolbar-controls" hidden>
-          <button id="experienceImportBtn" class="toolbar-icon-button primary-small-button" type="button">导入经历文件</button>
+        <div id="experienceToolbarControls" class="resume-toolbar-controls experience-toolbar-controls" hidden>
+          <button id="experienceProfileGenerateBtn" class="toolbar-icon-button primary-small-button" type="button">生成职业画像</button>
+          <details class="export-menu experience-import-menu">
+            <summary class="toolbar-icon-button">导入资料</summary>
+            <div class="export-menu-panel">
+              <button id="experienceImportBtn" type="button">经历文件</button>
+              <button id="headshotImportBtn" type="button">职业照</button>
+              <button id="intentionImportBtn" type="button">职业偏好</button>
+            </div>
+          </details>
           <input id="experienceImportInput" type="file" accept=".md,.docx,.txt" hidden>
-          <button id="headshotImportBtn" class="toolbar-icon-button" type="button">导入职业照</button>
           <input id="headshotImportInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
-          <button id="intentionImportBtn" class="toolbar-icon-button" type="button">导入职业偏好</button>
           <input id="intentionImportInput" type="file" accept=".md,.docx,.txt" hidden>
         </div>
         <span class="status" id="status">读取方向简历</span>
@@ -147,9 +164,8 @@
                 <label class="manual-import-input integrated-import-input">
                   <div class="manual-import-inline-copy">
                     <strong>粘贴邮件内容</strong>
-                    <p>支持投递回执、面试邀请、测评通知和拒信。解析后确认，再写入进度。</p>
                   </div>
-                  <textarea id="applicationImportText" rows="8" placeholder="示例：Subject: Interview invitation&#10;From: recruiting@example.com&#10;请在 2026-06-10 前预约面试..."></textarea>
+                  <textarea id="applicationImportText" rows="8" placeholder="支持投递回执、面试邀请、测评通知和拒信。解析后确认，再写入进度。&#10;&#10;示例：Subject: Interview invitation&#10;From: recruiting@example.com&#10;请在 2026-06-10 前预约面试..."></textarea>
                 </label>
                 <div class="manual-import-actions">
                   <button id="applicationParseBtn" class="small-button primary-small-button" type="button">解析进度</button>
@@ -162,12 +178,11 @@
             <div class="panel-heading compact-heading">
               <div>
                 <h3>解析结果</h3>
-                <p class="panel-supporting-copy">识别出的事件、下一步动作和入库命令会显示在这里。</p>
               </div>
               <span>确认后入库</span>
             </div>
             <div id="applicationImportResult" class="manual-import-result" aria-live="polite">
-              <div class="empty-state">先粘贴一封邮件并点击“解析进度”，这里会给出建议事件、下一步动作和入库命令。</div>
+              <div class="empty-state">识别出的事件、下一步动作和入库命令会显示在这里。先粘贴一封邮件并点击“解析进度”。</div>
             </div>
           </div>
         </section>
@@ -198,7 +213,7 @@
                 <button id="marketExperienceSearchBtn" class="small-button market-refresh-button" type="button">根据经历粗搜</button>
                 <button id="marketResumeIntentSearchBtn" class="small-button market-refresh-button" type="button">根据简历和意向检索</button>
               </div>
-              <p id="marketSearchStatus" class="market-search-status">按当前简历方向触发一次机会扫描。</p>
+              <p id="marketSearchStatus" class="market-search-status" hidden></p>
             </div>
             <div class="context-block market-manual-import" data-market-rail-panel="manual">
               <h3>手工导入</h3>
@@ -316,6 +331,13 @@
     </div>
     <div class="experience-file-rail">
       <details class="context-block experience-asset-group" open>
+        <summary>
+          <h3>我的职业画像</h3>
+          <span class="experience-asset-count">1 个</span>
+        </summary>
+        <div id="experienceProfileList" class="experience-file-list"></div>
+      </details>
+      <details class="context-block experience-asset-group">
         <summary>
           <h3>项目经历文件</h3>
           <span id="experienceFileCount" class="experience-asset-count">0</span>
@@ -470,20 +492,20 @@
     <div id="resourceStatus" class="resource-status">选择左侧资源开始。</div>
   </section>
 
-  <script src="/api-client.js"></script>
-  <script src="/visualizer-api.js"></script>
-  <script src="/app-state.js"></script>
-  <script src="/app-helpers.js"></script>
-  <script src="/app-resume-core.js"></script>
-  <script src="/app-resume-editor.js"></script>
-  <script src="/app-resume-resources.js"></script>
-  <script src="/app-experience-core.js"></script>
-  <script src="/app-experience-actions.js"></script>
-  <script src="/app-market.js"></script>
-  <script src="/app-tracker-evidence.js"></script>
-  <script src="/app-tracker-applications.js"></script>
-  <script src="/app-reply.js"></script>
-  <script src="/app-ai.js"></script>
-  <script src="/app-events.js"></script>
+  <script src="api-client.js"></script>
+  <script src="visualizer-api.js"></script>
+  <script src="app-state.js"></script>
+  <script src="app-helpers.js"></script>
+  <script src="app-resume-core.js"></script>
+  <script src="app-resume-editor.js"></script>
+  <script src="app-resume-resources.js"></script>
+  <script src="app-experience-core.js"></script>
+  <script src="app-experience-actions.js"></script>
+  <script src="app-market.js"></script>
+  <script src="app-tracker-evidence.js"></script>
+  <script src="app-tracker-applications.js"></script>
+  <script src="app-reply.js"></script>
+  <script src="app-ai.js"></script>
+  <script src="app-events.js"></script>
 </body>
 </html>

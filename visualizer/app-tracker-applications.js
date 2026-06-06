@@ -2,7 +2,7 @@ async function loadApplications() {
   if (currentView === 'applications') setStatus('读取投递进度');
   const data = await VisualizerApi.listApplications();
   currentApplicationsData = data.applications || [];
-  renderApplications(data.applications || [], data.metrics || {});
+  renderApplications(data.applications || [], data.metrics || {}, data.todos || [], data.feedback || []);
   if (currentView === 'applications') setStatus('已更新');
 }
 
@@ -16,7 +16,7 @@ function setApplicationImportSource(source) {
 function clearApplicationImport() {
   if (applicationImportText) applicationImportText.value = '';
   if (applicationImportResult) {
-    applicationImportResult.innerHTML = '<div class="empty-state">先粘贴一封邮件并点击“解析进度”，这里会给出建议事件、下一步动作和入库命令。</div>';
+    applicationImportResult.innerHTML = '<div class="empty-state">识别出的事件、下一步动作和入库命令会显示在这里。先粘贴一封邮件并点击“解析进度”。</div>';
   }
   setStatus('等待导入');
 }
@@ -282,7 +282,11 @@ function importSourceLabel(source) {
   return labels[source] || source;
 }
 
-function renderApplications(applications, metrics) {
+function renderApplications(applications, metrics, todos = [], feedback = []) {
+  applicationMetrics?.remove();
+  applicationTodos?.closest('.today-todo-panel')?.remove();
+  applicationFeedback?.closest('.feedback-review-panel')?.remove();
+
   const manualPipeline = applications
     .filter(hasActualPipelineProgress)
     .sort((a, b) => applicationStageIndex(progressStatusKey(b)) - applicationStageIndex(progressStatusKey(a)) || b.score - a.score);
@@ -298,7 +302,31 @@ function renderApplications(applications, metrics) {
     ? manualPipeline.map(renderProgressCard).join('')
     : '<div class="empty-state">还没有导入的投递进度。先解析一封真实邮件，确认入库后，这里才会形成你的投递时间线。</div>';
 
-  if (allJobs) allJobs.innerHTML = '';
+  priorityJobs.querySelectorAll('[data-edit-application-event]').forEach((button) => {
+    button.addEventListener('click', () => editApplicationEvent(button.dataset.editApplicationEvent));
+  });
+  priorityJobs.querySelectorAll('[data-delete-application-event]').forEach((button) => {
+    button.addEventListener('click', () => deleteApplicationEvent(button.dataset.deleteApplicationEvent));
+  });
+
+  if (applicationTodos) {
+    applicationTodos.innerHTML = todos.length
+      ? todos.map(renderTodoItem).join('')
+      : '<div class="empty-state">今天没有明确待办。继续导入新邮件后，这里会自动生成跟进、截止和面试准备动作。</div>';
+  }
+
+  if (applicationFeedback) {
+    applicationFeedback.innerHTML = feedback.length
+      ? feedback.map(renderFeedbackCard).join('')
+      : '<div class="empty-state">还没有足够反馈。导入拒信、无回复跟进或面试邀请后，这里会生成复盘建议。</div>';
+  }
+
+  if (allJobs) allJobs.innerHTML = renderApplicationInsights(applications, metrics, responseRate, {
+    manualApplied,
+    manualResponded,
+    manualInterview,
+    manualOffer,
+  });
 }
 
 function hasActualPipelineProgress(app) {
@@ -332,8 +360,104 @@ function renderProgressCard(app) {
         <span>${escapeHtml(app.scoreRaw || '-')}</span>
       </div>
       <div class="job-note">${escapeHtml(nextPipelineAction(app))}</div>
+      ${renderApplicationTimeline(app)}
     </article>
   `;
+}
+
+function renderApplicationTimeline(app) {
+  const events = (app.events || []).slice(-4).reverse();
+  if (!events.length) return '';
+  return `
+    <div class="application-event-list">
+      ${events.map((item) => `
+        <div class="application-event-row">
+          <div>
+            <strong>${escapeHtml(importEventLabel(item.event))}</strong>
+            <span>${escapeHtml([item.date, item.due ? `截止 ${item.due}` : '', importSourceLabel(item.source)].filter(Boolean).join(' · '))}</span>
+            ${item.next_action ? `<p>${escapeHtml(item.next_action)}</p>` : ''}
+          </div>
+          <div class="application-event-actions">
+            <button class="icon-text-button" type="button" data-edit-application-event="${escapeAttr(item.event_id)}">编辑</button>
+            <button class="icon-text-button danger-button" type="button" data-delete-application-event="${escapeAttr(item.event_id)}">删除</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderTodoItem(item) {
+  return `
+    <article class="todo-item todo-${escapeAttr(item.kind)}">
+      <div>
+        <strong>${escapeHtml(item.company)}</strong>
+        <span>${escapeHtml(item.role)}</span>
+      </div>
+      <p>${escapeHtml(item.action)}</p>
+      <small>${escapeHtml([item.reason, item.due].filter(Boolean).join(' · '))}</small>
+    </article>
+  `;
+}
+
+function renderFeedbackCard(item) {
+  return `
+    <article class="feedback-review-card feedback-${escapeAttr(item.kind)}">
+      <h4>${escapeHtml(item.title)}</h4>
+      <p>${escapeHtml(item.summary)}</p>
+      <strong>${escapeHtml(item.action)}</strong>
+      ${item.evidence?.length ? `<ul>${item.evidence.map((entry) => `<li>${escapeHtml(entry)}</li>`).join('')}</ul>` : ''}
+    </article>
+  `;
+}
+
+async function editApplicationEvent(eventId) {
+  const item = findApplicationEvent(eventId);
+  if (!item) return;
+  const company = window.prompt('公司', item.company || '') ?? item.company;
+  const role = window.prompt('岗位', item.role || '') ?? item.role;
+  const event = window.prompt('事件类型 applied/application_received/responded/assessment/interview/offer/rejected/note', item.event || 'note') ?? item.event;
+  const due = window.prompt('截止日期 YYYY-MM-DD，可留空', item.due || '') ?? item.due;
+  const nextAction = window.prompt('下一步动作', item.next_action || '') ?? item.next_action;
+  const note = window.prompt('备注/证据', item.note || item.evidence || '') ?? item.note;
+  try {
+    await VisualizerApi.updateApplicationEvent({
+      event_id: item.event_id,
+      company,
+      role,
+      event,
+      due,
+      next_action: nextAction,
+      note,
+      evidence: item.evidence || note,
+      source: item.source || 'manual_import',
+    });
+    setStatus('事件已更新');
+    await loadApplications();
+  } catch (err) {
+    setStatus(`更新失败：${err.message || err}`);
+  }
+}
+
+async function deleteApplicationEvent(eventId) {
+  const item = findApplicationEvent(eventId);
+  if (!item) return;
+  if (!window.confirm(`删除这条进度？\\n${importEventLabel(item.event)} · ${item.company || ''}`)) return;
+  try {
+    await VisualizerApi.deleteApplicationEvent({ event_id: eventId });
+    setStatus('事件已删除');
+    await loadApplications();
+  } catch (err) {
+    setStatus(`删除失败：${err.message || err}`);
+  }
+}
+
+function findApplicationEvent(eventId) {
+  for (const app of currentApplicationsData || []) {
+    const found = (app.events || []).find((item) => item.event_id === eventId);
+    if (found) return found;
+  }
+  return null;
 }
 
 function applicationStage(statusKey) {

@@ -8,6 +8,10 @@
       return ApiClient.getJson('/api/resumes');
     },
 
+    async listResumeJobLinks() {
+      return ApiClient.getJson('/api/resume-job-links');
+    },
+
     async getDirectionClues() {
       return ApiClient.getJson('/api/direction-clues');
     },
@@ -66,6 +70,14 @@
 
     async saveExperienceMetadata(payload) {
       return ApiClient.postJson('/api/experience-metadata', payload);
+    },
+
+    async getExperienceProfile() {
+      return ApiClient.getJson('/api/experience-profile');
+    },
+
+    async generateExperienceProfile() {
+      return ApiClient.postJson('/api/experience-profile/generate', {});
     },
 
     async getRecruitmentMarket() {
@@ -140,6 +152,14 @@
 
     async saveApplicationEvent(payload) {
       return ApiClient.postJson('/api/application-events', payload);
+    },
+
+    async updateApplicationEvent(payload) {
+      return ApiClient.postJson('/api/application-events/update', payload);
+    },
+
+    async deleteApplicationEvent(payload) {
+      return ApiClient.postJson('/api/application-events/delete', payload);
     },
   };
 })();

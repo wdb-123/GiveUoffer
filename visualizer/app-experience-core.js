@@ -1,18 +1,21 @@
 async function loadExperienceMetadata() {
   if (currentView === 'experience') setStatus('读取经历文件');
-  const data = await VisualizerApi.getExperienceFiles();
+  const [data, profileData] = await Promise.all([
+    VisualizerApi.getExperienceFiles(),
+    VisualizerApi.getExperienceProfile().catch(() => ({ profile: null })),
+  ]);
   currentExperienceFiles = data.files || [];
   currentHeadshots = data.photos || [];
   currentIntentions = data.intentions || [];
+  currentExperienceProfile = profileData.profile || null;
   const currentPathExists = [...currentExperienceFiles, ...currentHeadshots, ...currentIntentions].some((item) => item.path === currentExperiencePath);
   if (!currentExperiencePath || !currentPathExists) {
-    currentExperiencePath = currentExperienceFiles.find((item) => item.path.includes('ethercat-drop-op'))?.path
-      || currentExperienceFiles[0]?.path
-      || currentHeadshots[0]?.path
-      || currentIntentions[0]?.path
-      || '';
+    currentExperiencePath = '__profile__';
+    currentExperienceAssetType = 'profile';
   }
-  if (!currentExperienceFiles.some((item) => item.path === currentExperiencePath) && currentHeadshots.some((item) => item.path === currentExperiencePath)) {
+  if (currentExperiencePath === '__profile__') {
+    currentExperienceAssetType = 'profile';
+  } else if (!currentExperienceFiles.some((item) => item.path === currentExperiencePath) && currentHeadshots.some((item) => item.path === currentExperiencePath)) {
     currentExperienceAssetType = 'photo';
   } else if (!currentExperienceFiles.some((item) => item.path === currentExperiencePath) && currentIntentions.some((item) => item.path === currentExperiencePath)) {
     currentExperienceAssetType = 'intention';
@@ -34,10 +37,19 @@ function renderExperienceFiles() {
     ? selectedHeadshot()
     : currentExperienceAssetType === 'intention'
       ? selectedIntention()
-      : selectedExperienceFile();
+      : currentExperienceAssetType === 'profile'
+        ? null
+        : selectedExperienceFile();
   if (experienceFileCount) experienceFileCount.textContent = `${currentExperienceFiles.length} 个`;
   if (headshotCount) headshotCount.textContent = `${currentHeadshots.length} 个`;
   if (intentionCount) intentionCount.textContent = `${currentIntentions.length} 个`;
+  experienceProfileList.innerHTML = renderExperienceProfileItem();
+  experienceProfileList.querySelector('[data-path="__profile__"]')?.addEventListener('click', () => {
+    currentExperiencePath = '__profile__';
+    currentExperienceAssetType = 'profile';
+    experienceGeneratedOutput.hidden = true;
+    renderExperienceMetadata();
+  });
   experienceFileList.innerHTML = currentExperienceFiles.length
     ? currentExperienceFiles.map(renderExperienceFileItem).join('')
     : '<div class="empty-state">还没有项目经历文件。</div>';
@@ -73,9 +85,20 @@ function renderExperienceFiles() {
       });
     });
   }
-  if (currentExperienceAssetType === 'photo') renderHeadshotPreview(selected);
+  if (currentExperienceAssetType === 'profile') renderExperienceProfilePreview();
+  else if (currentExperienceAssetType === 'photo') renderHeadshotPreview(selected);
   else if (currentExperienceAssetType === 'intention') renderIntentionPreview(selected);
   else renderExperienceFilePreview(selected);
+}
+
+function renderExperienceProfileItem() {
+  return `
+    <button class="experience-file-item experience-profile-item ${currentExperienceAssetType === 'profile' ? 'is-active' : ''}" type="button" data-path="__profile__">
+      <span class="experience-file-kind">画像</span>
+      <strong>职业画像总览</strong>
+      <span class="experience-file-name">根据经历资产自动判断</span>
+    </button>
+  `;
 }
 
 function renderExperienceFileItem(item) {
@@ -150,9 +173,38 @@ function selectedIntention() {
 }
 
 function selectedExperience() {
+  if (currentExperienceAssetType === 'profile') return null;
   if (currentExperienceAssetType === 'photo') return selectedHeadshot();
   if (currentExperienceAssetType === 'intention') return selectedIntention();
   return selectedExperienceFile();
+}
+
+function renderExperienceProfilePreview() {
+  if (currentView === 'experience') {
+    titleEl.textContent = '职业画像总览';
+    fileEl.textContent = '基于经历资产 / 职业照 / 职业偏好';
+  }
+  const profile = buildExperienceProfileModel();
+  experienceMarkdownPaper.innerHTML = `
+    <section class="experience-profile-overview">
+      <p class="eyebrow">职业画像</p>
+      <h1>${escapeHtml(profile.headline)}</h1>
+      <p class="profile-summary">${escapeHtml(profile.summary)}</p>
+      <div class="profile-stat-grid">
+        ${profile.stats.map((item) => `
+          <div>
+            <strong>${escapeHtml(item.value)}</strong>
+            <span>${escapeHtml(item.label)}</span>
+          </div>
+        `).join('')}
+      </div>
+      ${experienceCard('判断过程', renderProfileReasoning(profile))}
+      ${experienceCard('核心画像', renderBulletList(profile.persona))}
+      ${experienceCard('适合优先投递的岗位', renderBulletList(profile.fitRoles))}
+      ${experienceCard('简历生成时应该突出', renderBulletList(profile.resumeFocus))}
+      ${experienceCard('当前证据缺口', renderBulletList(profile.gaps))}
+    </section>
+  `;
 }
 
 function renderHeadshotPreview(item) {
@@ -189,37 +241,165 @@ function renderIntentionPreview(item) {
 }
 
 function renderExperienceDiagnosis(item) {
-  if (!item) {
-    experienceDiagnosis.innerHTML = '<p class="clue-empty">从左侧选择一条经历。</p>';
-    return;
-  }
-  const detail = experienceDetailModel(item);
-  experienceDiagnosis.innerHTML = `
-    <div class="diagnosis-block">
-      <h4>适合投递的岗位</h4>
-      ${renderBulletList(detail.fitRoles)}
-    </div>
-    <div class="diagnosis-block">
-      <h4>这段经历已经证明了什么</h4>
-      ${renderBulletList(detail.proves)}
-    </div>
-    <div class="diagnosis-block">
-      <h4>还缺什么证据</h4>
-      ${renderBulletList(detail.missingEvidence)}
-    </div>
-    <div class="diagnosis-block">
-      <h4>下一步建议</h4>
-      <div class="diagnosis-actions">
-        <button class="small-button" type="button" data-experience-action="questions">一键生成补全问题</button>
-        <button class="small-button primary-small-button" type="button" data-experience-action="bullets">生成简历描述</button>
-        <button class="small-button" type="button" data-experience-action="story">生成面试 STAR 故事</button>
-        <button class="small-button" type="button" data-experience-action="add-resume">加入机器人系统工程师简历</button>
-      </div>
-    </div>
+  experienceDiagnosis.innerHTML = '';
+}
+
+function buildExperienceProfileModel() {
+  if (currentExperienceProfile) return normalizeExperienceProfileModel(currentExperienceProfile);
+  const experiences = currentExperienceData?.experiences?.length
+    ? currentExperienceData.experiences
+    : currentExperienceFiles;
+  const sourceText = currentExperienceFiles.map((item) => [item.title, item.name, item.content].join('\n')).join('\n');
+  const tags = uniqueList([
+    ...experiences.flatMap((item) => item.tags || []),
+    ...inferProfileTags(sourceText),
+  ]);
+  const categories = uniqueList([
+    ...experiences.map((item) => item.category),
+    ...inferProfileCategories(sourceText),
+  ]);
+  const evidence = uniqueList([
+    ...experiences.flatMap((item) => item.evidence || []),
+    ...currentExperienceFiles.flatMap((item) => extractProfileEvidence(item.content)),
+  ]);
+  const gaps = uniqueList([
+    ...experiences.flatMap((item) => item.gaps || []),
+    ...inferProfileGaps(sourceText),
+  ]);
+  const titles = experiences.map((item) => item.title).filter(Boolean);
+  const hasRobot = /机器人|ROS|EtherCAT|CAN|MoveIt|URDF|CiA402|SDK/i.test(`${tags.join(' ')} ${categories.join(' ')} ${titles.join(' ')}`);
+  const hasAi = /RAG|Agent|AI|知识|检索|FastAPI|OpenAI/i.test(`${tags.join(' ')} ${categories.join(' ')} ${titles.join(' ')}`);
+  const hasData = /数据|Pipeline|DataOps|DVC|MinIO|Label/i.test(`${tags.join(' ')} ${categories.join(' ')} ${titles.join(' ')}`);
+  const headline = hasRobot
+    ? '机器人系统软件 / 工业通信 / AI 工程化复合型候选人'
+    : '工程项目型候选人画像';
+  const summaryParts = [
+    `系统读取了 ${currentExperienceFiles.length} 份项目经历文件`,
+    currentHeadshots.length ? `${currentHeadshots.length} 份职业照资产` : '',
+    currentIntentions.length ? `${currentIntentions.length} 份职业偏好资产` : '',
+  ].filter(Boolean);
+  const persona = [
+    hasRobot ? '主线能力集中在机器人软件、工业通信、关节模组 SDK、系统联调和客户问题闭环。' : '主线能力来自工程项目拆解、交付协同和技术沉淀。',
+    hasAi ? '具备企业级 RAG / Agent / 知识治理经验，可把机器人产品知识转成 AI 工具链能力。' : '',
+    hasData ? '对机器人数据闭环、日志/状态/动作数据治理和具身智能数据基建有延展方向。' : '',
+    '更适合强调“现场问题复现 -> 技术定位 -> 文档/工具沉淀 -> 支撑交付”的工程闭环，而不是泛泛包装成算法研究型候选人。',
+  ].filter(Boolean);
+  const fitRoles = [
+    '机器人系统工程师 / 机器人软件工程师',
+    '机器人 SDK / 工业通信 / 控制系统集成方向',
+    hasAi ? 'AI 工具链 / RAG 工程 / 机器人知识系统方向' : '',
+    hasData ? '具身智能数据工程 / 机器人数据 Pipeline 方向' : '',
+    '技术支持型解决方案工程师（偏机器人系统与客户问题闭环）',
+  ].filter(Boolean);
+  const resumeFocus = [
+    '优先突出 EtherCAT、CANopen、CAN、ROS2、MoveIt、URDF、CiA402、SOEM / IGH 等硬技能。',
+    '项目排序建议：SDK 生态与系统集成优先，其次 EtherCAT 稳定性测试，再补 RAG / Agent 工程化作为差异化。',
+    '表达方式应偏“工程问题闭环”和“可复用交付资产”，少写空泛自我评价。',
+    '生成岗位简历时，根据 JD 自动选择机器人系统、AI 工具链或数据 Pipeline 作为主叙事。',
+  ];
+  return {
+    headline,
+    summary: `${summaryParts.join('、')}，并结合标签、项目标题、证据项和缺口项，判断候选人的求职画像与简历生成策略。`,
+    stats: [
+      { value: `${currentExperienceFiles.length}`, label: '项目经历' },
+      { value: `${tags.length}`, label: '技能标签' },
+      { value: `${evidence.length}`, label: '可用证据' },
+      { value: `${gaps.length}`, label: '待补证据' },
+    ],
+    persona,
+    fitRoles,
+    resumeFocus,
+    gaps: gaps.length ? gaps.slice(0, 6) : ['补充量化指标、项目截图、公开链接、客户反馈和最终结果。'],
+    categories: categories.slice(0, 6),
+    tags: tags.slice(0, 12),
+    evidence: evidence.slice(0, 6),
+  };
+}
+
+function normalizeExperienceProfileModel(profile) {
+  const fallback = {
+    headline: '职业画像总览',
+    summary: '根据导入的个人信息生成职业画像。',
+    persona: [],
+    fitRoles: [],
+    resumeFocus: [],
+    gaps: [],
+    reasoning: [],
+    tags: [],
+    categories: [],
+    evidence: [],
+  };
+  const normalized = { ...fallback, ...(profile || {}) };
+  return {
+    ...normalized,
+    stats: [
+      { value: `${currentExperienceFiles.length}`, label: '项目经历' },
+      { value: `${(normalized.tags || []).length}`, label: '技能标签' },
+      { value: `${(normalized.evidence || []).length}`, label: '可用证据' },
+      { value: `${(normalized.gaps || []).length}`, label: '待补证据' },
+    ],
+    persona: stringListValue(normalized.persona),
+    fitRoles: stringListValue(normalized.fitRoles),
+    resumeFocus: stringListValue(normalized.resumeFocus),
+    gaps: stringListValue(normalized.gaps),
+    reasoning: stringListValue(normalized.reasoning),
+    tags: stringListValue(normalized.tags),
+    categories: stringListValue(normalized.categories),
+    evidence: stringListValue(normalized.evidence),
+  };
+}
+
+function inferProfileTags(text) {
+  const candidates = [
+    'EtherCAT', 'CANopen', 'CAN', 'ROS2', 'ROS', 'MoveIt', 'URDF', 'CiA402',
+    'PDO / SDO', 'SOEM', 'IGH EtherCAT', 'RT-Linux', 'DC Sync', 'SM Sync',
+    'RAG', 'Agent', 'FastAPI', 'Evidence API', 'OpenAI-compatible API',
+    'DataOps', 'DVC', 'MinIO', 'Label Studio', '机器人系统', 'SDK', '具身智能',
+  ];
+  return candidates.filter((term) => String(text || '').toLowerCase().includes(term.toLowerCase()));
+}
+
+function inferProfileCategories(text) {
+  const value = String(text || '');
+  return [
+    /EtherCAT|CANopen|CiA402|SOEM|IGH/.test(value) ? '机器人系统 / 工业通信' : '',
+    /SDK|ROS2|MoveIt|URDF|开发者文档/.test(value) ? '机器人软件 / SDK' : '',
+    /RAG|Agent|知识|检索|Evidence API/.test(value) ? '企业级 AI / RAG / Agent' : '',
+    /数据|Pipeline|DataOps|DVC|Label Studio/.test(value) ? '具身智能数据基建' : '',
+  ].filter(Boolean);
+}
+
+function extractProfileEvidence(markdown) {
+  const sections = ['量化结果', '我具体做了什么', '技术栈'];
+  return uniqueList(sections.flatMap((section) => markdownSectionItems(markdown, section)))
+    .filter((item) => !item.includes('待补充'))
+    .slice(0, 8);
+}
+
+function inferProfileGaps(text) {
+  const value = String(text || '');
+  const gaps = [];
+  if (/从站数量|控制周期|日志|客户现场|掉 OP|EtherCAT/.test(value)) gaps.push('补充从站数量、控制周期、复现次数、日志证据和最终定位结论。');
+  if (/SDK|API|Demo|开发者文档/.test(value)) gaps.push('补充 SDK 模块边界、API 清单、Demo 数量、测试脚本和客户接入案例。');
+  if (/RAG|Agent|知识库|检索/.test(value)) gaps.push('补充可公开架构图、评测截图、API 文档和脱敏真实问题闭环。');
+  if (/Pipeline|数据|DataOps|标注|质检/.test(value)) gaps.push('补齐可运行数据 Pipeline、样本数据、版本管理、标注质检和评测截图。');
+  return gaps;
+}
+
+function renderProfileReasoning(profile) {
+  if (profile.reasoning?.length) return renderBulletList(profile.reasoning);
+  return `
+    <ul>
+      <li>根据项目类别判断主线：${escapeHtml(profile.categories.join('、') || '待补充')}。</li>
+      <li>根据技能标签识别能力簇：${escapeHtml(profile.tags.join('、') || '待补充')}。</li>
+      <li>根据证据项判断可写入简历的强证据：${escapeHtml(profile.evidence.join('；') || '待补充')}。</li>
+      <li>根据缺口项判断下一步补证据方向，避免把规划或待补材料写成已完成成果。</li>
+    </ul>
   `;
-  experienceDiagnosis.querySelectorAll('[data-experience-action]').forEach((button) => {
-    button.addEventListener('click', () => runExperienceAction(button.dataset.experienceAction));
-  });
+}
+
+function stringListValue(value) {
+  return Array.isArray(value) ? value.map((item) => String(item || '').trim()).filter(Boolean) : [];
 }
 
 function experienceDetailModel(item) {

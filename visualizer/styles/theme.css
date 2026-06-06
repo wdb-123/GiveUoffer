@@ -1,0 +1,338 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --ink: #111827;
+  --muted: #6b7280;
+  --line: #d9dde5;
+  --panel: #ffffff;
+  --accent: #111827;
+  --accent-hover: #2f3542;
+  --accent-2: #111827;
+  --soft: #eef0f4;
+  --signal: #b08d57;
+  --signal-soft: #f7f2e8;
+  --interactive-shadow: rgba(17, 24, 39, 0.14);
+}
+
+.sidebar {
+  background: linear-gradient(180deg, #ffffff 0%, #f2f4f7 100%);
+}
+
+.brand-mark {
+  width: 58px;
+  height: 58px;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  object-fit: contain;
+}
+
+.brand {
+  gap: 10px;
+}
+
+.brand h1 {
+  color: #061b31;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.brand p {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 5px;
+  row-gap: 2px;
+  max-width: 162px;
+  margin-top: 5px;
+  color: #4b5565;
+  font-family: "SF Pro Display", "Avenir Next", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.035em;
+  line-height: 1.25;
+  text-transform: none;
+  white-space: normal;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+.brand p span {
+  display: inline-block;
+}
+
+.side-nav-icon {
+  background: #eef0f4;
+  color: var(--muted);
+}
+
+.side-nav-item.is-active,
+.side-nav-item:hover {
+  border-color: rgba(17, 24, 39, 0.22);
+}
+
+.side-nav-item.is-active {
+  color: var(--ink);
+}
+
+.side-nav-item.is-active .side-nav-icon {
+  background: var(--signal-soft);
+  color: var(--accent);
+}
+
+.resume-toolbar-controls,
+.context-rail,
+.manual-import-panel,
+.manual-import-result-panel,
+.market-toolbar,
+.market-filters,
+.applications-board,
+.experience-panel,
+.insight-panel {
+  border-color: rgba(100, 112, 125, 0.24);
+}
+
+.context-rail,
+.resume-toolbar-controls,
+.manual-import-panel,
+.manual-import-result-panel,
+.market-toolbar,
+.market-filters,
+.applications-board,
+.experience-panel,
+.insight-panel {
+  box-shadow: 0 12px 34px rgba(17, 24, 39, 0.06);
+}
+
+.resume-page {
+  box-shadow: 0 18px 50px rgba(17, 24, 39, 0.10);
+}
+
+.paper.is-deck .resume-page.is-active-page {
+  box-shadow: 0 22px 58px rgba(17, 24, 39, 0.12);
+}
+
+.toolbar-icon-button:hover,
+.toolbar-icon-button:focus-visible,
+.small-button:hover,
+.small-button:focus-visible,
+.market-focus-button:hover,
+.market-focus-button.is-focused,
+.resume-deck-button,
+.primary-small-button,
+.experience-toolbar-controls .primary-small-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.primary-small-button,
+.toolbar-icon-button.primary-small-button,
+.resume-deck-button,
+.experience-toolbar-controls .primary-small-button {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.primary-small-button:hover,
+.toolbar-icon-button.primary-small-button:hover,
+.resume-deck-button:hover,
+.experience-toolbar-controls .primary-small-button:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.toolbar-icon-button:hover,
+.small-button:hover,
+.resume-deck-button,
+.primary-small-button,
+.experience-toolbar-controls .primary-small-button,
+.market-focus-button:hover,
+.market-focus-button.is-focused {
+  box-shadow: 0 10px 24px var(--interactive-shadow);
+}
+
+.primary-small-button,
+.toolbar-icon-button.primary-small-button,
+.resume-deck-button {
+  box-shadow: none;
+}
+
+.primary-small-button:hover,
+.toolbar-icon-button.primary-small-button:hover,
+.resume-deck-button:hover {
+  box-shadow: 0 8px 20px rgba(17, 24, 39, 0.16);
+}
+
+.resume-deck-button:disabled {
+  background: #d9dde5;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.resume-generation-status,
+.context-mode-button.is-active,
+.target-job-control span,
+.market-focus-button,
+.market-codex-workflow-button {
+  color: var(--accent);
+}
+
+.paper h2,
+.paper h3,
+.paper strong,
+.clue-title,
+.panel-heading h3 {
+  color: var(--ink);
+}
+
+.context-mode-button.is-active,
+.market-focus-button,
+.market-generate-resume-button,
+.experience-import-menu[open] > summary,
+.manual-import-source-button.is-active,
+.source-tab-button.is-active {
+  border-color: rgba(17, 24, 39, 0.24);
+  background: var(--soft);
+  color: var(--accent);
+}
+
+.score-pill,
+.match-score,
+.salary-badge,
+.status-badge,
+.resume-target-state-mark {
+  background: var(--signal-soft);
+  color: var(--signal);
+}
+
+.resume-page [style*="#111827"],
+.resume-page [style*="#111827"],
+.resume-page [style*="#111827"],
+.resume-page [style*="#111827"] {
+  color: var(--ink) !important;
+}
+
+.paper .resume-section-title,
+.paper .section-title,
+.paper .resume-line,
+.paper .skill-card,
+.paper .summary-box {
+  border-color: var(--line) !important;
+}
+
+.paper .resume-page a,
+.paper .resume-target-state-actions .primary-small-button {
+  color: var(--accent);
+}
+
+.is-market-view #marketView {
+  background: transparent;
+}
+
+.is-market-view .applications-page {
+  gap: 12px;
+}
+
+.is-market-view .market-bottom-tools {
+  padding: 10px;
+  border-color: rgba(17, 24, 39, 0.10);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 28px rgba(17, 24, 39, 0.05);
+}
+
+.is-market-view .market-rail-tab,
+.is-market-view .market-manual-form input,
+.is-market-view .market-manual-form textarea,
+.is-market-view .market-list-filters select,
+.is-market-view .market-list-filters input {
+  border-color: rgba(17, 24, 39, 0.12);
+  background: #ffffff;
+}
+
+.is-market-view .market-rail-tab.is-active {
+  border-color: rgba(17, 24, 39, 0.22);
+  background: #eef0f4;
+  color: var(--ink);
+}
+
+.is-market-view .market-list-filters {
+  margin-bottom: 0;
+  padding: 12px;
+  border-color: rgba(17, 24, 39, 0.10);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: none;
+}
+
+.is-market-view .market-list-filters span {
+  color: var(--muted);
+}
+
+.is-market-view .market-list-panel {
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(17, 24, 39, 0.10);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.05);
+}
+
+.is-market-view #marketJobs {
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.is-market-view .jobs-table table {
+  background: #ffffff;
+}
+
+.is-market-view .jobs-table th {
+  background: #ffffff;
+  color: var(--muted);
+}
+
+.is-market-view .jobs-table td {
+  background: #ffffff;
+}
+
+.is-market-view .jobs-table tbody tr.market-row-link:hover td,
+.is-market-view .jobs-table tbody tr.market-row-link:focus-visible td {
+  background: #f2f4f7;
+  box-shadow: inset 0 1px 0 rgba(17, 24, 39, 0.06), inset 0 -1px 0 rgba(17, 24, 39, 0.06);
+}
+
+.is-market-view .jobs-table tbody tr.market-row-link:hover td:first-child,
+.is-market-view .jobs-table tbody tr.market-row-link:focus-visible td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent), inset 0 1px 0 rgba(17, 24, 39, 0.06), inset 0 -1px 0 rgba(17, 24, 39, 0.06);
+}
+
+.is-market-view .score-badge,
+.is-market-view .salary-badge {
+  background: var(--signal-soft);
+  color: #6f542d;
+}
+
+.is-market-view .market-focus-button {
+  min-height: 28px;
+  height: 28px;
+  padding: 0 10px;
+  border-color: rgba(17, 24, 39, 0.18);
+  background: #ffffff;
+  color: var(--accent);
+}
+
+.is-market-view .market-focus-button:hover,
+.is-market-view .market-focus-button.is-focused {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.render-editable:hover {
+  outline-color: rgba(17, 24, 39, 0.45);
+}
+
+.render-editable:focus {
+  outline-color: rgba(17, 24, 39, 0.85);
+}

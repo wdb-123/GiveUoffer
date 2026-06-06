@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title>offerU product logo</title>
+  <desc>A compact offerU monogram combining a U-shaped career path with an accepted offer check.</desc>
+  <defs>
+    <linearGradient id="shell" x1="8" x2="56" y1="7" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f172a"/>
+      <stop offset=".55" stop-color="#1d1d1f"/>
+      <stop offset="1" stop-color="#0066cc"/>
+    </linearGradient>
+    <linearGradient id="uStroke" x1="17" x2="47" y1="15" y2="53" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f8fafc"/>
+      <stop offset="1" stop-color="#f5f5f7"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="21" x2="49" y1="43" y2="18" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#86868b"/>
+      <stop offset=".58" stop-color="#0066cc"/>
+      <stop offset="1" stop-color="#f8fafc"/>
+    </linearGradient>
+    <filter id="markShadow" x="-25%" y="-25%" width="150%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="5" stdDeviation="3.2" flood-color="#020617" flood-opacity=".3"/>
+    </filter>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#shell)"/>
+  <path d="M12.5 49.5 51.5 10.5" stroke="#f5f5f7" stroke-width="1.1" stroke-linecap="round" opacity=".13"/>
+  <path d="M19.5 17.5v20.2c0 8.9 5.2 14.8 12.5 14.8s12.5-5.9 12.5-14.8V17.5" fill="none" stroke="url(#uStroke)" stroke-width="8" stroke-linecap="round" filter="url(#markShadow)"/>
+  <path d="m24.2 36.3 6 6.1 13.6-16.1" fill="none" stroke="url(#accent)" stroke-width="5.6" stroke-linecap="round" stroke-linejoin="round" filter="url(#markShadow)"/>
+  <path d="M45.5 17.5h5.2v5.2" fill="none" stroke="#f8fafc" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="19.5" cy="17.5" r="3.5" fill="#86868b"/>
+  <circle cx="44.5" cy="17.5" r="3.5" fill="#f8fafc"/>
+</svg>

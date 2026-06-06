@@ -2,7 +2,7 @@
   min-width: 0;
   height: 100vh;
   display: grid;
-  grid-template-rows: 64px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .toolbar {
@@ -11,7 +11,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  padding: 0 28px 0 var(--workspace-pad);
+  min-height: 64px;
+  padding: 10px 28px 10px var(--workspace-pad);
   background: rgba(255, 255, 255, 0.88);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(12px);
@@ -68,7 +69,7 @@
 .toolbar-title strong {
   display: block;
   overflow: hidden;
-  color: #0f172a;
+  color: #111827;
   font-size: 18px;
   line-height: 1.15;
   text-overflow: ellipsis;
@@ -118,7 +119,7 @@
 }
 
 .resume-title-menu-item strong {
-  color: #0f172a;
+  color: #111827;
   font-size: 13px;
 }
 
@@ -138,6 +139,10 @@
   white-space: nowrap;
 }
 
+.toolbar-title span:empty {
+  display: none;
+}
+
 .market-toolbar-note {
   display: none;
   margin: 0;
@@ -145,12 +150,28 @@
   font-size: 12px;
   line-height: 1.45;
   max-width: 680px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.is-market-view .toolbar {
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 18px;
+  justify-items: start;
+}
+
+.is-market-view .toolbar-title {
+  max-width: none;
+  min-width: 132px;
 }
 
 .is-market-view .market-toolbar-note {
   display: block;
-  justify-self: center;
-  text-align: center;
+  align-self: center;
+  justify-self: start;
+  max-width: min(760px, 100%);
+  text-align: left;
 }
 
 .status {
@@ -164,9 +185,31 @@
   display: flex;
   justify-self: start;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
+  width: 100%;
   min-width: 0;
   max-width: 100%;
+}
+
+.is-resume-view .toolbar {
+  grid-template-columns: 1fr;
+  justify-items: start;
+}
+
+.is-resume-view .toolbar-title {
+  display: none;
+}
+
+.is-resume-view .toolbar-actions {
+  grid-column: 1;
+  justify-self: start;
+  justify-content: flex-start;
+}
+
+.is-experience-view .toolbar-actions {
+  justify-self: start;
+  justify-content: flex-start;
 }
 
 .toolbar-actions .small-button {
@@ -176,25 +219,158 @@
 }
 
 .resume-toolbar-controls {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  row-gap: 4px;
   align-items: center;
+  padding: 5px;
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  border-radius: 12px;
+  background: rgba(248, 250, 252, 0.9);
+  width: min(100%, 760px);
   min-width: 0;
-  max-width: none;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+.is-resume-view #resumeToolbarControls {
+  width: var(--resume-toolbar-aligned-width, min(100%, 760px));
+  margin-left: var(--resume-toolbar-aligned-left, 0px);
+  padding: 4px;
+  row-gap: 2px;
+}
+
+.is-resume-view #resumeToolbarControls .target-job-control {
+  min-height: 32px;
+}
+
+.is-resume-view #resumeToolbarControls .target-job-control select {
+  min-height: 30px;
+}
+
+.is-resume-view #resumeToolbarControls .export-menu summary {
+  min-height: 34px;
+}
+
+.resume-generation-status {
+  grid-column: 1 / -1;
+  min-width: 0;
+  max-width: 100%;
+  color: #111827;
+  font-size: 11px;
+  font-weight: 760;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .resume-toolbar-controls[hidden] {
   display: none;
 }
 
+.experience-toolbar-controls {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  width: auto;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.experience-toolbar-controls .toolbar-icon-button {
+  min-width: 118px;
+  max-width: 168px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #111827;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.experience-toolbar-controls .toolbar-icon-button:hover {
+  border-color: rgba(17, 24, 39, 0.34);
+  background: #f8fafc;
+  color: var(--accent);
+}
+
+.experience-toolbar-controls .primary-small-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.18);
+}
+
+.experience-toolbar-controls .primary-small-button:hover {
+  border-color: #004f9f;
+  background: #004f9f;
+  color: #ffffff;
+}
+
+.experience-toolbar-controls .experience-import-menu[open] > summary {
+  border-color: rgba(17, 24, 39, 0.38);
+  background: var(--soft);
+  color: var(--accent);
+}
+
+.experience-toolbar-controls .experience-import-menu {
+  justify-self: start;
+}
+
+.experience-toolbar-controls .experience-import-menu summary {
+  gap: 8px;
+}
+
+.experience-toolbar-controls .experience-import-menu summary::after {
+  width: 7px;
+  height: 7px;
+  display: block;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  content: "";
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.experience-toolbar-controls .experience-import-menu[open] summary::after {
+  transform: translateY(2px) rotate(225deg);
+}
+
+.experience-toolbar-controls .experience-import-menu .export-menu-panel {
+  left: 0;
+  right: auto;
+  width: 132px;
+}
+
 .resume-toolbar-controls label {
   display: grid;
-  gap: 3px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
   min-width: 0;
 }
 
 .resume-toolbar-controls .primary-direction-control {
-  width: min(420px, 44vw);
+  width: 100%;
+}
+
+.resume-toolbar-controls .target-job-control {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px 0 10px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 9px;
+  background: white;
 }
 
 .resume-toolbar-controls .primary-direction-control span {
@@ -217,16 +393,28 @@
 .primary-direction-control select {
   min-height: 42px;
   padding: 0 14px;
-  color: #0f172a;
+  color: #111827;
   font-size: 18px;
   font-weight: 850;
 }
 
+.target-job-control select {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 760;
+}
+
 .toolbar-icon-button {
   width: auto;
-  min-height: 32px;
-  padding: 0 10px;
-  border-radius: 7px;
+  min-height: 34px;
+  padding: 0 11px;
+  border-radius: 9px;
   white-space: nowrap;
   font-size: 12px;
 }
@@ -234,6 +422,8 @@
 .export-menu {
   position: relative;
   z-index: 160;
+  min-width: 0;
+  justify-self: end;
 }
 
 .export-menu summary {
@@ -252,7 +442,7 @@
   top: calc(100% + 8px);
   right: 0;
   z-index: 200;
-  width: 136px;
+  width: 148px;
   display: grid;
   gap: 6px;
   padding: 8px;
@@ -306,13 +496,32 @@
 .paper-shell {
   overflow: auto;
   padding: var(--workspace-pad) calc(var(--rail-width) + var(--rail-gap) + 70px) 48px var(--workspace-pad);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.88), rgba(226, 232, 240, 0.52)),
+    var(--bg);
+  scrollbar-gutter: stable;
 }
 
-.is-resume-view #resumeView,
-.is-experience-view #experienceView,
+.is-resume-view #resumeView {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.is-experience-view #experienceView {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
 .is-evidence-view #evidenceView {
   max-width: min(100%, 2360px);
   margin: 0 auto;
+}
+
+.is-evidence-view #evidenceView {
+  max-width: none;
+  width: 100%;
 }
 
 .resume-controls-panel {
@@ -372,6 +581,14 @@
 .applications-page {
   max-width: 1220px;
   margin: 0 auto;
+}
+
+.is-applications-view .applications-page {
+  min-height: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 14px;
 }
 
 .applications-header {
@@ -540,9 +757,9 @@
 }
 
 .import-source-tab.is-active {
-  border-color: #0f766e;
-  background: #ecfdf5;
-  color: #0f766e;
+  border-color: #111827;
+  background: #eef0f4;
+  color: #111827;
 }
 
 .manual-import-workspace {
@@ -570,7 +787,7 @@
   padding: 14px;
   border: 1px solid rgba(203, 213, 225, 0.95);
   border-radius: 12px;
-  color: #0f172a;
+  color: #111827;
   font: inherit;
   font-size: 15px;
   line-height: 1.6;
@@ -619,8 +836,8 @@
 }
 
 .import-result-card.confidence-high {
-  border-color: rgba(20, 184, 166, 0.38);
-  box-shadow: inset 3px 0 0 rgba(15, 118, 110, 0.72);
+  border-color: rgba(17, 24, 39, 0.38);
+  box-shadow: inset 3px 0 0 rgba(17, 24, 39, 0.72);
 }
 
 .import-result-head {
@@ -633,7 +850,7 @@
 
 .import-result-head h4 {
   margin: 2px 0 0;
-  color: #0f172a;
+  color: #111827;
   font-size: 18px;
 }
 
@@ -641,8 +858,8 @@
   flex: 0 0 auto;
   padding: 4px 8px;
   border-radius: 999px;
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: #eef0f4;
+  color: #111827;
   font-size: 12px;
   font-weight: 850;
 }
@@ -666,7 +883,7 @@
 
 .import-result-grid dd {
   margin: 2px 0 0;
-  color: #0f172a;
+  color: #111827;
   font-size: 13px;
   line-height: 1.45;
   overflow-wrap: anywhere;
@@ -705,7 +922,7 @@
   overflow: auto;
   overflow-wrap: anywhere;
   border-radius: 10px;
-  background: #0f172a;
+  background: #111827;
   color: #e2e8f0;
   font-size: 11px;
   white-space: normal;
@@ -734,9 +951,187 @@
 
 .applications-board {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(360px, 1.15fr) minmax(260px, 0.85fr) minmax(300px, 0.95fr);
   gap: 14px;
   align-items: start;
+  min-height: 0;
+}
+
+.progress-flow-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.progress-flow-panel .job-list {
+  min-height: 100%;
+  height: 100%;
+  align-content: start;
+}
+
+.progress-flow-panel .job-list .empty-state {
+  min-height: 100%;
+}
+
+.application-metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.application-metrics-strip .metric-card {
+  display: grid;
+  gap: 4px;
+  min-height: 84px;
+  padding: 13px 15px;
+  align-content: center;
+}
+
+.application-metrics-strip .metric-card span,
+.application-metrics-strip .metric-card small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.application-metrics-strip .metric-card strong {
+  color: #111827;
+  font-size: 28px;
+  line-height: 1;
+}
+
+.application-event-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.application-event-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 9px;
+  border: 1px solid #dbe5ef;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.application-event-row strong,
+.application-event-row span,
+.application-event-row p {
+  display: block;
+}
+
+.application-event-row strong {
+  color: #111827;
+  font-size: 13px;
+}
+
+.application-event-row span,
+.application-event-row p {
+  margin: 3px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.application-event-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.icon-text-button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.danger-button {
+  border-color: #e7d3b7;
+  color: #6b7280;
+}
+
+.todo-list,
+.feedback-review-list {
+  display: grid;
+  gap: 10px;
+}
+
+.todo-item,
+.feedback-review-card {
+  padding: 12px;
+  border: 1px solid #dbe5ef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.todo-item {
+  border-left: 4px solid #111827;
+}
+
+.todo-overdue {
+  border-left-color: #6b7280;
+}
+
+.todo-due_soon {
+  border-left-color: #6b7280;
+}
+
+.todo-item strong,
+.todo-item span,
+.todo-item p,
+.todo-item small {
+  display: block;
+}
+
+.todo-item strong,
+.feedback-review-card h4 {
+  margin: 0;
+  color: #111827;
+  font-size: 14px;
+}
+
+.todo-item span,
+.todo-item small,
+.feedback-review-card li {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.todo-item p,
+.feedback-review-card p {
+  margin: 7px 0;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.feedback-review-card strong {
+  display: block;
+  color: #111827;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.feedback-review-card ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 1180px) {
+  .applications-board {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (min-width: 1920px) {
@@ -758,12 +1153,20 @@
   }
 
   .resume-toolbar-controls .primary-direction-control {
-    width: min(480px, 34vw);
+    width: 100%;
+  }
+
+  .resume-toolbar-controls {
+    width: min(100%, 900px);
   }
 
   .primary-direction-control select {
     min-height: 44px;
     font-size: 20px;
+  }
+
+  .target-job-control select {
+    min-height: 44px;
   }
 
   .applications-page {
@@ -918,11 +1321,7 @@
   }
 
   .resume-toolbar-controls {
-    flex-wrap: wrap;
-  }
-
-  .resume-toolbar-controls .primary-direction-control {
-    width: min(360px, 100%);
+    width: min(100%, 577px);
   }
 
   .applications-page {
@@ -990,12 +1389,24 @@
   }
 
   .resume-toolbar-controls {
+    grid-template-columns: minmax(300px, 1fr) auto;
     width: 100%;
+    max-width: 100%;
   }
 
   .resume-toolbar-controls .primary-direction-control,
+  .resume-toolbar-controls .target-job-control,
   .resume-toolbar-controls label {
     width: 100%;
+  }
+
+  .resume-toolbar-controls .target-job-control {
+    grid-column: auto;
+  }
+
+  .resume-generation-status {
+    grid-column: 1 / -1;
+    max-width: 100%;
   }
 
   .primary-direction-control select {
@@ -1008,6 +1419,22 @@
     min-height: 38px;
   }
 
+  .experience-toolbar-controls {
+    display: flex;
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .experience-toolbar-controls > .toolbar-icon-button {
+    width: auto;
+    min-width: 104px;
+    flex: 0 0 auto;
+  }
+
+  .export-menu summary {
+    justify-content: center;
+  }
+
   .manual-import-stage,
   .manual-import-result-panel,
   .progress-panel {
@@ -1016,5 +1443,20 @@
 
   .manual-import-input textarea {
     min-height: 176px;
+  }
+}
+
+@media (max-width: 760px) {
+  .resume-toolbar-controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .resume-toolbar-controls .target-job-control {
+    grid-column: 1 / -1;
+  }
+
+  .resume-toolbar-controls > .toolbar-icon-button,
+  .resume-toolbar-controls > .export-menu {
+    width: 100%;
   }
 }

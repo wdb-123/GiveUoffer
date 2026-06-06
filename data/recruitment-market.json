@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-06-03",
+  "updatedAt": "2026-06-05",
   "queryScope": [
     "深圳 机器人系统工程师 EtherCAT ROS2 招聘 职位 -酒店 -天气",
     "深圳 具身智能 数据基建 机器人数据 Pipeline 招聘 职位 -酒店 -天气",
@@ -218,26 +218,31 @@
     "note": "打开已有 JD 详情页提取公开投递邮箱；不绕过登录、验证码或平台权限。"
   },
   "jobs_file": "/Users/don/Documents/career-ops/data/recruitment-market.json.jobs.d",
-  "jobsCount": 73,
-  "lastUpdatedFromShardsAt": "2026-06-03T15:20:42.890Z",
+  "jobsCount": 78,
+  "lastUpdatedFromShardsAt": "2026-06-05T09:46:43.510Z",
   "lastManualImport": {
-    "runAt": "2026-06-03T15:20:21.832Z",
-    "company": "待解析公司",
-    "role": "待解析岗位",
+    "runAt": "2026-06-04T16:19:17.875Z",
+    "company": "字节跳动",
+    "role": "大模型数据策略专家（VLA方向）-AI数据与安全",
     "source": "手工导入"
   },
   "lastDeletedJob": {
-    "runAt": "2026-06-03T14:16:41.054Z",
-    "id": "MJ-071",
-    "company": "某人工智能公司",
-    "role": "具身算法工程师（可接受博士应届生）",
-    "url": "https://www.zhipin.com/job_detail/ef1da549665098ff0nB70t6-GVBW.html"
+    "runAt": "2026-06-04T15:59:40.679Z",
+    "id": "MJ-074",
+    "company": "待解析公司",
+    "role": "待解析岗位",
+    "url": "https://www.zhipin.com/job_detail/9687c01726e88d390nB50tm9E1VS.html"
+  },
+  "lastScoreRecalculation": {
+    "runAt": "2026-06-05T00:50:25.462Z",
+    "changed": 8
   },
   "lastUpdatedJob": {
-    "runAt": "2026-06-03T15:20:42.887Z",
-    "id": "MJ-073",
-    "company": "某中型人工智能公司",
-    "role": "具身机器人-战略生态【头部】",
-    "url": "https://www.zhipin.com/job_detail/c1c02cf911bb69620nZ-29W6ElVV.html"
+    "runAt": "2026-06-05T09:46:43.505Z",
+    "id": "MJ-075",
+    "company": "腾讯 TEG",
+    "role": "机器人具身智能软件工程师-系统集成",
+    "url": "https://careers.tencent.com/jobdesc.html?postId=1987721108937396224",
+    "reason": "priority-focus-removed"
   }
 }

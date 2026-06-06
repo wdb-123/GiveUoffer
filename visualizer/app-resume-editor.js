@@ -221,25 +221,64 @@ async function exportResume(format) {
   }
 }
 
-async function autoGenerateResume() {
+async function autoGenerateResume(targetJobId = '') {
+  if (typeof targetJobId !== 'string') targetJobId = '';
   if (!autoGenerateResumeBtn) return;
+  const selectedTargetJobId = targetJobId || resumeTargetJobSelect?.value || '';
+  const originalButtonText = autoGenerateResumeBtn.textContent;
   autoGenerateResumeBtn.disabled = true;
-  setStatus('自动生成简历');
+  autoGenerateResumeBtn.textContent = '生成中...';
+  currentResumeGenerationJobId = selectedTargetJobId;
+  if (selectedTargetJobId && resumeTargetJobSelect) resumeTargetJobSelect.value = selectedTargetJobId;
+  if (exportMenu) exportMenu.open = false;
+  const selectedTargetJob = (currentMarketData.jobs || []).find((job) => job.id === selectedTargetJobId);
+  setResumeGenerationStatus(selectedTargetJob
+    ? `正在为 ${selectedTargetJob.company || '目标公司'} · ${selectedTargetJob.role || '目标岗位'} 生成简历...`
+    : '正在自动选择岗位并生成简历...');
+  renderRecruitmentMarket(currentMarketData);
+  setStatus('正在用大模型生成简历');
   try {
     await flushRenderedResumeEdits();
-    const result = await VisualizerApi.autoGenerateResume({ baseFile: currentFile });
-    resumeOptions = await VisualizerApi.listResumes();
-    resumeSelect.innerHTML = resumeOptions.map((item) => {
-      return `<option value="${escapeAttr(item.file)}">${escapeHtml(item.title)}</option>`;
-    }).join('');
+    const result = await VisualizerApi.autoGenerateResume({
+      baseFile: currentFile,
+      targetJobId: selectedTargetJobId,
+    });
+    const [resumes, links] = await Promise.all([
+      VisualizerApi.listResumes(),
+      VisualizerApi.listResumeJobLinks(),
+    ]);
+    resumeOptions = resumes;
+    resumeJobLinks = links.links || [];
+    if (resumeSelect) {
+      resumeSelect.innerHTML = resumeOptions.map((item) => {
+        return `<option value="${escapeAttr(item.file)}">${escapeHtml(item.title)}</option>`;
+      }).join('');
+    }
     renderResumeTitleMenu();
     await loadResume(result.file);
-    setStatus('已生成简历');
+    if (selectedTargetJobId && resumeTargetJobSelect) {
+      resumeTargetJobSelect.value = selectedTargetJobId;
+      rememberResumeTargetJob(selectedTargetJobId);
+    }
+    if (typeof switchView === 'function') switchView('resume');
+    setResumeGenerationStatus('');
+    setStatus(result.engine === 'codex-llm' ? '已用大模型生成简历' : '已生成简历');
   } catch (err) {
-    setStatus(`生成失败：${err.message || err}`);
+    const message = `生成失败：${err.message || err}`;
+    setResumeGenerationStatus(message);
+    setStatus(message);
   } finally {
+    currentResumeGenerationJobId = '';
+    renderRecruitmentMarket(currentMarketData);
     autoGenerateResumeBtn.disabled = false;
+    autoGenerateResumeBtn.textContent = originalButtonText || '生成简历';
   }
+}
+
+function setResumeGenerationStatus(message) {
+  if (!resumeGenerationStatus) return;
+  resumeGenerationStatus.textContent = message || '';
+  resumeGenerationStatus.hidden = !message;
 }
 
 async function restoreResumeVersion() {
@@ -273,4 +312,3 @@ async function flushRenderedResumeEdits() {
   }
   await Promise.all(modified.map((node) => saveRenderedNode(node, currentFile)));
 }
-

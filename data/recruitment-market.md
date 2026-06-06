@@ -1,6 +1,6 @@
 # 招聘信息检索表
 
-更新时间：2026-06-03
+更新时间：2026-06-05
 
 检索范围：
 
@@ -87,6 +87,11 @@
 | MJ-068 | 深圳汉阳科技有限公司 | 机器人系统工程师 【 深圳-龙华区 】 10-20k 1-3年 本科 | 深圳 | 待复核 | 机器人相关 / 待复核 | 3.0 | 机器人系统 | 围绕 机器人系统 补充项目证据。 | [链接](https://www.liepin.com/job/1959095001.shtml) |
 | MJ-069 | 深圳无界智航科技有限公司 | 机器人系统工程师（解决方案）(A60578) 【 深圳-南山区 】 30-60k·14薪 3-5年 硕士 | 深圳 | 待复核 | 机器人相关 / 待复核 | 3.6 | 具身智能、机器人系统 | 围绕 具身智能、机器人系统 补充项目证据。 | [链接](https://www.liepin.com/job/1982775577.shtml) |
 | MJ-070 | 广东具身风暴机器人有限公司 | 机器人系统工程师 【 深圳-龙华区 】 30-50k 3年以上 统招本科 | 深圳 | 待复核 | 机器人相关 / 待复核 | 3.0 | 机器人系统 | 围绕 机器人系统 补充项目证据。 | [链接](https://www.liepin.com/job/1981791733.shtml) |
-| MJ-071 | 自变量机器人 | 整机软件产品经理 | 深圳 | 30-60K·16薪 | 待复核 | 4.2 | 具身智能、机器人、运动控制 | 围绕 具身智能、机器人、运动控制 补充项目证据。 | [链接](https://www.zhipin.com/job_detail/0d32271c109159510nZ9096_FVRV.html) |
-| MJ-072 | 众擎机器人 | 技术支持工程师【生态合作方向】(A76721) | 深圳 | 20-35K·15薪 | 待复核 | 4.2 | Python、Linux、API、ROS2、ROS、SDK、具身智能、机器人、仿真 | 围绕 Python、Linux、API 补充项目证据。 | [链接](https://www.zhipin.com/job_detail/4a0672ead5f5ec1b0nB709-4FVdS.html) |
-| MJ-073 | 某中型人工智能公司 | 具身机器人-战略生态【头部】 | 深圳 | 40-70K·15薪 | 待复核 | 4.2 | 具身智能、机器人 | 围绕 具身智能、机器人 补充项目证据。 | [链接](https://www.zhipin.com/job_detail/c1c02cf911bb69620nZ-29W6ElVV.html) |
+| MJ-071 | 自变量机器人 | 整机软件产品经理 | 深圳 | 30-60K·16薪 | 待复核 | 2.6 | 具身智能、机器人、运动控制 | 围绕 具身智能、机器人、运动控制 补充项目证据。 | [链接](https://www.zhipin.com/job_detail/0d32271c109159510nZ9096_FVRV.html) |
+| MJ-072 | 众擎机器人 | 技术支持工程师【生态合作方向】(A76721) | 深圳 | 20-35K·15薪 | 待复核 | 3.8 | Python、Linux、API、ROS2、ROS、SDK、具身智能、机器人、仿真 | 围绕 Python、Linux、API 补充项目证据。 | [链接](https://www.zhipin.com/job_detail/4a0672ead5f5ec1b0nB709-4FVdS.html) |
+| MJ-073 | 某中型人工智能公司 | 具身机器人-战略生态【头部】 | 深圳 | 40-70K·15薪 | 待复核 | 1.6 | 具身智能、机器人 | 围绕 具身智能、机器人 补充项目证据。 | [链接](https://www.zhipin.com/job_detail/c1c02cf911bb69620nZ-29W6ElVV.html) |
+| MJ-074 | 某中型人工智能公司 | 解决方案架构师【机器人 头部】 | 深圳 | 30-60K·15薪 | 待复核 | 2.3 | Agent、具身智能、机器人 | 围绕 Agent、具身智能、机器人 补充项目证据。 | [链接](https://www.zhipin.com/job_detail/3c7484ff80138ef10nV83d61F1FQ.html) |
+| MJ-075 | 腾讯 TEG | 机器人具身智能软件工程师-系统集成 | 深圳 | 待复核 | 机器人软件 / ROS2 / SDK | 4.6 | CAN、ROS2、ROS、具身智能、C++、Python | 需要补 SDK 模块、API、Demo、文档、客户接入和测试证据。 | [链接](https://careers.tencent.com/jobdesc.html?postId=1987721108937396224) |
+| MJ-076 | 腾讯 TEG | 具身大模型评测与数据工程师 | 深圳 | 待复核 | 具身智能数据基建 | 4.0 | 多模态数据、数据标注、Python | 需要补机器人数据 Pipeline、数据清洗、质检、版本管理或标注流转证据。 | [链接](https://careers.tencent.com/jobdesc.html?postId=2059891450371555328) |
+| MJ-077 | 字节跳动 | 具身智能数据开发工程师-Seed | 北京 | 待复核 | 具身智能数据基建 | 3.7 | 具身智能、多模态数据、数据质检、VLA、Python | 需要补机器人数据 Pipeline、数据清洗、质检、版本管理或标注流转证据。 | [链接](https://jobs.bytedance.com/experienced/position/7537536257262487816/detail) |
+| MJ-078 | 字节跳动 | 大模型数据策略专家（VLA方向）-AI数据与安全 | 北京 | 待复核 | 具身智能数据基建 | 2.3 | 具身智能、多模态数据、VLA | 需要补机器人数据 Pipeline、数据清洗、质检、版本管理或标注流转证据。 | [链接](https://jobs.bytedance.com/experienced/position/7584751096462444805/detail) |

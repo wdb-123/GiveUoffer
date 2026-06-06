@@ -2,6 +2,10 @@ document.querySelectorAll('[data-export-format]').forEach((button) => {
   button.addEventListener('click', () => exportResume(button.dataset.exportFormat));
 });
 autoGenerateResumeBtn?.addEventListener('click', autoGenerateResume);
+resumeTargetJobSelect?.addEventListener('change', async () => {
+  rememberResumeTargetJob(resumeTargetJobSelect.value);
+  await syncSelectedTargetResumeState({ loadExisting: true });
+});
 document.querySelector('#refreshBtn')?.addEventListener('click', () => loadResume(currentFile));
 docTitleButton?.addEventListener('click', toggleResumeTitleMenu);
 document.addEventListener('click', closeResumeTitleMenuOnOutside);
@@ -25,6 +29,17 @@ marketManualImportForm?.addEventListener('submit', (event) => {
   addManualRecruitmentJob();
 });
 marketJobs?.addEventListener('click', (event) => {
+  const focusButton = event.target.closest('[data-market-priority-focus]');
+  if (focusButton) {
+    toggleMarketPriorityFocus(focusButton.dataset.marketPriorityFocus || '');
+    return;
+  }
+  const generateButton = event.target.closest('[data-market-generate-resume]');
+  if (generateButton) {
+    rememberResumeTargetJob(generateButton.dataset.marketGenerateResume || '');
+    autoGenerateResume(generateButton.dataset.marketGenerateResume || '');
+    return;
+  }
   const workflowButton = event.target.closest('[data-market-codex-job]');
   if (workflowButton) {
     runLocalCodexParseJob(workflowButton.dataset.marketCodexJob);
@@ -39,8 +54,14 @@ marketJobs?.addEventListener('click', (event) => {
   if (skipCardOpen) return;
   const card = event.target.closest('[data-market-open-url]');
   if (!card?.dataset.marketOpenUrl) return;
+  const rowJob = (currentMarketData.jobs || []).find((item) => item.id === card.dataset.marketJobId);
+  if (rowJob?.id) rememberResumeTargetJob(rowJob.id);
   if (event.metaKey || event.ctrlKey) {
     window.open(card.dataset.marketOpenUrl, '_blank', 'noopener');
+    return;
+  }
+  if (rowJob && isPendingParsedJob(rowJob)) {
+    runLocalCodexParseJob(rowJob.id);
     return;
   }
   window.location.href = card.dataset.marketOpenUrl;
@@ -52,6 +73,12 @@ marketJobs?.addEventListener('keydown', (event) => {
   const skipCardOpen = event.target.closest('a, button, textarea, input, select, label');
   if (skipCardOpen) return;
   event.preventDefault();
+  const rowJob = (currentMarketData.jobs || []).find((item) => item.id === card.dataset.marketJobId);
+  if (rowJob?.id) rememberResumeTargetJob(rowJob.id);
+  if (rowJob && isPendingParsedJob(rowJob)) {
+    runLocalCodexParseJob(rowJob.id);
+    return;
+  }
   window.location.href = card.dataset.marketOpenUrl;
 });
 marketGroupSelect?.addEventListener('change', () => renderRecruitmentMarket(currentMarketData));
@@ -79,10 +106,20 @@ document.querySelectorAll('[data-ai-prompt]').forEach((button) => {
 });
 document.querySelector('#replyRefreshBtn')?.addEventListener('click', loadReplyDrafts);
 document.querySelector('#experienceRefreshBtn')?.addEventListener('click', loadExperienceMetadata);
+experienceProfileGenerateBtn?.addEventListener('click', generateExperienceProfile);
 experienceSaveBtn?.addEventListener('click', saveExperienceMetadata);
-document.querySelector('#experienceImportBtn')?.addEventListener('click', () => experienceImportInput?.click());
-document.querySelector('#headshotImportBtn')?.addEventListener('click', () => headshotImportInput?.click());
-document.querySelector('#intentionImportBtn')?.addEventListener('click', () => intentionImportInput.click());
+document.querySelector('#experienceImportBtn')?.addEventListener('click', () => {
+  document.querySelector('.experience-import-menu').open = false;
+  experienceImportInput?.click();
+});
+document.querySelector('#headshotImportBtn')?.addEventListener('click', () => {
+  document.querySelector('.experience-import-menu').open = false;
+  headshotImportInput?.click();
+});
+document.querySelector('#intentionImportBtn')?.addEventListener('click', () => {
+  document.querySelector('.experience-import-menu').open = false;
+  intentionImportInput.click();
+});
 experienceImportInput?.addEventListener('change', importExperienceFiles);
 headshotImportInput?.addEventListener('change', importHeadshotFiles);
 intentionImportInput?.addEventListener('change', importIntentionFiles);
@@ -110,6 +147,18 @@ resumeVersionSelect?.addEventListener('change', () => {
 });
 restoreResumeVersionBtn?.addEventListener('click', restoreResumeVersion);
 paper?.addEventListener('dblclick', enableRenderedInlineEditing);
+paper?.addEventListener('pointerdown', handleResumeDeckPointerDown);
+paper?.addEventListener('pointermove', handleResumeDeckPointerMove);
+paper?.addEventListener('pointerup', handleResumeDeckPointerUp);
+paper?.addEventListener('pointercancel', handleResumeDeckPointerCancel);
+document.addEventListener('keydown', handleResumeDeckKeydown);
+window.addEventListener('resize', scheduleResumeToolbarSync);
+resumeView?.addEventListener('scroll', scheduleResumeToolbarSync);
+paper?.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-generate-target-resume]');
+  if (!button) return;
+  autoGenerateResume(button.dataset.generateTargetResume || '');
+});
 document.querySelectorAll('.resource-link').forEach((button) => {
   button.addEventListener('click', () => openResource(button.dataset.resource));
 });
@@ -124,24 +173,30 @@ document.querySelectorAll('.context-mode-button').forEach((button) => {
 async function init() {
   document.body.classList.add('is-resume-view');
   setStatus('读取方向简历');
-  const [resumes, clues] = await Promise.all([
+  const [resumes, clues, links] = await Promise.all([
     VisualizerApi.listResumes(),
     VisualizerApi.getDirectionClues(),
+    VisualizerApi.listResumeJobLinks(),
   ]);
   directionClues = clues || {};
+  resumeJobLinks = links.links || [];
   resumeOptions = resumes;
-  resumeSelect.innerHTML = resumeOptions.map((item) => {
-    return `<option value="${escapeAttr(item.file)}">${escapeHtml(item.title)}</option>`;
-  }).join('');
+  if (resumeSelect) {
+    resumeSelect.innerHTML = resumeOptions.map((item) => {
+      return `<option value="${escapeAttr(item.file)}">${escapeHtml(item.title)}</option>`;
+    }).join('');
+  }
   renderResumeTitleMenu();
   await loadResume(resumes[0]?.file);
   await loadExperienceMetadata();
   await loadRecruitmentMarket();
+  await syncSelectedTargetResumeState({ loadExisting: true });
   await loadApplications();
   await loadEvidenceRequests();
   await loadReplyDrafts();
   await loadResumeTemplates();
   setApplicationImportSource('email');
+  document.querySelector('.toolbar-title')?.setAttribute('hidden', '');
 }
 
 function switchView(view) {
@@ -159,7 +214,7 @@ function switchView(view) {
   document.body.classList.toggle('is-applications-view', showApplications);
   document.body.classList.toggle('is-evidence-view', showEvidence);
   document.body.classList.toggle('is-reply-view', showReply);
-  if (showExperience || showMarket || showApplications || showEvidence || showReply) {
+  if (showMarket || showApplications || showEvidence || showReply) {
     document.querySelector('.toolbar-title')?.removeAttribute('hidden');
   } else {
     document.querySelector('.toolbar-title')?.setAttribute('hidden', '');
@@ -199,7 +254,7 @@ function switchView(view) {
     marketRailTabs.hidden = false;
     setMarketRailMode('manual');
     titleEl.textContent = '岗位信息列表';
-    fileEl.textContent = 'data/recruitment-market.json';
+    fileEl.textContent = '';
     setStatus('市场扫描');
     loadRecruitmentMarket();
     return;

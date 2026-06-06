@@ -36,8 +36,10 @@ modes/_profile.md
 
 # Generated
 .resolved-prompt-*
+.offeru/
 node_modules/
 bun.lock
+apps/web/dist/
 
 # OS
 .DS_Store
