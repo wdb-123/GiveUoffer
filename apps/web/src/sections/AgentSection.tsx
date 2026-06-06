@@ -150,7 +150,10 @@ export function AgentSection(props: AgentSectionProps) {
                   <button
                     type="button"
                     disabled={!intakeText.trim()}
-                    onClick={sendIntake}
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      sendIntake();
+                    }}
                   >
                     发送给 Agent
                   </button>
