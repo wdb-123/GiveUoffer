@@ -85,7 +85,7 @@
 .login-story-copy {
   display: grid;
   gap: clamp(12px, 1.25vw, 20px);
-  margin-top: clamp(46px, 7.2vw, 116px);
+  margin-top: clamp(18px, 2.2vw, 34px);
   max-width: 44%;
   position: relative;
   z-index: 3;
@@ -665,11 +665,11 @@
   display: grid;
   align-content: start;
   align-self: center;
-  gap: clamp(18px, 2.35vh, 28px);
+  gap: clamp(15px, 2vh, 22px);
   grid-column: 2;
   justify-self: center;
   min-height: 0;
-  padding: clamp(42px, 6vh, 60px) clamp(34px, 3.05vw, 44px) clamp(34px, 5.4vh, 48px);
+  padding: clamp(38px, 5.5vh, 52px) clamp(34px, 3.05vw, 44px) clamp(30px, 4.8vh, 42px);
   position: relative;
   width: min(460px, calc(100% - 48px));
   z-index: 6;
@@ -687,13 +687,13 @@
 
 .login-panel-brand {
   display: inline-flex;
-  margin-bottom: clamp(12px, 2.2vh, 24px);
+  margin-bottom: clamp(10px, 1.7vh, 18px);
 }
 
 .login-panel-brand img {
   display: block;
   height: auto;
-  width: clamp(136px, 11.5vw, 176px);
+  width: clamp(126px, 10vw, 156px);
 }
 
 .login-legal {
@@ -709,7 +709,7 @@
 
 .login-control {
   display: grid;
-  gap: 11px;
+  gap: 9px;
 }
 
 .login-control > span {
@@ -722,11 +722,11 @@
 .login-control input {
   background: rgba(4, 13, 33, 0.56);
   border: 1px solid rgba(158, 190, 255, 0.2);
-  border-radius: 10px;
+  border-radius: 9px;
   color: #f8fafc;
   font: inherit;
   font-size: 15px;
-  height: clamp(50px, 5.9vh, 58px);
+  height: clamp(46px, 5.3vh, 52px);
   outline: none;
   padding: 0 16px;
   transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
@@ -752,7 +752,7 @@
   display: flex;
   gap: 16px;
   justify-content: space-between;
-  margin: clamp(2px, 0.9vh, 8px) 0;
+  margin: 0;
 }
 
 .login-check {
@@ -785,12 +785,12 @@
 .login-primary-action,
 .login-secondary-actions button {
   border: 0;
-  border-radius: 10px;
+  border-radius: 9px;
   cursor: pointer;
   font: inherit;
-  font-weight: 900;
+  font-weight: 800;
   letter-spacing: 0;
-  min-height: clamp(54px, 7vh, 64px);
+  min-height: 48px;
   transition: box-shadow 160ms ease, transform 160ms ease, opacity 160ms ease;
 }
 
@@ -800,18 +800,18 @@
   color: #ffffff;
   display: flex;
   justify-content: space-between;
-  margin-top: clamp(4px, 1vh, 10px);
-  padding: 0 18px 0 22px;
+  margin-top: clamp(2px, 0.7vh, 6px);
+  padding: 0 16px 0 20px;
 }
 
 .login-primary-action i {
   font-style: normal;
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .login-primary-action:hover,
 .login-secondary-actions button:hover {
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.26);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
   transform: translateY(-1px);
 }
 
@@ -840,7 +840,7 @@
 
 .login-secondary-actions {
   display: grid;
-  gap: 12px;
+  gap: 10px;
   grid-template-columns: 1fr 1fr;
 }
 
@@ -848,6 +848,7 @@
   background: rgba(4, 13, 33, 0.52);
   border: 1px solid rgba(158, 190, 255, 0.18);
   color: #eef4ff;
+  min-height: 44px;
 }
 
 .login-secondary-actions button:last-child {
@@ -952,7 +953,7 @@
   }
 
   .login-control input {
-    height: 52px;
+    height: 48px;
   }
 
   .login-panel-row {
@@ -968,7 +969,7 @@
 
   .login-primary-action,
   .login-secondary-actions button {
-    min-height: 52px;
+    min-height: 48px;
   }
 
   .login-secondary-actions {
