@@ -2,10 +2,11 @@ import type {
   AgentEvent,
   EntityId,
   PermissionAction,
+  ProviderContextWindow,
   ProviderInstallStatus,
   RiskLevel,
   TaskStatus,
-} from "@offeru/shared";
+} from "@ucareer/shared";
 
 export interface InstallStatus {
   installed: boolean;
@@ -64,6 +65,7 @@ export interface AgentProvider {
   id: string;
   label: string;
   capabilities: AgentCapabilities;
+  contextWindow?: ProviderContextWindow;
 
   checkInstalled(): Promise<InstallStatus>;
   createStructuredCommand?(input: AgentSessionInput): AgentExecutionCommand;

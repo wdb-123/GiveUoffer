@@ -1,4 +1,4 @@
-import type { AgentProvider } from "@offeru/agent-core";
+import type { AgentProvider } from "@ucareer/agent-core";
 
 export interface DaemonRuntime {
   providers: AgentProvider[];

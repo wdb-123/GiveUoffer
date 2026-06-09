@@ -1,4 +1,4 @@
-# OfferU Gemini Provider
+# Ucareer Gemini Provider
 
 Provider adapter for Gemini CLI.
 

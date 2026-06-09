@@ -1,4 +1,4 @@
-import type { ApplicationsOverview } from "@offeru/shared";
+import type { ApplicationsOverview } from "@ucareer/shared";
 import { useState } from "react";
 import { Panel } from "../ui/Panel";
 import { SectionHeading } from "../ui/SectionHeading";
@@ -61,13 +61,6 @@ export function ApplicationsSection({ applications, onCreateEvent, onUpdateLates
 
   return (
     <div className="applications-workspace applications-import-workspace">
-      <header className="applications-import-header">
-        <div>
-          <h1>投递进度导入</h1>
-          <p>data/applications.md</p>
-        </div>
-      </header>
-
       <div className="applications-import-grid">
         <Panel className="applications-mail-panel">
           <h2>粘贴邮件内容</h2>

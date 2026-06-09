@@ -8,7 +8,7 @@ import type {
   AgentSessionHandle,
   AgentSessionInput,
   InstallStatus,
-} from "@offeru/agent-core";
+} from "@ucareer/agent-core";
 
 const execFileAsync = promisify(execFile);
 

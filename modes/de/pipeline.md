@@ -1,12 +1,12 @@
 # Modus: pipeline — URL-Inbox (Second Brain)
 
-Verarbeitet URLs von Stellenanzeigen, die in `data/pipeline.md` gesammelt wurden. Der Kandidat wirft URLs ins Inbox, wann immer er eine entdeckt, und führt später `/career-ops pipeline` aus, um sie alle in einem Rutsch zu verarbeiten.
+Verarbeitet URLs von Stellenanzeigen, die in `workspace/ops/data/pipeline.md` gesammelt wurden. Der Kandidat wirft URLs ins Inbox, wann immer er eine entdeckt, und führt später `/ucareer pipeline` aus, um sie alle in einem Rutsch zu verarbeiten.
 
 ## Workflow
 
-1. **Lesen** von `data/pipeline.md` → alle Items mit `- [ ]` im Abschnitt "Pendientes" / "Pending" / "Offen" finden
+1. **Lesen** von `workspace/ops/data/pipeline.md` → alle Items mit `- [ ]` im Abschnitt "Pendientes" / "Pending" / "Offen" finden
 2. **Für jede offene URL**:
-   a. Nächste fortlaufende `REPORT_NUM` berechnen (in `reports/` lesen, höchste Nummer + 1)
+   a. Nächste fortlaufende `REPORT_NUM` berechnen (in `workspace/jobs/reports/` lesen, höchste Nummer + 1)
    b. **Stellenanzeige extrahieren** mit Playwright (`browser_navigate` + `browser_snapshot`) → WebFetch → WebSearch
    c. Wenn die URL nicht erreichbar ist → als `- [!]` mit Notiz markieren und weitermachen
    d. **Vollständige Auto-Pipeline ausführen**: A-F-Bewertung → Report .md → PDF (wenn Score >= 3.0) → Tracker
@@ -42,13 +42,13 @@ Verarbeitet URLs von Stellenanzeigen, die in `data/pipeline.md` gesammelt wurden
 **Sonderfälle:**
 - **LinkedIn**: Kann Login erfordern → mit `[!]` markieren und den Kandidaten bitten, den Text einzufügen
 - **PDF**: Wenn die URL auf ein PDF zeigt, direkt mit dem Read-Tool lesen
-- **`local:`-Präfix**: Lokale Datei lesen. Beispiel: `local:jds/linkedin-pm-ai.md` → `jds/linkedin-pm-ai.md` lesen
+- **`local:`-Präfix**: Lokale Datei lesen. Beispiel: `local:workspace/jobs/jds/linkedin-pm-ai.md` → `workspace/jobs/jds/linkedin-pm-ai.md` lesen
 - **StepStone / XING / kununu**: Häufig deutscher Markt, oft Cookie-Banner. Playwright kann in Snapshot scrollen, um den Anzeigentext zu erfassen
 - **Bundesagentur für Arbeit (arbeitsagentur.de)**: Strukturierte Stellenanzeigen, gut maschinenlesbar. WebFetch reicht meist
 
 ## Automatische Nummerierung
 
-1. Alle Dateien in `reports/` listen
+1. Alle Dateien in `workspace/jobs/reports/` listen
 2. Aus dem Präfix die Nummer extrahieren (z. B. `142-medispend...` → 142)
 3. Neue Nummer = höchste gefundene + 1
 
@@ -57,7 +57,7 @@ Verarbeitet URLs von Stellenanzeigen, die in `data/pipeline.md` gesammelt wurden
 Vor dem Verarbeiten irgendeiner URL die Sync prüfen:
 
 ```bash
-node cv-sync-check.mjs
+npm run sync-check
 ```
 
 Bei Abweichungen den Kandidaten warnen, bevor weitergearbeitet wird.

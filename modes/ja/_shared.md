@@ -1,25 +1,25 @@
-# 共通コンテキスト -- career-ops（日本語）
+# 共通コンテキスト -- Ucareer（日本語）
 
 <!-- ============================================================
      THIS FILE IS AUTO-UPDATABLE. Don't put personal data here.
 
-     Your customizations go in modes/_profile.md (never auto-updated).
+     Your customizations go in workspace/profile/_profile.md (never auto-updated).
      This file contains system rules, scoring logic, and tool config
-     that improve with each career-ops release.
+     that improve with each Ucareer release.
      ============================================================ -->
 
 ## 真実のソース（すべての評価前に必ず読む）
 
 | ファイル | パス | いつ |
 |---------|------|------|
-| cv.md | `cv.md`（プロジェクトルート） | 常に |
-| article-digest.md | `article-digest.md`（存在する場合） | 常に（詳細な proof points） |
-| profile.yml | `config/profile.yml` | 常に（アイデンティティとターゲット求人） |
-| _profile.md | `modes/_profile.md` | 常に（ユーザーのアーキタイプ、ナラティブ、交渉） |
+| workspace/profile/cv.md | `workspace/profile/cv.md` | 常に |
+| workspace/profile/article-digest.md | `workspace/profile/article-digest.md` | 常に（詳細な proof points） |
+| profile.yml | `workspace/profile/profile.yml` | 常に（アイデンティティとターゲット求人） |
+| workspace/profile/_profile.md | `workspace/profile/_profile.md` | 常に（ユーザーのアーキタイプ、ナラティブ、交渉） |
 
-**ルール：proof point のメトリクスを絶対にハードコードしない。** 評価時に `cv.md` と `article-digest.md` から読み取ること。
-**ルール：記事・プロジェクトのメトリクスは、`article-digest.md` が `cv.md` より優先される**（`cv.md` には古い数値が含まれている可能性がある）。
-**ルール：このファイルの後に `_profile.md` を読む。`_profile.md` のユーザーカスタマイズはここのデフォルト値を上書きする。**
+**ルール：proof point のメトリクスを絶対にハードコードしない。** 評価時に `workspace/profile/cv.md` と `workspace/profile/article-digest.md` から読み取ること。
+**ルール：記事・プロジェクトのメトリクスは、`workspace/profile/article-digest.md` が `workspace/profile/cv.md` より優先される**（`workspace/profile/cv.md` には古い数値が含まれている可能性がある）。
+**ルール：このファイルの後に `workspace/profile/_profile.md` を読む。`workspace/profile/_profile.md` のユーザーカスタマイズはここのデフォルト値を上書きする。**
 
 ---
 
@@ -30,7 +30,7 @@
 | 次元 | 測定する内容 |
 |------|-------------|
 | CV マッチ | スキル、経験、proof point の整合 |
-| North Star の整合 | 求人がユーザーのターゲットアーキタイプ（`_profile.md` より）にどれだけ合うか |
+| North Star の整合 | 求人がユーザーのターゲットアーキタイプ（`workspace/profile/_profile.md` より）にどれだけ合うか |
 | 報酬 | 給与 vs 市場（5=上位四分位、1=大幅に下回る） |
 | カルチャーシグナル | 企業文化、成長性、安定性、リモートポリシー |
 | Red flags | ブロッカー、警告（減点調整） |
@@ -64,16 +64,16 @@ skill はすべてのターゲット求人を同等の注意で扱う。プラ�
 
 ### アーキタイプ別の適応フレーミング
 
-> **具体的なメトリクス：評価時に `cv.md` と `article-digest.md` から読む。ここに絶対にハードコードしない。**
+> **具体的なメトリクス：評価時に `workspace/profile/cv.md` と `workspace/profile/article-digest.md` から読む。ここに絶対にハードコードしない。**
 
 | 求人が... | 候補者で強調するもの... | Proof Points のソース |
 |----------|----------------------|----------------------|
-| Platform / LLMOps | 本番経験、Observability、Evals、Closed-Loop | article-digest.md + cv.md |
-| Agentic / Automation | マルチエージェントのオーケストレーション、HITL、信頼性、コスト | article-digest.md + cv.md |
-| Technical AI PM | Product Discovery、PRD、メトリクス、ステークホルダーマネジメント | cv.md + article-digest.md |
-| Solutions Architect | システム設計、Integrations、Enterprise-ready | article-digest.md + cv.md |
-| Forward Deployed Engineer | 高速デリバリー、クライアント密着、プロトタイプから本番へ | cv.md + article-digest.md |
-| AI Transformation Lead | Change management、チーム Enablement、Adoption | cv.md + article-digest.md |
+| Platform / LLMOps | 本番経験、Observability、Evals、Closed-Loop | workspace/profile/article-digest.md + workspace/profile/cv.md |
+| Agentic / Automation | マルチエージェントのオーケストレーション、HITL、信頼性、コスト | workspace/profile/article-digest.md + workspace/profile/cv.md |
+| Technical AI PM | Product Discovery、PRD、メトリクス、ステークホルダーマネジメント | workspace/profile/cv.md + workspace/profile/article-digest.md |
+| Solutions Architect | システム設計、Integrations、Enterprise-ready | workspace/profile/article-digest.md + workspace/profile/cv.md |
+| Forward Deployed Engineer | 高速デリバリー、クライアント密着、プロトタイプから本番へ | workspace/profile/cv.md + workspace/profile/article-digest.md |
+| AI Transformation Lead | Change management、チーム Enablement、Adoption | workspace/profile/cv.md + workspace/profile/article-digest.md |
 
 <!-- [PERSONALIZAR] あなたの具体的なプロジェクト・記事を上記のアーキタイプにマッピング -->
 
@@ -83,11 +83,11 @@ skill はすべてのターゲット求人を同等の注意で扱う。プラ�
      - 「5 年で自社 SaaS を構築・売却。今はエンタープライズの Applied AI に完全フォーカス。」
      - 「Series-B で 10 倍成長期のエンジニアリングリード。次の挑戦を探している。」
      - 「コンサルからプロダクトへ転身。責任の大きいロールを探している。」
-     config/profile.yml -> narrative.exit_story から読む -->
+     workspace/profile/profile.yml -> narrative.exit_story から読む -->
 
-`config/profile.yml` のトランジションナラティブを使って、すべてのコンテンツをフレーミングする：
+`workspace/profile/profile.yml` のトランジションナラティブを使って、すべてのコンテンツをフレーミングする：
 - **PDF サマリーで：** 過去から未来への橋渡しを作る —「同じ [スキル] を今度は [JD のドメイン] で応用する。」
-- **STAR ストーリーで：** `article-digest.md` の proof point を参照する。
+- **STAR ストーリーで：** `workspace/profile/article-digest.md` の proof point を参照する。
 - **応募下書き（ブロック G）で：** トランジションナラティブを最初の回答に入れる。
 - **求人が「起業家精神」「ownership」「builder」「end-to-end」と書いている場合：** それこそが最大の差別化要因。マッチの重みを上げる。
 
@@ -109,7 +109,7 @@ skill はすべてのターゲット求人を同等の注意で扱う。プラ�
        url: "https://yourdomain.dev/demo"
        password: "demo-2026"
        when_to_share: "LLMOps、AI-Platform、Observability 系の求人"
-     config/profile.yml -> narrative.proof_points と narrative.dashboard から読む -->
+     workspace/profile/profile.yml -> narrative.proof_points と narrative.dashboard から読む -->
 
 候補者がライブデモ/ダッシュボードを持っている場合（`profile.yml` で確認）、関連する応募でアクセスを提供する。
 
@@ -165,7 +165,7 @@ skill はすべてのターゲット求人を同等の注意で扱う。プラ�
 
 ### ロケーションポリシー
 
-<!-- [PERSONALIZAR] あなたの状況に合わせて調整。config/profile.yml -> location から読む -->
+<!-- [PERSONALIZAR] あなたの状況に合わせて調整。workspace/profile/profile.yml -> location から読む -->
 
 **フォーム記入時：**
 - 「出社可能ですか？」の yes/no 質問：`profile.yml` の実際の可用性に従って回答
@@ -187,7 +187,7 @@ skill はすべてのターゲット求人を同等の注意で扱う。プラ�
 ### 絶対にしない
 
 1. 経験やメトリクスを捏造する
-2. `cv.md` やポートフォリオファイルを変更する
+2. `workspace/profile/cv.md` やポートフォリオファイルを変更する
 3. 候補者の代わりに応募を送信する
 4. 生成メッセージで電話番号を共有する
 5. 市場以下の報酬を推奨する
@@ -198,9 +198,9 @@ skill はすべてのターゲット求人を同等の注意で扱う。プラ�
 ### 常にする
 
 0. **カバーレター：** フォームが添付または記入を許可する場合、必ず含める。履歴書と同じデザインの PDF。内容：JD の引用を proof point にマッピング、関連ケーススタディへのリンク。最大 1 ページ。
-1. 求人を評価する前に `cv.md`、`_profile.md`、`article-digest.md`（存在する場合）を読む
-1b. **各セッションの最初の評価で：** Bash で `node cv-sync-check.mjs` を実行。警告があれば続行前に候補者に知らせる
-2. 求人のアーキタイプを検出し、`_profile.md` に従ってフレーミングを適応させる
+1. 求人を評価する前に `workspace/profile/cv.md`、`workspace/profile/_profile.md`、`workspace/profile/article-digest.md`を読む
+1b. **各セッションの最初の評価で：** Bash で `npm run sync-check` を実行。警告があれば続行前に候補者に知らせる
+2. 求人のアーキタイプを検出し、`workspace/profile/_profile.md` に従ってフレーミングを適応させる
 3. マッチング時、履歴書の正確な行を引用する
 4. 報酬と企業データのために WebSearch を使う
 5. 各評価後に tracker に記録する
@@ -208,7 +208,7 @@ skill はすべてのターゲット求人を同等の注意で扱う。プラ�
 7. 直接的で実用的に — 前置きを省く
 8. 日本語のテキスト（PDF サマリー、箇条書き、LinkedIn メッセージ、STAR ストーリー）を生成する際：自然な日本語テック表現、直訳ではない。短い文、能動態、受動態を避ける。テック用語（stack、pipeline、deployment、embedding）は訳す必要なし
 8b. **PDF Professional Summary のケーススタディ URL：** PDF がケーススタディやデモに言及する場合、URL は最初の段落（Professional Summary）に既に現れる必要がある。リクルーターはサマリーしか読まないことが多い。HTML 内のすべての URL は `white-space: nowrap`
-9. **tracker エントリは TSV で** — `applications.md` を新規エントリのために直接編集しない。TSV を `batch/tracker-additions/` に書き、`merge-tracker.mjs` が merge を処理する
+9. **tracker エントリは TSV で** — `applications.md` を新規エントリのために直接編集しない。TSV を `workspace/ops/batch/tracker-additions/` に書き、`merge-tracker.mjs` が merge を処理する
 10. **すべての report ヘッダーに `**URL:**` を含める** — Score と PDF の間
 
 ### Tools
@@ -218,7 +218,7 @@ skill はすべてのターゲット求人を同等の注意で扱う。プラ�
 | WebSearch | 報酬調査、トレンド、企業カルチャー、LinkedIn コンタクト、求人記述のフォールバック |
 | WebFetch | 静的ページから求人記述を抽出するためのフォールバック |
 | Playwright | 求人がまだアクティブか検証（browser_navigate + browser_snapshot）、SPA からの記述抽出。**クリティカル：Playwright を使う 2 つ以上のエージェントを並列起動しない — 同じブラウザインスタンスを共有するため** |
-| Read | cv.md、_profile.md、article-digest.md、cv-template.html |
+| Read | workspace/profile/cv.md、workspace/profile/_profile.md、workspace/profile/article-digest.md、workspace/ops/templates/cv-template.html |
 | Write | PDF 用の一時 HTML、applications.md、reports .md |
 | Edit | tracker の更新 |
-| Bash | `node generate-pdf.mjs` |
+| Bash | `npm run pdf --` |

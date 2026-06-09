@@ -20,7 +20,7 @@ Agent(
 
 ## Configuración
 
-Leer `portals.yml` que contiene:
+Leer `workspace/profile/portals.yml` que contiene:
 - `search_queries`: Lista de queries WebSearch con `site:` filters por portal (descubrimiento amplio)
 - `tracked_companies`: Empresas específicas con `careers_url` para navegación directa
 - `tracked_companies[].parser`: Parser local opcional para páginas SSR o HTML estable
@@ -30,7 +30,7 @@ Leer `portals.yml` que contiene:
 
 ### Nivel 0 — Local parser (MÁS BARATO)
 
-**Para cada empresa en `tracked_companies` con `parser:` configurado:** ejecutar el parser local definido en `portals.yml`. Este nivel es ideal cuando la página de careers usa SSR o HTML estable y ya existe un script JavaScript, Python, o de otro runtime local que extrae los jobs sin ayuda del agente.
+**Para cada empresa en `tracked_companies` con `parser:` configurado:** ejecutar el parser local definido en `workspace/profile/portals.yml`. Este nivel es ideal cuando la página de careers usa SSR o HTML estable y ya existe un script JavaScript, Python, o de otro runtime local que extrae los jobs sin ayuda del agente.
 
 Contrato recomendado:
 
@@ -79,7 +79,7 @@ Formato objeto con `results`:
 
 `company` es opcional; si no viene, `scan.mjs` usa el nombre de `tracked_companies`.
 
-El escáner no necesita conservar el JSON completo después de leer stdout. Si un parser también genera un artefacto para auditoría o depuración, guardarlo en `data/parser-output/{company}/` y mantenerlo fuera de git (los JSON en `.gitignore`; los `.gitkeep` se mantienen en git para conservar la estructura).
+El escáner no necesita conservar el JSON completo después de leer stdout. Si un parser también genera un artefacto para auditoría o depuración, guardarlo en `workspace/ops/data/parser-output/{company}/` y mantenerlo fuera de git (los JSON en `.gitignore`; los `.gitkeep` se mantienen en git para conservar la estructura).
 
 ### Regla: local parser exitoso — no repetir scraping caro
 
@@ -103,7 +103,7 @@ Durante el scan del agente, mantener en memoria el conjunto **`local_parser_ok`*
 - Nivel 3: no desactivar queries transversales (`site:jobs.ashbyhq.com`, `site:boards.greenhouse.io`, etc.) — sirven para descubrir empresas **nuevas**. Solo filtrar resultados de empresas ya en `tracked_companies` con parser exitoso.
 - No crear queries `search_queries` dedicadas a una empresa con parser local activo (p. ej. `site:jobs.ashbyhq.com/cohere "AI Engineer"`); usar el parser o, si falla, Playwright/API.
 
-**Nivel 0 recomendado:** ejecutar `node scan.mjs` (o `npm run scan`) al inicio del workflow del agente. Eso cubre parsers locales + APIs en un solo paso zero-token y devuelve qué empresas usaron `local-parser` con éxito.
+**Nivel 0 recomendado:** ejecutar `npm run scan` (o `npm run scan`) al inicio del workflow del agente. Eso cubre parsers locales + APIs en un solo paso zero-token y devuelve qué empresas usaron `local-parser` con éxito.
 
 ### Nivel 1 — Playwright directo (PRINCIPAL)
 
@@ -113,7 +113,7 @@ Durante el scan del agente, mantener en memoria el conjunto **`local_parser_ok`*
 - Detecta ofertas nuevas al instante
 - No depende de la indexación de Google
 
-**Cada empresa DEBE tener `careers_url` en portals.yml.** Si no la tiene, buscarla una vez, guardarla, y usar en futuros scans.
+**Cada empresa DEBE tener `careers_url` en workspace/profile/portals.yml.** Si no la tiene, buscarla una vez, guardarla, y usar en futuros scans.
 
 ### Nivel 2 — ATS APIs / Feeds (COMPLEMENTARIO)
 
@@ -149,13 +149,13 @@ Los niveles son aditivos — se ejecutan en orden, los resultados se mezclan y d
 
 ## Workflow
 
-1. **Leer configuración**: `portals.yml`
-2. **Leer historial**: `data/scan-history.tsv` → URLs ya vistas
-3. **Leer dedup sources**: `data/applications.md` + `data/pipeline.md`
+1. **Leer configuración**: `workspace/profile/portals.yml`
+2. **Leer historial**: `workspace/ops/data/scan-history.tsv` → URLs ya vistas
+3. **Leer dedup sources**: `workspace/ops/data/applications.md` + `workspace/ops/data/pipeline.md`
 
 3.5. **Nivel 0 — Local parser** (`scan.mjs`, zero-token):
    Inicializar `local_parser_ok = []`.
-   Preferir ejecutar `node scan.mjs` una vez para cubrir todos los parsers + APIs zero-token; si se hace manualmente, repetir la lógica siguiente.
+   Preferir ejecutar `npm run scan` una vez para cubrir todos los parsers + APIs zero-token; si se hace manualmente, repetir la lógica siguiente.
    Para cada empresa en `tracked_companies` con `enabled: true`, `parser.command` y script existente:
    a. Ejecutar `parser.command` con `parser.script` + `parser.args` usando ejecución local sin shell
    b. Expandir placeholders `{careers_url}` y `{company}` en argumentos
@@ -198,12 +198,12 @@ Los niveles son aditivos — se ejecutan en orden, los resultados se mezclan y d
    c. **Omitir** el resultado si `company` (normalizado) coincide con algún nombre en `local_parser_ok`
    d. Acumular el resto en lista de candidatos (dedup con Nivel 0+1+2)
 
-6. **Filtrar por título** usando `title_filter` de `portals.yml`:
+6. **Filtrar por título** usando `title_filter` de `workspace/profile/portals.yml`:
    - Al menos 1 keyword de `positive` debe aparecer en el título (case-insensitive)
    - 0 keywords de `negative` deben aparecer
    - `seniority_boost` keywords dan prioridad pero no son obligatorios
 
-6b. **Filtrar por ubicación (opcional)** usando `location_filter` de `portals.yml`:
+6b. **Filtrar por ubicación (opcional)** usando `location_filter` de `workspace/profile/portals.yml`:
    - Si el bloque `location_filter` está ausente, todas las ubicaciones pasan (comportamiento por defecto)
    - Ubicación vacía en una oferta → pasa (no penalizar datos faltantes)
    - Cualquier keyword de `block` presente → rechazar (precedencia sobre allow)
@@ -257,12 +257,12 @@ Regex genérico: `(.+?)(?:\s*[@|—–-]\s*|\s+at\s+)(.+?)$`
 ## URLs privadas
 
 Si se encuentra una URL no accesible públicamente:
-1. Guardar el JD en `jds/{company}-{role-slug}.md`
-2. Añadir a pipeline.md como: `- [ ] local:jds/{company}-{role-slug}.md | {company} | {title}`
+1. Guardar el JD en `workspace/jobs/jds/{company}-{role-slug}.md`
+2. Añadir a pipeline.md como: `- [ ] local:workspace/jobs/jds/{company}-{role-slug}.md | {company} | {title}`
 
 ## Scan History
 
-`data/scan-history.tsv` trackea TODAS las URLs vistas:
+`workspace/ops/data/scan-history.tsv` trackea TODAS las URLs vistas:
 
 ```
 url	first_seen	portal	title	company	status
@@ -287,7 +287,7 @@ Nuevas añadidas a pipeline.md: N
   + {company} | {title} | {query_name}
   ...
 
-→ Ejecuta /career-ops pipeline para evaluar las nuevas ofertas.
+→ Ejecuta /ucareer pipeline para evaluar las nuevas ofertas.
 ```
 
 ## Gestión de careers_url
@@ -326,14 +326,14 @@ Fallback: si solo tienes la URL ATS directa, navega primero al sitio web de la e
 1. Intentar el patrón de su plataforma conocida
 2. Si falla, hacer un WebSearch rápido: `"{company}" careers jobs`
 3. Navegar con Playwright para confirmar que funciona
-4. **Guardar la URL encontrada en portals.yml** para futuros scans
+4. **Guardar la URL encontrada en workspace/profile/portals.yml** para futuros scans
 
 **Si `careers_url` devuelve 404 o redirect:**
 1. Anotar en el resumen de salida
 2. Intentar scan_query como fallback
 3. Marcar para actualización manual
 
-## Mantenimiento del portals.yml
+## Mantenimiento del workspace/profile/portals.yml
 
 - **SIEMPRE guardar `careers_url`** cuando se añade una empresa nueva
 - Añadir nuevos queries según se descubran portales o roles interesantes

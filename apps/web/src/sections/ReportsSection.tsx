@@ -1,4 +1,4 @@
-import type { ReportDocument, ReportsOverview } from "@offeru/shared";
+import type { ReportDocument, ReportsOverview } from "@ucareer/shared";
 import { Panel } from "../ui/Panel";
 import { SectionHeading } from "../ui/SectionHeading";
 

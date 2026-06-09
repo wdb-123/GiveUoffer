@@ -1,5 +1,5 @@
 {
-  "name": "@offeru/provider-gemini",
+  "name": "@ucareer/provider-gemini",
   "version": "0.1.0",
   "type": "module",
   "private": true,

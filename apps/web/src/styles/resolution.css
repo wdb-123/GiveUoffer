@@ -1,0 +1,138 @@
+/*
+ * Resolution compatibility framework.
+ *
+ * Layering rule:
+ * - Shell tokens decide the app chrome: sidebar, main viewport and mobile stacking.
+ * - Page tokens decide usable content width and gutters.
+ * - Components should adapt to their container with container queries where possible.
+ */
+
+:root {
+  --uc-bp-mobile: 760px;
+  --uc-bp-tablet: 1024px;
+  --uc-bp-laptop-sm: 1180px;
+  --uc-bp-laptop: 1440px;
+
+  --uc-sidebar-expanded: 300px;
+  --uc-sidebar-laptop: 260px;
+  --uc-sidebar-compact: 240px;
+  --uc-sidebar-collapsed: 76px;
+
+  --uc-content-xs: 640px;
+  --uc-content-sm: 720px;
+  --uc-content-md: 820px;
+  --uc-content-lg: 960px;
+  --uc-content-xl: 1180px;
+
+  --uc-gutter-xs: 16px;
+  --uc-gutter-sm: 24px;
+  --uc-gutter-md: 32px;
+  --uc-gutter-lg: 48px;
+
+  --sidebar-width: var(--uc-sidebar-laptop);
+  --sidebar-collapsed-width: var(--uc-sidebar-collapsed);
+  --page-gutter-inline: var(--uc-gutter-md);
+  --page-content-width: var(--uc-content-xl);
+  --page-readable-width: var(--uc-content-md);
+
+  --density-text-xs: 10px;
+  --density-text-sm: 11px;
+  --density-text-md: 12px;
+  --density-text-lg: 14px;
+  --density-icon-sm: 18px;
+  --density-icon-md: 22px;
+  --density-control-sm: 30px;
+  --density-control-md: 34px;
+  --density-brand-wordmark: 80px;
+  --density-brand-wordmark-height: 28px;
+  --density-agent-logo-width: 220px;
+  --density-agent-logo-height: 60px;
+
+  --density-hero-title: 31px;
+  --density-control-text: 12px;
+  --density-input-text: 15px;
+  --density-guide-text: 14px;
+}
+
+.view-shell {
+  --view-content-width: var(--page-content-width);
+  --view-readable-width: var(--page-readable-width);
+  --view-gutter-inline: var(--page-gutter-inline);
+}
+
+.view-agent {
+  --view-content-width: var(--uc-content-md);
+  --view-readable-width: var(--uc-content-md);
+}
+
+.uc-content-frame {
+  margin-inline: auto;
+  max-width: var(--view-content-width);
+  width: min(calc(100% - var(--view-gutter-inline) * 2), var(--view-content-width));
+}
+
+.uc-readable-frame {
+  margin-inline: auto;
+  max-width: var(--view-readable-width);
+  width: min(calc(100% - var(--view-gutter-inline) * 2), var(--view-readable-width));
+}
+
+/* Desktop keeps Laptop L geometry so subpage components do not shift across common monitor widths. */
+
+@media (max-width: 760px) {
+  :root {
+    --sidebar-width: 0px;
+    --page-gutter-inline: var(--uc-gutter-xs);
+    --page-content-width: 100%;
+    --page-readable-width: 100%;
+    --density-hero-title: 22px;
+    --density-control-text: 11px;
+    --density-input-text: 12px;
+    --density-guide-text: 12px;
+    --density-brand-wordmark: 68px;
+    --density-brand-wordmark-height: 24px;
+    --density-agent-logo-width: 168px;
+    --density-agent-logo-height: 46px;
+  }
+
+  body {
+    overflow: auto;
+  }
+
+  .app-layout {
+    display: block;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .app-nav {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    padding: 16px;
+    position: static;
+  }
+
+  .app-nav nav {
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  }
+
+  .nav-item {
+    font-size: 12px;
+    min-height: 36px;
+    padding: 0 9px;
+  }
+
+  .nav-item-icon {
+    font-size: 10px;
+    height: 20px;
+    width: 20px;
+  }
+
+  .view-shell {
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+    padding: 14px;
+  }
+}

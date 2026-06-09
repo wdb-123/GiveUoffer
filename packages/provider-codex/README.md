@@ -1,4 +1,4 @@
-# OfferU Codex Provider
+# Ucareer Codex Provider
 
 Provider adapter for Codex CLI.
 

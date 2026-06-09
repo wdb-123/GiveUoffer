@@ -8,25 +8,29 @@ These files contain your personal data, customizations, and work product. Update
 
 | File | Purpose |
 |------|---------|
-| `cv.md` | Your CV in markdown |
-| `config/profile.yml` | Your identity, targets, comp range |
-| `modes/_profile.md` | Your archetypes, narrative, negotiation scripts |
-| `article-digest.md` | Your proof points from portfolio |
-| `interview-prep/story-bank.md` | Your accumulated STAR+R stories |
-| `portals.yml` | Your customized company list |
-| `data/applications.md` | Your application tracker |
-| `data/application-progress.md` | Your applied jobs and application progress board |
-| `data/pipeline.md` | Your URL inbox |
-| `data/scan-history.tsv` | Your scan history |
-| `data/follow-ups.md` | Your follow-up history |
-| `writing-samples/*` | Your personal writing samples for style calibration (except `writing-samples/README.md`, which is system-owned documentation delivered by updates) |
-| `reports/*` | Your evaluation reports |
-| `output/*` | Your generated PDFs |
-| `jds/*` | Your saved job descriptions |
+| `workspace/profile/cv.md` | Your CV in markdown |
+| `workspace/profile/profile.yml` | Your identity, targets, comp range |
+| `workspace/profile/_profile.md` | Your archetypes, narrative, negotiation scripts |
+| `workspace/profile/article-digest.md` | Your proof points from portfolio |
+| `workspace/jobs/interview-prep/story-bank.md` | Your accumulated STAR+R stories |
+| `workspace/profile/portals.yml` | Your customized company list |
+| `workspace/ops/data/applications.md` | Your application tracker |
+| `workspace/ops/data/application-progress.md` | Your applied jobs and application progress board |
+| `workspace/ops/data/pipeline.md` | Your URL inbox |
+| `workspace/ops/data/scan-history.tsv` | Your scan history |
+| `workspace/ops/data/follow-ups.md` | Your follow-up history |
+| `workspace/ops/imports/*` | Your locally imported files and parsed attachment copies |
+| `workspace/ops/exports/*` | Your generated exports for local handoff |
+| `workspace/resumes/*` | Your resume library, source files and rendered resume variants |
+| `workspace/jobs/research/*` | Your company, market and role research notes |
+| `workspace/jobs/examples/*` | Your local examples and project-specific sample assets |
+| `workspace/profile/writing-samples/*` | Your personal writing samples for style calibration (except `workspace/profile/writing-samples/README.md`, which is system-owned documentation delivered by updates) |
+| `workspace/jobs/reports/*` | Your evaluation reports |
+| `workspace/jobs/jds/*` | Your saved job descriptions |
 
-## System Layer (safe to auto-update)
+## System Layer (product source)
 
-These files contain system logic, scripts, templates, and instructions that improve with each release.
+These files contain product logic, scripts, templates, and instructions.
 
 | File | Purpose |
 |------|---------|
@@ -34,7 +38,6 @@ These files contain system logic, scripts, templates, and instructions that impr
 | `modes/oferta.md` | Evaluation mode instructions |
 | `modes/pdf.md` | PDF generation instructions |
 | `modes/scan.md` | Portal scanner instructions |
-| `modes/batch.md` | Batch processing instructions |
 | `modes/apply.md` | Application assistant instructions |
 | `modes/auto-pipeline.md` | Auto-pipeline instructions |
 | `modes/contacto.md` | LinkedIn outreach instructions |
@@ -49,24 +52,19 @@ These files contain system logic, scripts, templates, and instructions that impr
 | `modes/de/*` | German language modes |
 | `modes/fr/*` | French language modes |
 | `modes/ja/*` | Japanese language modes |
-| `modes/pt/*` | Portuguese language modes |
-| `modes/ru/*` | Russian language modes |
+| `modes/tr/*` | Turkish language modes |
 | `CLAUDE.md` | Agent instructions |
 | `AGENTS.md` | Codex instructions |
 | `*.mjs` | Utility scripts |
-| `batch/batch-prompt.md` | Batch worker prompt |
-| `batch/batch-runner.sh` | Batch orchestrator |
-| `dashboard/*` | Go TUI dashboard |
-| `templates/*` | Base templates |
-| `fonts/*` | Self-hosted fonts |
+| `workspace/ops/templates/*` | Base templates |
+| `workspace/ops/templates/fonts/*` | Self-hosted resume template fonts |
 | `.claude/skills/*` | Skill definitions |
 | `docs/*` | Documentation |
-| `VERSION` | Current version number |
 | `DATA_CONTRACT.md` | This file |
-| `writing-samples/README.md` | System-owned onboarding documentation for the writing-samples directory |
+| `workspace/profile/writing-samples/README.md` | System-owned onboarding documentation for the writing-samples directory |
 
 ## The Rule
 
 **If a file is in the User Layer, no update process may read, modify, or delete it.**
 
-**If a file is in the System Layer, it can be safely replaced with the latest version from the upstream repo.**
+**If a file is in the System Layer, it can be changed as part of product development.**

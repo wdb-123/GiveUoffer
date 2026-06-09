@@ -1,4 +1,4 @@
-import type { AgentEvent } from "@offeru/shared";
+import type { AgentEvent } from "@ucareer/shared";
 
 export function formatEvent(event: AgentEvent): string {
   if (event.type === "message") return `${event.role}: ${event.text}`;

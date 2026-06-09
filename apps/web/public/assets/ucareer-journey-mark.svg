@@ -1,0 +1,29 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <mask id="ucareerUMask" maskUnits="userSpaceOnUse" x="40" y="38" width="176" height="184">
+      <path d="M70 44V128C70 166 94 191 128 191C162 191 186 166 186 128V44" stroke="#FFFFFF" stroke-width="36" stroke-linecap="butt" stroke-linejoin="round"/>
+    </mask>
+    <linearGradient id="ucareerBaseGradient" x1="56" y1="68" x2="202" y2="72" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7B61FF"/>
+      <stop offset="0.52" stop-color="#4F8CFF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="ucareerBottomGradient" x1="84" y1="166" x2="164" y2="202" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7B61FF" stop-opacity="0.42"/>
+      <stop offset="0.5" stop-color="#4F8CFF" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0.5"/>
+    </linearGradient>
+    <linearGradient id="ucareerRightShadow" x1="145" y1="92" x2="188" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4F8CFF" stop-opacity="0.04"/>
+      <stop offset="0.52" stop-color="#4F8CFF" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+  <g mask="url(#ucareerUMask)">
+    <rect x="40" y="38" width="176" height="184" fill="url(#ucareerBaseGradient)"/>
+    <ellipse cx="97" cy="180" rx="54" ry="44" fill="#4F8CFF" opacity="0.46"/>
+    <ellipse cx="133" cy="190" rx="48" ry="40" fill="url(#ucareerBottomGradient)"/>
+    <path d="M151 92C174 105 187 124 188 151C176 144 160 132 148 119C139 109 140 98 151 92Z" fill="url(#ucareerRightShadow)"/>
+    <ellipse cx="184" cy="82" rx="28" ry="70" fill="#22D3EE" opacity="0.34"/>
+  </g>
+</svg>

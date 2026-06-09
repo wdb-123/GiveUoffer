@@ -1,0 +1,67 @@
+.agent-empty-prompt {
+  display: grid;
+  justify-items: center;
+  max-width: 760px;
+}
+
+.agent-brand-lockup {
+  align-items: center;
+  display: inline-flex;
+  justify-self: center;
+  margin: 0 auto 12px;
+}
+
+.agent-brand-wordmark {
+  display: block;
+  height: var(--density-agent-logo-height, 60px);
+  object-fit: contain;
+  width: var(--density-agent-logo-width, 220px);
+}
+
+.agent-empty-prompt h2 {
+  color: #0b132b;
+  font-size: var(--density-hero-title, 31px);
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.22;
+  margin: 0;
+  text-align: center;
+}
+
+.agent-empty-prompt p {
+  color: #667085;
+  font-size: 14px;
+  font-weight: 450;
+  line-height: 1.6;
+  margin: 10px 0 0;
+  text-align: center;
+}
+
+.agent-brand-path {
+  height: 22px;
+  margin-top: 10px;
+  max-width: 420px;
+  width: min(54vw, 420px);
+}
+
+@media (max-width: 760px) {
+  .agent-brand-lockup {
+    margin-bottom: 14px;
+  }
+
+  .agent-brand-wordmark {
+    height: var(--density-agent-logo-height, 46px);
+    width: var(--density-agent-logo-width, 168px);
+  }
+
+  .agent-empty-prompt h2 {
+    max-width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .agent-empty-prompt p {
+    font-size: 13px;
+    max-width: 310px;
+  }
+}

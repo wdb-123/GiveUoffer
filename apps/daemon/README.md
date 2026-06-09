@@ -1,13 +1,12 @@
-# OfferU Daemon
+# Ucareer Daemon
 
-The daemon is the new local execution boundary for OfferU.
+The daemon is the new local execution boundary for Ucareer.
 
 Current state:
 
-- `src/legacy-visualizer.mjs` reuses the existing `visualizer/services/*.mjs` modules.
-- `src/index.ts` is the future TypeScript runtime entry.
 - `src/server.ts` exposes the TypeScript Fastify API.
-- `.offeru/daemon.sqlite` stores local tasks, events, approvals and decisions.
+- `src/index.ts` owns the daemon runtime.
+- `.ucareer/daemon.sqlite` stores local tasks, events, approvals and decisions.
 - `sync_events` in SQLite is the local outbox for future cloud sync.
 - The daemon keeps source-code access, shell execution and AI CLI sessions local.
 
@@ -17,4 +16,4 @@ Run:
 npm run daemon
 ```
 
-The legacy-compatible server exposes the current visualizer at `http://localhost:4173`.
+The daemon API starts on `http://127.0.0.1:54321` by default.

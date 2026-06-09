@@ -12,7 +12,7 @@ Interactive mode for when the candidate is filling out an application form in Ch
 ```text
 1. DETECT      → Read active Chrome tab (screenshot/URL/title)
 2. IDENTIFY    → Extract company + role from the page
-3. SEARCH      → Match against existing reports in reports/
+3. SEARCH      → Match against existing reports in workspace/jobs/reports/
 4. LOAD        → Read full report + Section G (if it exists)
 5. COMPARE     → Does the role on screen match the one evaluated? If it changed → notify
 6. ANALYZE     → Identify ALL visible form questions
@@ -32,7 +32,7 @@ Interactive mode for when the candidate is filling out an application form in Ch
 ## Step 2 — Identify and search for context
 
 1. Extract company name and role title from the page
-2. Search in `reports/` by company name (case-insensitive grep)
+2. Search in `workspace/jobs/reports/` by company name (case-insensitive grep)
 3. If there is a match → load the full report
 4. If there is a Section G → load previous draft answers as a base
 5. If there is NO match → notify and offer to run a quick auto-pipeline
@@ -56,7 +56,7 @@ Identify ALL visible questions:
 
 Classify each question:
 - **Already answered in Section G** → adapt the existing response
-- **New question** → generate response from the report + cv.md
+- **New question** → generate response from the report + workspace/profile/cv.md
 
 ## Step 5 — Generate responses
 
@@ -66,7 +66,7 @@ For each question, generate the response following:
 2. **Previous Section G**: If a draft response exists, use it as a base and refine
 3. **"I'm choosing you" tone**: Same auto-pipeline framework
 4. **Specificity**: Reference something specific from the JD visible on screen
-5. **career-ops proof point**: Include in "Additional info" if there is a field for it
+5. **Ucareer proof point**: Include in "Additional info" if there is a field for it
 
 **Output format:**
 
@@ -97,7 +97,7 @@ Notes:
 If the candidate confirms that they submitted the application:
 1. Update status in `applications.md` from "Evaluated" to "Applied"
 2. Update Section G of the report with the final responses
-3. Suggest next step: `/career-ops contacto` for LinkedIn outreach
+3. Suggest next step: `/ucareer contacto` for LinkedIn outreach
 
 ## Scroll handling
 

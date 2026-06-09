@@ -1,4 +1,4 @@
-# OfferU Desktop
+# Ucareer Desktop
 
 Desktop shell placeholder.
 

@@ -5,10 +5,10 @@ When the user asks to prep for an interview at a specific company+role, or when 
 ## Inputs
 
 1. **Company name** and **role title** (required)
-2. **Evaluation report** in `reports/` (if exists) — read for archetype, gaps, matched proof points
-3. **Story bank** at `interview-prep/story-bank.md` — read for existing prepared stories
-4. **CV** at `cv.md` + `article-digest.md` — read for proof points
-5. **Profile** at `config/profile.yml` + `modes/_profile.md` — read for candidate context
+2. **Evaluation report** in `workspace/jobs/reports/` (if exists) — read for archetype, gaps, matched proof points
+3. **Story bank** at `workspace/jobs/interview-prep/story-bank.md` — read for existing prepared stories
+4. **CV** at `workspace/profile/cv.md` + `workspace/profile/article-digest.md` — read for proof points
+5. **Profile** at `workspace/profile/profile.yml` + `workspace/profile/_profile.md` — read for candidate context
 
 ## Step 1 — Research
 
@@ -114,7 +114,7 @@ If round structure is unknown, state that and provide the best available intel o
 
 ## Step 4 — Likely Questions (per audience)
 
-Group all discovered and inferred questions by the audience that asks them, not by question type. Within each audience, draft candidate-specific answers using `cv.md`, `article-digest.md`, `config/profile.yml`, and `modes/_profile.md`. **Never fabricate questions** — sourced questions must cite, inferred questions must be tagged `[inferred from JD]`.
+Group all discovered and inferred questions by the audience that asks them, not by question type. Within each audience, draft candidate-specific answers using `workspace/profile/cv.md`, `workspace/profile/article-digest.md`, `workspace/profile/profile.yml`, and `workspace/profile/_profile.md`. **Never fabricate questions** — sourced questions must cite, inferred questions must be tagged `[inferred from JD]`.
 
 If any of those profile files are missing, incomplete, or out-of-date, note the gap inline (e.g. "comp target unknown — defer to recruiter band") and proceed with what's available rather than blocking the prep. The mode's value is partial-but-honest output, not perfect-or-nothing.
 
@@ -122,21 +122,21 @@ If any of those profile files are missing, incomplete, or out-of-date, note the 
 
 The recruiter is screening for fit, not testing skill. Wrong-foot answers (vague comp, fuzzy motivation, missing logistics) end the process before any technical signal is collected. Cover at minimum:
 
-- **"Walk me through your CV / why are you looking?"** — 60–90s narrative anchored to `modes/_profile.md` narrative + the role's archetype.
-- **Comp expectation** — concrete range pulled from Step 1 Levels.fyi/Glassdoor data, anchored to `config/profile.yml` `compensation.target`. Note the leverage hand: if comp data is thin or the candidate has no competing offer, recommend deferring with a clean script ("I'm calibrating to market for {level}, can you share the band for this role?").
+- **"Walk me through your CV / why are you looking?"** — 60–90s narrative anchored to `workspace/profile/_profile.md` narrative + the role's archetype.
+- **Comp expectation** — concrete range pulled from Step 1 Levels.fyi/Glassdoor data, anchored to `workspace/profile/profile.yml` `compensation.target`. Note the leverage hand: if comp data is thin or the candidate has no competing offer, recommend deferring with a clean script ("I'm calibrating to market for {level}, can you share the band for this role?").
 - **Why this company** — 2–3 sentences referencing public signals from Step 1 (recent launch, named values, team work). Avoid generic praise.
-- **Location / remote / visa** — answer derived from `config/profile.yml` location policy and the role's posted policy. Flag deal-breakers from `modes/_profile.md` so the recruiter can route correctly.
+- **Location / remote / visa** — answer derived from `workspace/profile/profile.yml` location policy and the role's posted policy. Flag deal-breakers from `workspace/profile/_profile.md` so the recruiter can route correctly.
 - **Timeline / availability / notice period** — numbers, not vibes.
 - **Other processes in flight** — recommended framing only; never push the candidate to lie.
-- **Background red flags** — gaps, transitions, unusual elements from `cv.md` + `_profile.md`. Honest, specific, forward-looking framing — never defensive.
+- **Background red flags** — gaps, transitions, unusual elements from `workspace/profile/cv.md` + `workspace/profile/_profile.md`. Honest, specific, forward-looking framing — never defensive.
 
 ### Audience: `hiring-manager`
 
 The HM is screening for motivation + scope fit. They've already trusted the recruiter's logistics gate; they care whether you'd own the work. Cover at minimum:
 
-- **"Why this role, why now?"** — connect candidate's last 1–2 roles + `_profile.md` narrative to the team's named challenge from Step 1.
+- **"Why this role, why now?"** — connect candidate's last 1–2 roles + `workspace/profile/_profile.md` narrative to the team's named challenge from Step 1.
 - **"What would your first 90 days look like here?"** — derived from JD scope + the team's recent work (engineering blog, public roadmap).
-- **Leadership / collaboration questions** — map to `interview-prep/story-bank.md`.
+- **Leadership / collaboration questions** — map to `workspace/jobs/interview-prep/story-bank.md`.
 - **Sharp questions to ask back** — 2–3 tied to a specific recent thing the team shipped or wrote about, not generic "what's the team like".
 
 ### Audience: `peer-tech`
@@ -170,9 +170,9 @@ Run this mapping **per audience pack** from Step 4 — same story can map differ
 - **partial**: story is adjacent, needs reframing
 - **none**: no existing story — flag for the user
 
-For each gap, suggest: "You need a story about {topic}. Consider: {specific experience from cv.md that could become a STAR+R story}."
+For each gap, suggest: "You need a story about {topic}. Consider: {specific experience from workspace/profile/cv.md that could become a STAR+R story}."
 
-If the user wants to draft missing stories, help them build STAR+R format and append to `interview-prep/story-bank.md`.
+If the user wants to draft missing stories, help them build STAR+R format and append to `workspace/jobs/interview-prep/story-bank.md`.
 
 ## Step 6 — Technical Prep Checklist
 
@@ -199,13 +199,13 @@ Things to say, do, and avoid — segmented by who's listening. The same fact can
 
 ### To the hiring manager
 
-- **What to lead with**: connection between candidate narrative (`_profile.md`) and a named team challenge from Step 1.
+- **What to lead with**: connection between candidate narrative (`workspace/profile/_profile.md`) and a named team challenge from Step 1.
 - **Vocabulary to use**: terms the company uses internally — shows homework (e.g., Stripe says "increase the GDP of the internet", Anthropic says "safety" not "alignment").
 - **Sharp questions to ask back**: 2–3 tied to recent news / blog posts from Step 1.
 
 ### To the peer / technical panel
 
-- **What to lead with**: stack-relevant proof points from `cv.md` / `article-digest.md`.
+- **What to lead with**: stack-relevant proof points from `workspace/profile/cv.md` / `workspace/profile/article-digest.md`.
 - **Things to avoid**: anti-patterns flagged in Glassdoor / Blind reviews specific to this company.
 - **Reverse questions**: on-call rotation, code review norms, deployment cadence, what surprised them when they joined.
 
@@ -218,7 +218,7 @@ Things to say, do, and avoid — segmented by who's listening. The same fact can
 
 ## Output
 
-Save the full report to `interview-prep/{company-slug}-{role-slug}.md` with this header:
+Save the full report to `workspace/jobs/interview-prep/{company-slug}-{role-slug}.md` with this header:
 
 ```markdown
 # Interview Intel: {Company} — {Role}

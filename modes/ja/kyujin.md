@@ -22,7 +22,7 @@
 
 ## ブロック B -- CV マッチ
 
-`cv.md` を読む。JD の各要件を履歴書の正確な行にマッピングしたテーブルを作成。
+`workspace/profile/cv.md` を読む。JD の各要件を履歴書の正確な行にマッピングしたテーブルを作成。
 
 **アーキタイプに応じて適応：**
 - FDE → 高速デリバリーとクライアント密着の proof point を優先
@@ -81,7 +81,7 @@ JD の要件にマッピングした 6-10 の STAR+R ストーリー（STAR + **
 
 **Reflection** 列は学んだこと、または次にどうするかを捉える。これがシニアリティのシグナル — ジュニアは起きたことを説明し、シニアは教訓を引き出す。
 
-**Story Bank：** `interview-prep/story-bank.md` が存在する場合、これらのストーリーが既にあるか確認。なければ新しいものを追加。時間の経過とともに、どの面接の質問にも適応できる 5-10 のマスターストーリーのバンクが構築される。
+**Story Bank：** `workspace/jobs/interview-prep/story-bank.md` が存在する場合、これらのストーリーが既にあるか確認。なければ新しいものを追加。時間の経過とともに、どの面接の質問にも適応できる 5-10 のマスターストーリーのバンクが構築される。
 
 **アーキタイプに応じたストーリー選択とフレーミング：**
 - FDE → デリバリー速度とクライアント密着を強調
@@ -103,7 +103,7 @@ JD の要件にマッピングした 6-10 の STAR+R ストーリー（STAR + **
 
 ### 1. report を .md として保存
 
-完全な評価を `reports/{###}-{company-slug}-{YYYY-MM-DD}.md` に保存。
+完全な評価を `workspace/jobs/reports/{###}-{company-slug}-{YYYY-MM-DD}.md` に保存。
 
 - `{###}` = 次の連番（3 桁、ゼロパディング）
 - `{company-slug}` = 企業名を小文字に、スペースなし（ハイフン使用）
@@ -151,7 +151,7 @@ JD の要件にマッピングした 6-10 の STAR+R ストーリー（STAR + **
 
 ### 2. tracker に記録
 
-**必ず** `data/applications.md` に記録：
+**必ず** `workspace/ops/data/applications.md` に記録：
 - 次の連番
 - 現在の日付
 - 企業名
@@ -159,7 +159,7 @@ JD の要件にマッピングした 6-10 の STAR+R ストーリー（STAR + **
 - スコア：マッチの平均（1-5）
 - ステータス：`Evaluated`
 - PDF：❌（または auto-pipeline が PDF を生成した場合は ✅）
-- Report：report .md への相対リンク（例：`[001](reports/001-company-2026-01-01.md)`）
+- Report：report .md への相対リンク（例：`[001](../../jobs/reports/001-company-2026-01-01.md)`）
 
 **tracker のフォーマット：**
 

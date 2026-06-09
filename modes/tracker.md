@@ -1,17 +1,17 @@
 # Modo: tracker — Tracker de Aplicaciones
 
-Lee y muestra `data/applications.md`.
+Lee y muestra `workspace/ops/data/applications.md`.
 
 Para cola de acciones, vencimientos y eventos historicos, usa:
 
 ```bash
-node tracker-workflow.mjs --summary
+npm run tracker -- --summary
 ```
 
 Para registrar un evento sin cambiar el formato principal de `applications.md`:
 
 ```bash
-node tracker-workflow.mjs --add-event {num} --event applied --next-action "Follow up" --due YYYY-MM-DD
+npm run tracker -- --add-event {num} --event applied --next-action "Follow up" --due YYYY-MM-DD
 ```
 
 **Formato del tracker:**

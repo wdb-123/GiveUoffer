@@ -1,0 +1,30 @@
+<svg width="690" height="256" viewBox="0 0 690 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <mask id="ucareerPrimaryLightUMask" maskUnits="userSpaceOnUse" x="20" y="28" width="176" height="190">
+      <path d="M50 44V128C50 166 74 191 108 191C142 191 166 166 166 128V44" stroke="#FFFFFF" stroke-width="36" stroke-linecap="butt" stroke-linejoin="round"/>
+    </mask>
+    <linearGradient id="ucareerPrimaryLightBase" x1="36" y1="70" x2="182" y2="72" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7B61FF"/>
+      <stop offset="0.52" stop-color="#4F8CFF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="ucareerPrimaryLightBottom" x1="64" y1="166" x2="144" y2="202" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7B61FF" stop-opacity="0.42"/>
+      <stop offset="0.5" stop-color="#4F8CFF" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0.5"/>
+    </linearGradient>
+    <linearGradient id="ucareerPrimaryLightShadow" x1="125" y1="92" x2="168" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4F8CFF" stop-opacity="0.04"/>
+      <stop offset="0.52" stop-color="#4F8CFF" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0.08"/>
+    </linearGradient>
+  </defs>
+  <g mask="url(#ucareerPrimaryLightUMask)">
+    <rect x="20" y="28" width="176" height="190" fill="url(#ucareerPrimaryLightBase)"/>
+    <ellipse cx="77" cy="180" rx="54" ry="44" fill="#4F8CFF" opacity="0.46"/>
+    <ellipse cx="113" cy="190" rx="48" ry="40" fill="url(#ucareerPrimaryLightBottom)"/>
+    <path d="M131 92C154 105 167 124 168 151C156 144 140 132 128 119C119 109 120 98 131 92Z" fill="url(#ucareerPrimaryLightShadow)"/>
+    <ellipse cx="164" cy="82" rx="28" ry="70" fill="#22D3EE" opacity="0.34"/>
+  </g>
+  <text x="196" y="172" fill="#FFFFFF" font-family="Inter, Arial, Helvetica, sans-serif" font-size="148" font-weight="900" letter-spacing="-7">career</text>
+</svg>

@@ -1,4 +1,4 @@
-# OfferU Claude Provider
+# Ucareer Claude Provider
 
 Provider adapter for Claude Code CLI.
 

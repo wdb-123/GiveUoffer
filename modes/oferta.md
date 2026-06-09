@@ -22,7 +22,7 @@ Table with:
 
 ## Block B — Match with CV
 
-Read `cv.md`. Create a table with each JD requirement mapped to exact lines in the CV.
+Read `workspace/profile/cv.md`. Create a table with each JD requirement mapped to exact lines in the CV.
 
 **Adapted to the archetype:**
 - If FDE → prioritize delivery speed and client-facing proof points
@@ -71,7 +71,7 @@ Top 5 changes to CV + Top 5 changes to LinkedIn to maximize match.
 
 The **Reflection** column captures what was learned or what would be done differently. This signals seniority — junior candidates describe what happened, senior candidates extract lessons.
 
-**Story Bank:** If `interview-prep/story-bank.md` exists, check if any of these stories are already there. If not, append new ones. Over time this builds a reusable bank of 5-10 master stories that can be adapted to any interview question.
+**Story Bank:** If `workspace/jobs/interview-prep/story-bank.md` exists, check if any of these stories are already there. If not, append new ones. Over time this builds a reusable bank of 5-10 master stories that can be adapted to any interview question.
 
 **Selected and framed according to the archetype:**
 - FDE → emphasize delivery speed and client-facing
@@ -148,7 +148,7 @@ Analyze the job posting for signals that indicate whether this is a real, active
 
 ### 1. Save report .md
 
-Save full evaluation in `reports/{###}-{company-slug}-{YYYY-MM-DD}.md`.
+Save full evaluation in `workspace/jobs/reports/{###}-{company-slug}-{YYYY-MM-DD}.md`.
 
 - `{###}` = next sequential number (3 digits, zero-padded)
 - `{company-slug}` = company name in lowercase, without spaces (use hyphens)
@@ -200,7 +200,7 @@ Save full evaluation in `reports/{###}-{company-slug}-{YYYY-MM-DD}.md`.
 
 ### 2. Record in tracker
 
-**ALWAYS** record in `data/applications.md`:
+**ALWAYS** record in `workspace/ops/data/applications.md`:
 - Next sequential number
 - Current date
 - Company
@@ -208,7 +208,7 @@ Save full evaluation in `reports/{###}-{company-slug}-{YYYY-MM-DD}.md`.
 - Score: match average (1-5)
 - Status: `Evaluated`
 - PDF: ❌ (or ✅ if auto-pipeline generated PDF)
-- Report: link relative to the report .md (e.g., `[001](reports/001-company-2026-01-01.md)`)
+- Report: link relative to the report .md (e.g., `[001](../../jobs/reports/001-company-2026-01-01.md)`)
 
 **Tracker format:**
 

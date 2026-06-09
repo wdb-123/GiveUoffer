@@ -1,0 +1,662 @@
+.agent-mobile-connector {
+  align-items: center;
+  display: inline-flex;
+  font-family: "Inter Variable", Arial, sans-serif;
+  height: var(--agent-control-height, 28px);
+  position: relative;
+}
+
+.agent-connector-strip {
+  align-items: center;
+  display: inline-flex;
+  gap: 2px;
+  height: var(--agent-control-height, 28px);
+}
+
+.sr-only {
+  clip: rect(0 0 0 0);
+  border: 0;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.agent-jobsearch-trigger {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--agent-control-radius, 7px);
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 0;
+  height: var(--agent-control-height, 28px);
+  margin: 0;
+  padding: 0 5px;
+}
+
+.agent-jobsearch-trigger strong {
+  font: inherit;
+}
+
+.agent-jobsearch-trigger:hover,
+.agent-jobsearch-trigger:focus-visible {
+  background: rgba(148, 163, 184, 0.1);
+  outline: none;
+}
+
+.agent-jobsearch-trigger:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.agent-jobsearch-trigger-icons {
+  align-items: center;
+  display: inline-flex;
+  height: 22px;
+  isolation: isolate;
+  padding-left: 2px;
+  width: 42px;
+}
+
+.agent-jobsearch-trigger-icons .agent-jobsearch-logo {
+  height: 20px;
+  margin-left: -5px;
+  width: 20px;
+}
+
+.agent-jobsearch-trigger-icons .agent-jobsearch-logo:first-child {
+  margin-left: 0;
+}
+
+.agent-jobsearch-menu {
+  align-items: center;
+  display: inline-flex;
+  height: var(--agent-control-height, 28px);
+  position: relative;
+}
+
+.agent-jobsearch-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 255, 0.98) 100%);
+  border: 1px solid rgba(214, 226, 240, 0.95);
+  border-radius: 12px;
+  bottom: calc(100% + 8px);
+  box-shadow:
+    0 18px 42px rgba(30, 41, 59, 0.12),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+  display: grid;
+  font-size: 13px;
+  gap: 7px;
+  grid-template-rows: minmax(0, 1fr) auto auto auto;
+  left: 0;
+  max-height: min(186px, calc(100vh - 180px));
+  padding: 8px;
+  position: absolute;
+  width: min(140px, calc(100vw - 36px));
+  z-index: 70;
+}
+
+.agent-jobsearch-panel.is-hover-panel {
+  display: none;
+}
+
+.agent-jobsearch-menu:hover .agent-jobsearch-panel.is-hover-panel,
+.agent-jobsearch-menu:focus-within .agent-jobsearch-panel.is-hover-panel {
+  display: grid;
+}
+
+.agent-jobsearch-panel::after {
+  background: inherit;
+  border-bottom: 1px solid rgba(214, 226, 240, 0.95);
+  border-right: 1px solid rgba(214, 226, 240, 0.95);
+  bottom: -5px;
+  content: "";
+  height: 10px;
+  left: 26px;
+  position: absolute;
+  transform: rotate(45deg);
+  width: 10px;
+}
+
+.agent-jobsearch-sites {
+  background: rgba(248, 250, 252, 0.84);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 10px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, 1fr);
+  max-height: 126px;
+  min-height: 0;
+  overflow: visible;
+  padding: 7px;
+  scrollbar-color: rgba(148, 163, 184, 0.48) transparent;
+  scrollbar-width: thin;
+}
+
+.agent-jobsearch-sites::-webkit-scrollbar {
+  width: 5px;
+}
+
+.agent-jobsearch-sites::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.44);
+  border-radius: 999px;
+}
+
+.agent-jobsearch-sites::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-jobsearch-site {
+  align-items: center;
+  aspect-ratio: 1;
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 9px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
+  color: inherit;
+  cursor: default;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 0;
+  padding: 0;
+  position: relative;
+}
+
+.agent-jobsearch-site:hover,
+.agent-jobsearch-site:focus,
+.agent-jobsearch-site:focus-visible {
+  background: #f8fbff;
+  border-color: rgba(148, 163, 184, 0.85);
+  outline: none;
+  z-index: 5;
+}
+
+.agent-jobsearch-site::after {
+  background: #cbd5e1;
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 1px rgba(148, 163, 184, 0.32),
+    0 2px 5px rgba(15, 23, 42, 0.16);
+  content: "";
+  height: 8px;
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 8px;
+  z-index: 3;
+}
+
+.agent-jobsearch-site.is-connected::after {
+  background: linear-gradient(135deg, #16a34a 0%, #22c55e 46%, #27d6ee 100%);
+  box-shadow:
+    0 0 0 1px rgba(34, 197, 94, 0.48),
+    0 0 0 4px rgba(34, 197, 94, 0.12),
+    0 2px 5px rgba(15, 23, 42, 0.16);
+}
+
+.agent-jobsearch-site em {
+  display: none;
+}
+
+.agent-jobsearch-tooltip {
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  bottom: calc(100% + 8px);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.22);
+  color: #ffffff;
+  display: grid;
+  gap: 3px;
+  left: 50%;
+  max-width: 180px;
+  min-width: 132px;
+  opacity: 0;
+  padding: 8px 9px;
+  pointer-events: none;
+  position: absolute;
+  text-align: left;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+  visibility: hidden;
+  z-index: 90;
+}
+
+.agent-jobsearch-tooltip::after {
+  background: rgba(15, 23, 42, 0.94);
+  bottom: -4px;
+  content: "";
+  height: 8px;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+}
+
+.agent-jobsearch-tooltip strong,
+.agent-jobsearch-tooltip small,
+.agent-jobsearch-tooltip span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.agent-jobsearch-tooltip strong {
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+.agent-jobsearch-tooltip small {
+  color: #a7f3d0;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.1;
+}
+
+.agent-jobsearch-site:not(.is-connected) .agent-jobsearch-tooltip small {
+  color: #cbd5e1;
+}
+
+.agent-jobsearch-tooltip span {
+  color: #cbd5e1;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.agent-jobsearch-site:hover .agent-jobsearch-tooltip,
+.agent-jobsearch-site:focus .agent-jobsearch-tooltip,
+.agent-jobsearch-site:focus-visible .agent-jobsearch-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+
+.agent-jobsearch-actions {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.agent-jobsearch-actions button {
+  align-items: center;
+  background: rgba(248, 250, 252, 0.9);
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 8px;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  height: 26px;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+.agent-jobsearch-actions button:hover,
+.agent-jobsearch-actions button:focus-visible {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.85);
+  color: #334155;
+  outline: none;
+}
+
+.agent-jobsearch-action-icon {
+  display: inline-block;
+  height: 14px;
+  position: relative;
+  width: 14px;
+}
+
+.agent-jobsearch-action-icon.is-add::before,
+.agent-jobsearch-action-icon.is-add::after {
+  background: currentColor;
+  border-radius: 999px;
+  content: "";
+  left: 50%;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.agent-jobsearch-action-icon.is-add::before {
+  height: 2px;
+  width: 12px;
+}
+
+.agent-jobsearch-action-icon.is-add::after {
+  height: 12px;
+  width: 2px;
+}
+
+.agent-jobsearch-action-icon.is-settings::before {
+  background:
+    linear-gradient(currentColor, currentColor) 0 2px / 14px 1.7px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 7px / 14px 1.7px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 12px / 14px 1.7px no-repeat;
+  content: "";
+  inset: 0;
+  position: absolute;
+}
+
+.agent-jobsearch-action-icon.is-settings::after {
+  background:
+    radial-gradient(circle at 4px 2.8px, currentColor 0 2px, transparent 2.2px),
+    radial-gradient(circle at 10px 7.8px, currentColor 0 2px, transparent 2.2px),
+    radial-gradient(circle at 6px 12.8px, currentColor 0 2px, transparent 2.2px);
+  content: "";
+  inset: 0;
+  position: absolute;
+}
+
+.agent-jobsearch-action-tooltip {
+  background: rgba(15, 23, 42, 0.94);
+  border-radius: 7px;
+  bottom: calc(100% + 7px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.2);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  left: 50%;
+  line-height: 1;
+  opacity: 0;
+  padding: 6px 7px;
+  pointer-events: none;
+  position: absolute;
+  transform: translate(-50%, 4px);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+  visibility: hidden;
+  white-space: nowrap;
+  z-index: 95;
+}
+
+.agent-jobsearch-action-tooltip::after {
+  background: rgba(15, 23, 42, 0.94);
+  bottom: -3px;
+  content: "";
+  height: 6px;
+  left: 50%;
+  position: absolute;
+  transform: translateX(-50%) rotate(45deg);
+  width: 6px;
+}
+
+.agent-jobsearch-actions button:hover .agent-jobsearch-action-tooltip,
+.agent-jobsearch-actions button:focus-visible .agent-jobsearch-action-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  visibility: visible;
+}
+
+.agent-jobsearch-logo {
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(241, 245, 249, 0.92) 100%);
+  border: 1px solid rgba(226, 232, 240, 0.84);
+  border-radius: 7px;
+  color: #334155;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 900;
+  height: 24px;
+  justify-content: center;
+  line-height: 1;
+  overflow: hidden;
+  position: relative;
+  width: 24px;
+}
+
+.agent-jobsearch-logo::before {
+  content: attr(data-fallback);
+  position: absolute;
+}
+
+.agent-jobsearch-logo img {
+  background: #ffffff;
+  display: block;
+  height: 100%;
+  object-fit: contain;
+  padding: 2px;
+  position: relative;
+  width: 100%;
+  z-index: 1;
+}
+
+.agent-jobsearch-site:not(.is-connected) .agent-jobsearch-logo {
+  filter: grayscale(1);
+  opacity: 0.52;
+}
+
+.agent-mobile-connector-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--agent-control-radius, 7px);
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  height: var(--agent-control-height, 28px);
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  width: var(--agent-control-height, 28px);
+}
+
+.agent-mobile-connector-toggle:hover,
+.agent-mobile-connector-toggle:focus-visible,
+.agent-mobile-connector-toggle[aria-expanded="true"] {
+  background: rgba(148, 163, 184, 0.1);
+  outline: none;
+}
+
+.connector-plug-icon {
+  color: #64748b;
+  display: inline-block;
+  height: 16px;
+  position: relative;
+  width: 16px;
+}
+
+.connector-plug-icon::before {
+  border: 1.7px solid currentColor;
+  border-radius: 4px 4px 5px 5px;
+  content: "";
+  height: 7px;
+  left: 4px;
+  position: absolute;
+  top: 5px;
+  width: 8px;
+}
+
+.connector-plug-icon::after {
+  background:
+    linear-gradient(currentColor, currentColor) 4px 0 / 1.5px 5px no-repeat,
+    linear-gradient(currentColor, currentColor) 10.5px 0 / 1.5px 5px no-repeat,
+    linear-gradient(currentColor, currentColor) 7.4px 12px / 1.6px 4px no-repeat;
+  content: "";
+  inset: 0;
+  position: absolute;
+}
+
+.connector-app-icon {
+  align-items: center;
+  background: linear-gradient(145deg, #f4f900 0%, #ffd31a 42%, #ff8b17 100%);
+  border: 1px solid rgba(255, 214, 38, 0.9);
+  border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 1px 2px rgba(255, 145, 0, 0.2);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 20px;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  width: 20px;
+}
+
+.connector-qqmail::before {
+  border: 2.2px solid #ffffff;
+  border-radius: 2px;
+  content: "";
+  height: 8px;
+  left: 4px;
+  position: absolute;
+  top: 6px;
+  width: 11px;
+}
+
+.connector-qqmail::after {
+  background:
+    linear-gradient(35deg, transparent 43%, #ffffff 45%, #ffffff 57%, transparent 59%),
+    linear-gradient(145deg, transparent 43%, #ffffff 45%, #ffffff 57%, transparent 59%);
+  content: "";
+  height: 8px;
+  left: 5px;
+  position: absolute;
+  top: 6px;
+  width: 10px;
+}
+
+.agent-mobile-connector-menu {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  bottom: calc(100% + 8px);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.14);
+  display: grid;
+  gap: 2px;
+  left: 0;
+  min-width: 128px;
+  padding: 6px;
+  position: absolute;
+  z-index: 60;
+}
+
+.agent-connector-menu {
+  min-width: 204px;
+}
+
+.agent-mobile-connector-account,
+.agent-mobile-connector-menu button {
+  align-items: center;
+  border-radius: 7px;
+  color: #334155;
+  display: flex;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 7px;
+  min-height: 28px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.agent-mobile-connector-account {
+  color: #64748b;
+}
+
+.agent-mobile-connector-account strong {
+  color: #334155;
+  font: inherit;
+}
+
+.agent-mobile-connector-menu button {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.agent-mobile-connector-menu button:hover,
+.agent-mobile-connector-menu button:focus-visible {
+  background: rgba(148, 163, 184, 0.1);
+  outline: none;
+}
+
+.agent-mobile-connector-menu button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.agent-connector-divider {
+  background: #e2e8f0;
+  height: 1px;
+  margin: 3px 2px;
+}
+
+.connector-search-icon {
+  border: 1.7px solid #64748b;
+  border-radius: 999px;
+  display: inline-block;
+  height: 14px;
+  position: relative;
+  width: 14px;
+}
+
+.connector-search-icon::after {
+  background: #64748b;
+  border-radius: 999px;
+  bottom: -3px;
+  content: "";
+  height: 6px;
+  position: absolute;
+  right: -2px;
+  transform: rotate(-45deg);
+  width: 1.8px;
+}
+
+.agent-jobsearch-form {
+  display: grid;
+  gap: 6px;
+  padding: 4px 2px 6px;
+}
+
+.agent-jobsearch-form label {
+  display: grid;
+  gap: 3px;
+}
+
+.agent-jobsearch-form label span,
+.agent-jobsearch-result,
+.agent-jobsearch-error {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.agent-jobsearch-form input,
+.agent-jobsearch-form select,
+.agent-jobsearch-form textarea {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  color: #334155;
+  font: inherit;
+  min-height: 28px;
+  padding: 5px 7px;
+  resize: vertical;
+}
+
+.agent-jobsearch-result,
+.agent-jobsearch-error {
+  display: block;
+  padding: 3px 8px;
+}
+
+.agent-jobsearch-error {
+  color: #b91c1c;
+}

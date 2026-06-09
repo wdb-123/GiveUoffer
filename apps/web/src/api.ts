@@ -1,7 +1,11 @@
 import type {
   AgentEvent,
+  AgentAttachment,
   AgentTask,
+  AgentTaskTurn,
   ApplicationsOverview,
+  AuthSession,
+  CreateAccountRequest,
   CreateApplicationEventRequest,
   DeleteApplicationEventRequest,
   EvidenceRequestsOverview,
@@ -11,6 +15,8 @@ import type {
   FulfillEvidenceRequestResult,
   GenerateResumePreviewRequest,
   GenerateResumePreviewResult,
+  ImportEmailMessagesRequest,
+  ImportEmailMessagesResult,
   ExperienceOverview,
   ApiEnvelope,
   ApprovalDecisionRequest,
@@ -19,6 +25,7 @@ import type {
   CreateAgentTaskRequest,
   CreateLocalCommandRequest,
   CreateLocalCommandResult,
+  LoginRequest,
   ProviderInstallStatus,
   ProviderSummary,
   PushSyncRequest,
@@ -26,15 +33,65 @@ import type {
   RecruitmentMarket,
   ReportDocument,
   ReportsOverview,
+  RouteDecision,
+  RoutePreviewRequest,
   ResumeDocument,
   ResumeSummary,
   SaveExperienceMetadataInput,
   SaveGeneratedResumeRequest,
   SaveGeneratedResumeResult,
+  JobSearchRequest,
+  JobSearchResult,
+  JobSearchSource,
   UpdateApplicationEventRequest,
-} from "@offeru/shared";
+  UploadAgentAttachmentRequest,
+  WorkspaceFilePreview,
+  WorkflowRun,
+  WorkflowRunDetail,
+} from "@ucareer/shared";
 
-const API_BASE = import.meta.env.VITE_DAEMON_API_URL || "http://127.0.0.1:4180";
+const API_BASE =
+  import.meta.env.VITE_DAEMON_API_URL || (typeof window !== "undefined"
+    ? `http://${window.location.hostname || "127.0.0.1"}:54321`
+    : "http://127.0.0.1:54321");
+let sessionToken = "";
+
+export function setApiSessionToken(token: string): void {
+  sessionToken = token;
+}
+
+export async function login(input: LoginRequest): Promise<AuthSession> {
+  return unwrap(
+    await request<ApiEnvelope<AuthSession>>("/api/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function createAccount(input: CreateAccountRequest): Promise<AuthSession> {
+  return unwrap(
+    await request<ApiEnvelope<AuthSession>>("/api/auth/create-account", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function getAuthSession(token: string): Promise<AuthSession | null> {
+  return unwrap(await request<ApiEnvelope<AuthSession | null>>("/api/auth/session", { headers: sessionHeaders(token) }));
+}
+
+export async function logout(token: string): Promise<{ loggedOut: boolean }> {
+  return unwrap(
+    await request<ApiEnvelope<{ loggedOut: boolean }>>("/api/auth/logout", {
+      method: "POST",
+      headers: sessionHeaders(token),
+    }),
+  );
+}
 
 export async function getProviders(): Promise<ProviderSummary[]> {
   return unwrap(await request<ApiEnvelope<ProviderSummary[]>>("/api/providers"));
@@ -56,6 +113,44 @@ export async function createAgentTask(input: CreateAgentTaskRequest): Promise<Ag
       body: JSON.stringify(input),
     }),
   );
+}
+
+export async function uploadAgentAttachment(input: UploadAgentAttachmentRequest): Promise<AgentAttachment> {
+  return unwrap(
+    await request<ApiEnvelope<AgentAttachment>>("/api/agent-attachments", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function previewAgentRoute(input: RoutePreviewRequest): Promise<RouteDecision> {
+  return unwrap(
+    await request<ApiEnvelope<RouteDecision>>("/api/agent-route/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function importEmailMessages(input: ImportEmailMessagesRequest): Promise<ImportEmailMessagesResult> {
+  return unwrap(
+    await request<ApiEnvelope<ImportEmailMessagesResult>>("/api/connectors/qq-email/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function getWorkflowRuns(): Promise<WorkflowRun[]> {
+  return unwrap(await request<ApiEnvelope<WorkflowRun[]>>("/api/workflow-runs"));
+}
+
+export async function getWorkflowRun(runId: string): Promise<WorkflowRunDetail> {
+  return unwrap(await request<ApiEnvelope<WorkflowRunDetail>>(`/api/workflow-runs/${encodeURIComponent(runId)}`));
 }
 
 export async function createLocalCommand(input: CreateLocalCommandRequest): Promise<CreateLocalCommandResult> {
@@ -90,8 +185,81 @@ export async function getAgentTask(taskId: string): Promise<AgentTask> {
   return unwrap(await request<ApiEnvelope<AgentTask>>(`/api/agent-tasks/${encodeURIComponent(taskId)}`));
 }
 
+export async function deleteAgentTask(taskId: string): Promise<AgentTask> {
+  return unwrap(
+    await request<ApiEnvelope<AgentTask>>(`/api/agent-tasks/${encodeURIComponent(taskId)}`, {
+      method: "DELETE",
+    }),
+  );
+}
+
+export async function cancelAgentTask(taskId: string): Promise<AgentTask> {
+  return unwrap(
+    await request<ApiEnvelope<AgentTask>>(`/api/agent-tasks/${encodeURIComponent(taskId)}/cancel`, {
+      method: "POST",
+    }),
+  );
+}
+
 export async function getAgentTaskEvents(taskId: string): Promise<AgentEvent[]> {
   return unwrap(await request<ApiEnvelope<AgentEvent[]>>(`/api/agent-tasks/${encodeURIComponent(taskId)}/events`));
+}
+
+export async function getAgentTaskTurns(taskId: string): Promise<AgentTaskTurn[]> {
+  return unwrap(await request<ApiEnvelope<AgentTaskTurn[]>>(`/api/agent-tasks/${encodeURIComponent(taskId)}/turns`));
+}
+
+export async function getWorkspaceFilePreview(path: string): Promise<WorkspaceFilePreview> {
+  return unwrap(await request<ApiEnvelope<WorkspaceFilePreview>>(`/api/workspace-file?path=${encodeURIComponent(path)}`));
+}
+
+export interface AgentTaskSnapshot {
+  task: AgentTask;
+  events: AgentEvent[];
+  turns?: AgentTaskTurn[];
+  approvals: ApprovalRequest[];
+}
+
+export function subscribeAgentTaskEvents(
+  taskId: string,
+  onSnapshot: (snapshot: AgentTaskSnapshot) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const controller = new AbortController();
+  void (async () => {
+    try {
+      const response = await fetch(apiUrl(`/api/agent-tasks/${encodeURIComponent(taskId)}/events/stream`), {
+        headers: sessionHeaders(sessionToken),
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`Agent event stream failed: ${response.status}`);
+      if (!response.body) throw new Error("Agent event stream is not readable");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (!controller.signal.aborted) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() || "";
+        frames.forEach((frame) => {
+          const data = frame
+            .split("\n")
+            .filter((line) => line.startsWith("data:"))
+            .map((line) => line.slice(5).trimStart())
+            .join("\n");
+          if (!data) return;
+          onSnapshot(JSON.parse(data) as AgentTaskSnapshot);
+        });
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) onError?.(error instanceof Error ? error : new Error(String(error)));
+    }
+  })();
+
+  return () => controller.abort();
 }
 
 export async function pushSyncToCloud(input: PushSyncRequest = {}): Promise<PushSyncResult> {
@@ -144,6 +312,20 @@ export async function exportResume(input: ExportResumeRequest): Promise<ExportRe
 
 export async function getRecruitmentMarket(): Promise<RecruitmentMarket> {
   return unwrap(await request<ApiEnvelope<RecruitmentMarket>>("/api/recruitment-market"));
+}
+
+export async function getJobSearchSources(): Promise<JobSearchSource[]> {
+  return unwrap(await request<ApiEnvelope<JobSearchSource[]>>("/api/search/jobsearch/sources"));
+}
+
+export async function runJobSearch(input: JobSearchRequest): Promise<JobSearchResult> {
+  return unwrap(
+    await request<ApiEnvelope<JobSearchResult>>("/api/search/jobsearch", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
 }
 
 export async function getProfileOverview(): Promise<CareerProfileOverview> {
@@ -221,8 +403,18 @@ export async function fulfillEvidenceRequest(input: FulfillEvidenceRequestInput)
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, init);
+  const headers = new Headers(init?.headers);
+  if (sessionToken && !headers.has("x-ucareer-session")) headers.set("x-ucareer-session", sessionToken);
+  const response = await fetch(apiUrl(path), { ...init, headers });
   return (await response.json()) as T;
+}
+
+function apiUrl(path: string): string {
+  return `${API_BASE}${path}`;
+}
+
+function sessionHeaders(token: string): HeadersInit {
+  return token ? { "x-ucareer-session": token } : {};
 }
 
 function unwrap<T>(envelope: ApiEnvelope<T>): T {

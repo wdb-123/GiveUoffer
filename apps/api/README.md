@@ -1,4 +1,4 @@
-# OfferU Cloud API
+# Ucareer Cloud API
 
 SaaS-ready sync and relay API.
 

@@ -1,33 +1,53 @@
 # Personal data (user fills these)
-cv.md
-data/applications.md
-data/application-events.jsonl
-data/pipeline.md
-data/scan-history.tsv
-data/parser-output/**/*.json
-!data/parser-output/.gitkeep
-!data/parser-output/**/.gitkeep
-reports/*.md
-!reports/.gitkeep
-output/*
-!output/.gitkeep
-batch/logs/*
-!batch/logs/.gitkeep
-batch/batch-state.tsv
-batch/batch-input.tsv
-batch/tracker-additions/**/*.tsv
-!batch/tracker-additions/.gitkeep
-jds/*
-!jds/.gitkeep
+workspace/profile/cv.md
+workspace/profile/article-digest.md
+workspace/profile/_profile.md
+workspace/profile/headshots/*
+!workspace/profile/headshots/.gitkeep
+workspace/ops/data/applications.md
+workspace/ops/data/application-events.jsonl
+workspace/ops/data/pipeline.md
+workspace/ops/data/scan-history.tsv
+workspace/ops/data/*.json
+workspace/ops/data/*.md
+workspace/ops/data/recruitment-market.json.jobs.d/*.json
+workspace/ops/data/parser-output/**/*.json
+!workspace/ops/data/parser-output/.gitkeep
+!workspace/ops/data/parser-output/**/.gitkeep
+!workspace/ops/data/.gitkeep
+workspace/ops/imports/*
+!workspace/ops/imports/.gitkeep
+workspace/jobs/reports/*.md
+!workspace/jobs/reports/.gitkeep
+workspace/jobs/research/*
+!workspace/jobs/research/.gitkeep
+workspace/jobs/interview-prep/*
+!workspace/jobs/interview-prep/.gitkeep
+workspace/jobs/project-notes/*
+!workspace/jobs/project-notes/.gitkeep
+workspace/resumes/**
+!workspace/resumes/
+!workspace/resumes/.gitkeep
+workspace/ops/exports/**
+!workspace/ops/exports/
+!workspace/ops/exports/.gitkeep
+workspace/ops/batch/logs/*
+!workspace/ops/batch/logs/.gitkeep
+workspace/ops/batch/batch-state.tsv
+workspace/ops/batch/batch-input.tsv
+workspace/ops/batch/tracker-additions/**/*.tsv
+!workspace/ops/batch/tracker-additions/
+!workspace/ops/batch/tracker-additions/.gitkeep
+workspace/jobs/jds/*
+!workspace/jobs/jds/.gitkeep
 
 # Writing samples (user's personal files — never committed)
-writing-samples/*
-!writing-samples/README.md
+workspace/profile/writing-samples/*
+!workspace/profile/writing-samples/README.md
 
 # User config and customization (never auto-updated)
-config/profile.yml
-portals.yml
-modes/_profile.md
+workspace/profile/profile.yml
+workspace/profile/portals.yml
 .update-dismissed
 .update-lock
 
@@ -36,7 +56,8 @@ modes/_profile.md
 
 # Generated
 .resolved-prompt-*
-.offeru/
+.ucareer/
+apps/daemon/workspace/
 node_modules/
 bun.lock
 apps/web/dist/
@@ -45,6 +66,7 @@ apps/web/dist/
 .DS_Store
 *.mov
 *.mp4
+*.swp
 
 # Claude Code local
 .claude/settings.local.json

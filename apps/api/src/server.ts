@@ -1,7 +1,7 @@
 import process from "node:process";
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
-import type { ApiEnvelope } from "@offeru/shared";
+import type { ApiEnvelope } from "@ucareer/shared";
 
 const port = Number(process.env.PORT || 4191);
 const host = process.env.HOST || "127.0.0.1";
@@ -9,7 +9,7 @@ const host = process.env.HOST || "127.0.0.1";
 const app = Fastify({ logger: false });
 
 app.get("/health", async (): Promise<ApiEnvelope<{ service: string }>> => {
-  return ok({ service: "offeru-cloud-api" });
+  return ok({ service: "ucareer-cloud-api" });
 });
 
 app.post("/auth/device-pairing", async (): Promise<ApiEnvelope<{ pairingId: string; code: string; expiresInSeconds: number }>> => {
@@ -51,7 +51,7 @@ app.post("/approvals/:approvalId/decision", async (): Promise<ApiEnvelope<{ rela
 });
 
 app.listen({ host, port }).then((address) => {
-  console.log(`OfferU cloud API: ${address}`);
+  console.log(`Ucareer cloud API: ${address}`);
 });
 
 function ok<T>(data: T): ApiEnvelope<T> {

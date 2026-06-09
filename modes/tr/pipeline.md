@@ -1,12 +1,12 @@
 # Mod: pipeline — İlan Gelen Kutusu
 
-`data/pipeline.md` dosyasına biriktirilen iş ilanı URL'lerini işler. İstediğin zaman URL ekle, hazır olduğunda `/career-ops pipeline` komutunu çalıştır.
+`workspace/ops/data/pipeline.md` dosyasına biriktirilen iş ilanı URL'lerini işler. İstediğin zaman URL ekle, hazır olduğunda `/ucareer pipeline` komutunu çalıştır.
 
 ## İş Akışı
 
-1. **Oku** `data/pipeline.md` → "Bekleyenler" bölümündeki `- [ ]` satırlarını bul
+1. **Oku** `workspace/ops/data/pipeline.md` → "Bekleyenler" bölümündeki `- [ ]` satırlarını bul
 2. **Her bekleyen URL için:**
-   a. Sıradaki rapor numarasını hesapla (`reports/` klasörüne bak, en büyük numara + 1)
+   a. Sıradaki rapor numarasını hesapla (`workspace/jobs/reports/` klasörüne bak, en büyük numara + 1)
    b. **İlan içeriğini çek:** Playwright (browser_navigate + browser_snapshot) → WebFetch → WebSearch. **Playwright kullanılmadıysa** (toplu/headless mod veya yedek yola düşüldüyse) rapor başlığına `**Doğrulama:** doğrulanmamış (toplu mod)` etiketini ekle.
    c. URL erişilemiyorsa → `- [!]` olarak işaretle, not ekle ve bir sonrakine geç
    d. **Tam pipeline'ı çalıştır:** A-G değerlendirmesi → Rapor (.md) → PDF (puan ≥ 3,0 ise) → Takipçi
@@ -44,11 +44,11 @@
 - **Yenibiris.com:** Playwright ile çalışır.
 - **LinkedIn:** Giriş gerektirebilir → `[!]` olarak işaretle, adaydan ilan metnini yapıştırmasını iste.
 - **PDF linki:** URL doğrudan bir PDF'e işaret ediyorsa Read aracıyla oku.
-- **`local:` öneki:** Yerel dosyayı oku. Örnek: `local:jds/kariyer-backend.md` → `jds/kariyer-backend.md` oku.
+- **`local:` öneki:** Yerel dosyayı oku. Örnek: `local:workspace/jobs/jds/kariyer-backend.md` → `workspace/jobs/jds/kariyer-backend.md` oku.
 
 ## Rapor Numaralandırma
 
-1. `reports/` klasöründeki tüm dosyaları listele
+1. `workspace/jobs/reports/` klasöründeki tüm dosyaları listele
 2. Dosya adı önekinden numarayı çıkar (örn. `142-trendyol-backend...` → 142)
 3. Yeni numara = bulunan en büyük numara + 1
 
@@ -56,6 +56,6 @@
 
 Herhangi bir URL'yi işlemeden önce yapılandırma kontrolü çalıştır:
 ```bash
-node cv-sync-check.mjs
+npm run sync-check
 ```
 Uyarı varsa adayı bilgilendirmeden devam etme.

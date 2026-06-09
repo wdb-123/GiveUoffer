@@ -1,4 +1,4 @@
-# OfferU Shared Contracts
+# Ucareer Shared Contracts
 
 Shared TypeScript contracts for:
 

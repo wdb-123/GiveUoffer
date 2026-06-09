@@ -1,4 +1,4 @@
-# OfferU Agent Core
+# Ucareer Agent Core
 
 Core abstractions for provider-neutral AI agent execution.
 

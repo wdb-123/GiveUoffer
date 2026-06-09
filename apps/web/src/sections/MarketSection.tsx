@@ -1,13 +1,29 @@
 import { useMemo, useState } from "react";
-import type { MarketJob, RecruitmentMarket, ReportsOverview, ReportSummary } from "@offeru/shared";
+import type { MarketJob, RecruitmentMarket, ReportDocument, ReportsOverview, ReportSummary, JobSearchRequest, JobSearchResult, JobSearchSource } from "@ucareer/shared";
 
 interface MarketSectionProps {
   market: RecruitmentMarket | null;
   reports: ReportsOverview | null;
+  jobSearch: {
+    sources: JobSearchSource[];
+    status: "idle" | "running" | "failed";
+    lastResult: JobSearchResult | null;
+    error: string;
+    onSearch(input: JobSearchRequest): void;
+  };
+  selectedReport: ReportDocument | null;
+  onClearReport(): void;
+  onGenerateReport(job: MarketJob): void;
   onSelectReport(file: string): void;
 }
 
-export function MarketSection({ market, reports, onSelectReport }: MarketSectionProps) {
+export function MarketSection({ market, reports, jobSearch, selectedReport, onClearReport, onGenerateReport, onSelectReport }: MarketSectionProps) {
+  const [activeImportTool, setActiveImportTool] = useState<"manual" | "radar">("manual");
+  const [radarSource, setRadarSource] = useState("boss-agent");
+  const [radarCity, setRadarCity] = useState("深圳");
+  const [radarMatch, setRadarMatch] = useState("3.0");
+  const [radarKeywords, setRadarKeywords] = useState("机器人系统工程师, ROS2, 具身智能数据, AI Agent");
+  const [radarMax, setRadarMax] = useState("25");
   const [companyType, setCompanyType] = useState("");
   const [direction, setDirection] = useState("");
   const [salary, setSalary] = useState("");
@@ -48,21 +64,112 @@ export function MarketSection({ market, reports, onSelectReport }: MarketSection
     <div className="market-workspace market-legacy-workspace">
       <section className="market-bottom-tools" aria-label="岗位导入与机会雷达">
         <div className="market-rail-tabs">
-          <button className="market-rail-tab is-active" type="button">贴链接</button>
-          <button className="market-rail-tab" type="button">跑雷达</button>
+          <button
+            className={activeImportTool === "manual" ? "market-rail-tab is-active" : "market-rail-tab"}
+            type="button"
+            onClick={() => setActiveImportTool("manual")}
+          >
+            贴链接
+          </button>
+          <button
+            className={activeImportTool === "radar" ? "market-rail-tab is-active" : "market-rail-tab"}
+            type="button"
+            onClick={() => setActiveImportTool("radar")}
+          >
+            跑雷达
+          </button>
         </div>
         <div className="market-bottom-panels">
-          <div className="context-block market-manual-import">
-            <h3>手工导入</h3>
-            <form className="market-manual-form" onSubmit={(event) => event.preventDefault()}>
-              <label className="market-manual-wide">
-                <input type="url" placeholder="直接粘贴 Boss / 智联 / 猎聘 / 官网 JD 链接" />
-              </label>
-              <div className="market-manual-actions">
-                <button className="small-button primary-small-button" type="submit">导入并解析</button>
+          {activeImportTool === "manual" ? (
+            <div className="context-block market-manual-import">
+              <h3>手工导入</h3>
+              <form className="market-manual-form" onSubmit={(event) => event.preventDefault()}>
+                <label className="market-manual-wide">
+                  <input type="url" placeholder="直接粘贴 Boss / 智联 / 猎聘 / 官网 JD 链接" />
+                </label>
+                <div className="market-manual-actions">
+                  <button className="small-button primary-small-button" type="submit">导入并解析</button>
+                </div>
+              </form>
+            </div>
+          ) : (
+            <div className="context-block market-radar-panel">
+              <div className="market-radar-form">
+                <label>
+                  <span>来源</span>
+                  <MarketMiniSelect
+                    value={radarSource}
+                    onChange={setRadarSource}
+                    options={[
+                      { value: "boss-agent", label: "Boss Agent" },
+                      { value: "china-crawler", label: "中国平台爬虫" },
+                      { value: "all", label: "全部来源" },
+                    ]}
+                  />
+                </label>
+                <label>
+                  <span>城市</span>
+                  <MarketMiniSelect
+                    value={radarCity}
+                    onChange={setRadarCity}
+                    options={[
+                      { value: "深圳", label: "深圳" },
+                      { value: "上海", label: "上海" },
+                      { value: "北京", label: "北京" },
+                      { value: "大湾区", label: "大湾区" },
+                      { value: "远程", label: "远程" },
+                    ]}
+                  />
+                </label>
+                <label className="market-radar-keywords">
+                  <span>关键词组</span>
+                  <input value={radarKeywords} onChange={(event) => setRadarKeywords(event.target.value)} />
+                </label>
+                <label>
+                  <span>最大新增</span>
+                  <input value={radarMax} inputMode="numeric" onChange={(event) => setRadarMax(event.target.value)} />
+                </label>
+                <label>
+                  <span>最低匹配</span>
+                  <MarketMiniSelect
+                    value={radarMatch}
+                    onChange={setRadarMatch}
+                    options={[
+                      { value: "4.0", label: "4.0+" },
+                      { value: "3.5", label: "3.5+" },
+                      { value: "3.0", label: "3.0+" },
+                      { value: "0", label: "不限" },
+                    ]}
+                  />
+                </label>
+                <div className="market-radar-switches" aria-label="雷达运行选项">
+                  <label><input type="checkbox" defaultChecked /> 去重</label>
+                  <label><input type="checkbox" /> 详情抓取</label>
+                  <label><input type="checkbox" defaultChecked /> 只读模式</label>
+                </div>
+                <button
+                  className="small-button primary-small-button"
+                  type="button"
+                  disabled={jobSearch.status === "running"}
+                  onClick={() => jobSearch.onSearch({
+                    source: radarSource as JobSearchRequest["source"],
+                    city: radarCity,
+                    max: Number(radarMax) || 25,
+                    minMatchScore: Number(radarMatch) || 0,
+                    queries: radarKeywords.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean),
+                  })}
+                >
+                  {jobSearch.status === "running" ? "扫描中" : "开始扫描"}
+                </button>
+                {jobSearch.lastResult ? (
+                  <small className="market-radar-result">
+                    jobsearch：新增 {jobSearch.lastResult.added} 个，候选 {jobSearch.lastResult.candidatesSeen} 个，重复 {jobSearch.lastResult.duplicatesSkipped} 个
+                  </small>
+                ) : null}
+                {jobSearch.error ? <small className="market-radar-error">{jobSearch.error}</small> : null}
               </div>
-            </form>
-          </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -117,32 +224,105 @@ export function MarketSection({ market, reports, onSelectReport }: MarketSection
 
         <div className="jobs-table market-table">
           {filteredJobs.length ? (
-            <MarketTable jobs={filteredJobs} reports={reports?.reports || []} onSelectReport={onSelectReport} />
+            <MarketTable jobs={filteredJobs} reports={reports?.reports || []} onGenerateReport={onGenerateReport} onSelectReport={onSelectReport} />
           ) : (
             <div className="empty-state">暂无符合当前筛选的岗位。</div>
           )}
         </div>
       </section>
+
+      {selectedReport ? (
+        <aside className="market-report-preview" aria-label="评估报告预览">
+          <div className="market-report-preview-head">
+            <div>
+              <span>评估报告</span>
+              <h3>{selectedReport.title}</h3>
+              <p>{selectedReport.file}</p>
+            </div>
+            <button type="button" className="secondary compact-button" onClick={onClearReport}>关闭</button>
+          </div>
+          <pre>{selectedReport.markdown.slice(0, 6000)}</pre>
+        </aside>
+      ) : null}
     </div>
   );
 }
 
-function MarketTable({ jobs, reports, onSelectReport }: { jobs: MarketJob[]; reports: ReportSummary[]; onSelectReport(file: string): void }) {
+function MarketMiniSelect({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange(value: string): void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((option) => option.value === value) || options[0];
+
+  return (
+    <div className="market-mini-select">
+      <button
+        type="button"
+        className="market-mini-select-trigger"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{selected?.label || "请选择"}</span>
+        <b aria-hidden="true">⌄</b>
+      </button>
+      {open ? (
+        <div className="market-mini-select-options" role="listbox">
+          {options.map((option) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={option.value === value}
+              className={option.value === value ? "is-selected" : ""}
+              key={option.value}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MarketTable({
+  jobs,
+  reports,
+  onGenerateReport,
+  onSelectReport,
+}: {
+  jobs: MarketJob[];
+  reports: ReportSummary[];
+  onGenerateReport(job: MarketJob): void;
+  onSelectReport(file: string): void;
+}) {
   return (
     <table>
       <colgroup>
         <col className="market-col-role" />
-        <col className="market-col-score" />
+        <col className="market-col-salary" />
         <col className="market-col-source" />
-        <col className="market-col-summary" />
+        <col className="market-col-score" />
+        <col className="market-col-report" />
         <col className="market-col-action" />
       </colgroup>
       <thead>
         <tr>
           <th>岗位</th>
-          <th>初筛 / 薪资</th>
+          <th>薪资</th>
           <th>来源</th>
-          <th>为什么值得看</th>
+          <th>评分</th>
+          <th>评估报告</th>
           <th>操作</th>
         </tr>
       </thead>
@@ -156,25 +336,30 @@ function MarketTable({ jobs, reports, onSelectReport }: { jobs: MarketJob[]; rep
                 {job.url ? <a className="market-job-title-link" href={job.url} target="_blank" rel="noreferrer">{job.role || "待复核岗位"}</a> : <span>{job.role || "待复核岗位"}</span>}
                 <small>{[job.id, compactMarketMeta(job)].filter(Boolean).join(" · ")}</small>
               </td>
-              <td className="market-score-cell">
-                <span className="score-badge">{typeof job.matchScore === "number" ? job.matchScore.toFixed(1) : "--"}</span>
+              <td className="market-salary-cell">
                 <span className="salary-badge">{displaySalary(job.salary)}</span>
               </td>
               <td className="market-source-cell">
                 <span>{platformLabel(job)}</span>
                 <small>{marketStoredAt(job)}</small>
               </td>
-              <td className="market-reason-cell">
-                <div className="market-summary-text">{job.fitReason || job.evidenceGap || job.direction || "需要打开 JD 后复核。"}</div>
+              <td className="market-score-cell">
+                <span className="score-badge">{typeof job.matchScore === "number" ? job.matchScore.toFixed(1) : "--"}</span>
+              </td>
+              <td className="market-report-cell">
+                {report ? (
+                  <button className="market-report-button" type="button" onClick={() => onSelectReport(report.file)}>
+                    评估报告
+                  </button>
+                ) : (
+                  <button className="market-generate-report-button" type="button" onClick={() => onGenerateReport(job)}>
+                    生成报告
+                  </button>
+                )}
               </td>
               <td className="market-action-cell">
                 <div className="market-table-actions">
                   <button className="market-focus-button" type="button">重点关注</button>
-                  {report ? (
-                    <button className="market-report-button" type="button" onClick={() => onSelectReport(report.file)}>
-                      评估报告
-                    </button>
-                  ) : null}
                   {job.url ? <a className="market-job-jump" href={job.url} target="_blank" rel="noreferrer">打开</a> : null}
                 </div>
               </td>

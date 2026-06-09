@@ -22,7 +22,7 @@ Aday bir ilan yapıştırdığında (metin veya URL) HER ZAMAN 7 bloğun tamamı
 
 ## Blok B — CV Eşleştirmesi
 
-`cv.md` dosyasını oku. İlandaki her gereksinimi CV'deki tam satırlarla karşılaştıran bir tablo oluştur.
+`workspace/profile/cv.md` dosyasını oku. İlandaki her gereksinimi CV'deki tam satırlarla karşılaştıran bir tablo oluştur.
 
 **Arketipe göre öne çıkarılacaklar:**
 - FDE → hızlı teslimat ve müşteri yönlü kanıt noktaları
@@ -77,7 +77,7 @@ CV için en etkili 5 değişiklik + LinkedIn profili için en etkili 5 değişik
 
 **Yansıma** sütunu: öğrenilen dersi veya bugün farklı yapılacak şeyi yakalar. Bu kıdemi gösterir — junior adaylar ne olduğunu anlatır, kıdemli adaylar ders çıkarır.
 
-**Story Bank:** `interview-prep/story-bank.md` varsa bu hikayelerin orada olup olmadığını kontrol et. Yoksa ekle. Zamanla her mülakat sorusuna uyarlanabilecek 5-10 ana hikayeden oluşan yeniden kullanılabilir bir banka oluşur.
+**Story Bank:** `workspace/jobs/interview-prep/story-bank.md` varsa bu hikayelerin orada olup olmadığını kontrol et. Yoksa ekle. Zamanla her mülakat sorusuna uyarlanabilecek 5-10 ana hikayeden oluşan yeniden kullanılabilir bir banka oluşur.
 
 **Arketipe göre seçim ve çerçeveleme:**
 - FDE → teslimat hızı ve müşteri yönlü yaklaşım ön planda
@@ -99,7 +99,7 @@ Bloklar A-F tamamlandıktan sonra **HER ZAMAN** şunları yap:
 
 ### 1. Rapor .md Kaydet
 
-Değerlendirmenin tamamını `reports/{###}-{sirket-slug}-{YYYY-MM-DD}.md` olarak kaydet.
+Değerlendirmenin tamamını `workspace/jobs/reports/{###}-{sirket-slug}-{YYYY-MM-DD}.md` olarak kaydet.
 
 - `{###}` = sıradaki numara (3 haneli, sıfır dolgulu)
 - `{sirket-slug}` = şirket adı küçük harfle, boşluksuz (tire kullan)
@@ -151,21 +151,21 @@ Değerlendirmenin tamamını `reports/{###}-{sirket-slug}-{YYYY-MM-DD}.md` olara
 
 ### 2. Takipçiye Kaydet
 
-**Yeni** kayıt için `data/applications.md`'yi doğrudan düzenleme. Bunun yerine `batch/tracker-additions/{num}-{sirket-slug}.tsv` dosyasına tek satır TSV yaz (8 veya 9 sekme ile ayrılmış sütun):
+**Yeni** kayıt için `workspace/ops/data/applications.md`'yi doğrudan düzenleme. Bunun yerine `workspace/ops/batch/tracker-additions/{num}-{sirket-slug}.tsv` dosyasına tek satır TSV yaz (8 veya 9 sekme ile ayrılmış sütun):
 
 ```tsv
-{num}\t{date}\t{company}\t{role}\t{status}\t{score}\t{pdf_emoji}\t[{num}](reports/{num}-{slug}-{date}.md)\t{note}
+{num}\t{date}\t{company}\t{role}\t{status}\t{score}\t{pdf_emoji}\t[{num}](../../jobs/reports/{num}-{slug}-{date}.md)\t{note}
 ```
 
-- `{num}` = sıradaki numara (tam sayı, `reports/` klasöründen hesapla)
+- `{num}` = sıradaki numara (tam sayı, `workspace/jobs/reports/` klasöründen hesapla)
 - `{status}` = `Evaluated`
 - `{score}` = `X.X/5` formatı (örn. `4.2/5`)
 - `{pdf_emoji}` = `✅` veya `❌`
 - `{note}` = kısa not (isteğe bağlı, sütun atlanabilir)
 
-Ardından `node merge-tracker.mjs` çalıştır.
+Ardından `npm run merge` çalıştır.
 
-**Mevcut** kayıt için `data/applications.md`'de ilgili satırı doğrudan güncelle (durum, PDF, rapor bağlantısı).
+**Mevcut** kayıt için `workspace/ops/data/applications.md`'de ilgili satırı doğrudan güncelle (durum, PDF, rapor bağlantısı).
 
 ---
 
@@ -237,7 +237,7 @@ Ardından `node merge-tracker.mjs` çalıştır.
 | Boyut | Ne ölçülüyor |
 |-------|-------------|
 | CV Eşleşmesi | Beceriler, deneyim ve kanıt noktalarının örtüşmesi |
-| Hedef Rol Uyumu | İlanın hedef arketiplerle uyumu (`_profile.md`'den) |
+| Hedef Rol Uyumu | İlanın hedef arketiplerle uyumu (`workspace/profile/_profile.md`'den) |
 | Maaş | Teklifin piyasa konumu |
 | Kültürel Sinyaller | Şirket kültürü, büyüme, istikrar, çalışma şekli |
 | Kırmızı Bayraklar | Engelleyiciler ve uyarılar (negatif düzeltme) |

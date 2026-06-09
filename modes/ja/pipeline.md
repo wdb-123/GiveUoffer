@@ -1,12 +1,12 @@
 # モード: pipeline -- URL インボックス（Second Brain）
 
-`data/pipeline.md` に蓄積された求人 URL を処理する。候補者がいつでも URL を追加し、後から `/career-ops pipeline` を実行してまとめて処理する。
+`workspace/ops/data/pipeline.md` に蓄積された求人 URL を処理する。候補者がいつでも URL を追加し、後から `/ucareer pipeline` を実行してまとめて処理する。
 
 ## ワークフロー
 
-1. **読み取り** `data/pipeline.md` → 「未処理」セクションの `- [ ]` アイテムを検索
+1. **読み取り** `workspace/ops/data/pipeline.md` → 「未処理」セクションの `- [ ]` アイテムを検索
 2. **各未処理 URL に対して**：
-   a. 次の `REPORT_NUM` を連番で計算（`reports/` を読み、最大番号 + 1）
+   a. 次の `REPORT_NUM` を連番で計算（`workspace/jobs/reports/` を読み、最大番号 + 1）
    b. **JD を抽出** Playwright（browser_navigate + browser_snapshot）→ WebFetch → WebSearch の順で
    c. URL にアクセスできない場合 → `- [!]` にマークし注記、次へ進む
    d. **完全な auto-pipeline を実行**：評価 A-F → Report .md → PDF（スコア >= 3.0 の場合）→ Tracker
@@ -42,7 +42,7 @@
 **特殊ケース：**
 - **LinkedIn**：ログインが必要な場合あり → `[!]` にマークし、候補者にテキストを貼り付けてもらう
 - **PDF**：URL が PDF を指す場合、Read tool で直接読む
-- **`local:` プレフィックス**：ローカルファイルを読む。例：`local:jds/linkedin-pm-ai.md` → `jds/linkedin-pm-ai.md` を読む
+- **`local:` プレフィックス**：ローカルファイルを読む。例：`local:workspace/jobs/jds/linkedin-pm-ai.md` → `workspace/jobs/jds/linkedin-pm-ai.md` を読む
 - **Wantedly / Green / Findy**：日本の主要プラットフォーム。Playwright でうまく動作
 - **doda / リクナビNEXT / マイナビ転職**：日本の大手求人ポータル。通常 WebFetch でアクセス可能
 - **ビズリーチ**：ハイクラス求人。ログインが必要な場合あり
@@ -50,7 +50,7 @@
 
 ## 自動採番
 
-1. `reports/` 内のすべてのファイルをリスト
+1. `workspace/jobs/reports/` 内のすべてのファイルをリスト
 2. プレフィックスから番号を抽出（例：`142-medispend...` → 142）
 3. 新番号 = 見つかった最大値 + 1
 
@@ -59,7 +59,7 @@
 URL を処理する前に同期を確認：
 
 ```bash
-node cv-sync-check.mjs
+npm run sync-check
 ```
 
 非同期がある場合、続行前に候補者に通知。

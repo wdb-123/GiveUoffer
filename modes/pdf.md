@@ -2,7 +2,7 @@
 
 ## Full pipeline
 
-1. Read `cv.md` as the source of truth
+1. Read `workspace/profile/cv.md` as the source of truth
 2. Ask the user for the JD if it is not in context (text or URL)
 3. Extract 15-20 keywords from the JD
 4. Detect JD language → CV language (EN default)
@@ -16,9 +16,9 @@
 10. Build competency grid from JD requirements (6-8 keyword phrases)
 11. Inject keywords naturally into existing achievements (NEVER invent)
 12. Generate full HTML from template + personalized content
-13. Read `name` from `config/profile.yml` → normalize to kebab-case lowercase (e.g. "John Doe" → "john-doe") → `{candidate}`
+13. Read `name` from `workspace/profile/profile.yml` → normalize to kebab-case lowercase (e.g. "John Doe" → "john-doe") → `{candidate}`
 14. Write HTML to `/tmp/cv-{candidate}-{company}.html`
-15. Execute: `node generate-pdf.mjs /tmp/cv-{candidate}-{company}.html output/cv-{candidate}-{company}-{YYYY-MM-DD}.pdf --format={letter|a4}`
+15. Execute: `npm run pdf -- /tmp/cv-{candidate}-{company}.html workspace/ops/exports/cv-{candidate}-{company}-{YYYY-MM-DD}.pdf --format={letter|a4}`
 16. Report: PDF path, number of pages, keyword coverage %
 
 ## ATS Rules (clean parsing)
@@ -34,7 +34,7 @@
 ## PDF Design
 
 - **Fonts**: Space Grotesk (headings, 600-700) + DM Sans (body, 400-500)
-- **Fonts self-hosted**: `fonts/`
+- **Fonts self-hosted**: `workspace/ops/templates/fonts/`
 - **Header**: name in Space Grotesk 24px bold + gradient line `linear-gradient(to right, hsl(187,74%,32%), hsl(270,70%,45%))` 2px + contact row
 - **Section headers**: Space Grotesk 13px, uppercase, letter-spacing 0.05em, color cyan primary
 - **Body**: DM Sans 11px, line-height 1.5
@@ -63,7 +63,7 @@ Examples of legitimate reformulation:
 
 ## Template HTML
 
-Use the template in `cv-template.html`. Replace the `{{...}}` placeholders with personalized content:
+Use the template in `workspace/ops/templates/cv-template.html`. Replace the `{{...}}` placeholders with personalized content:
 
 | Placeholder | Content |
 |-------------|-----------|
@@ -94,7 +94,7 @@ Use the template in `cv-template.html`. Replace the `{{...}}` placeholders with 
 
 ## Canva CV Generation (optional)
 
-If `config/profile.yml` has `cv.canva_resume_design_id` set, offer the user a choice before generating:
+If `workspace/profile/profile.yml` has `cv.canva_resume_design_id` set, offer the user a choice before generating:
 - **"HTML/PDF (fast, ATS-optimized)"** — existing flow above
 - **"Canva CV (visual, design-preserving)"** — new flow below
 
@@ -114,7 +114,7 @@ a. `get-design-content` on the new design → returns all text elements (richtex
 b. Map text elements to CV sections by content matching:
    - Look for the candidate's name → header section
    - Look for "Summary" or "Professional Summary" → summary section
-   - Look for company names from cv.md → experience sections
+   - Look for company names from workspace/profile/cv.md → experience sections
    - Look for degree/school names → education section
    - Look for skill keywords → skills section
 c. If mapping fails, show the user what was found and ask for guidance
@@ -157,12 +157,12 @@ f. `commit-editing-transaction` to save (ONLY after user approval)
 a. `export-design` the duplicate as PDF (format: a4 or letter based on JD location)
 b. **IMMEDIATELY** download the PDF using Bash:
    ```bash
-   curl -sL -o "output/cv-{candidate}-{company}-canva-{YYYY-MM-DD}.pdf" "{download_url}"
+   curl -sL -o "workspace/ops/exports/cv-{candidate}-{company}-canva-{YYYY-MM-DD}.pdf" "{download_url}"
    ```
    The export URL is a pre-signed S3 link that expires in ~2 hours. Download it right away.
 c. Verify the download:
    ```bash
-   file output/cv-{candidate}-{company}-canva-{YYYY-MM-DD}.pdf
+   file workspace/ops/exports/cv-{candidate}-{company}-canva-{YYYY-MM-DD}.pdf
    ```
    Must show "PDF document". If it shows XML or HTML, the URL expired — re-export and retry.
 d. Report: PDF path, file size, Canva design URL (for manual tweaking)

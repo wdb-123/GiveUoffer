@@ -6,18 +6,18 @@ Track follow-up cadence for active applications. Flag overdue follow-ups, extrac
 
 ## Inputs
 
-- `data/applications.md` — Application tracker
+- `workspace/ops/data/applications.md` — Application tracker
 - `data/follow-ups.md` — Follow-up history (created on first use)
-- `reports/` — Evaluation reports (for context in drafts)
-- `config/profile.yml` — User profile (name, identity)
-- `cv.md` — CV for proof points in drafts
+- `workspace/jobs/reports/` — Evaluation reports (for context in drafts)
+- `workspace/profile/profile.yml` — User profile (name, identity)
+- `workspace/profile/cv.md` — CV for proof points in drafts
 
 ## Step 1 — Run Cadence Script
 
 Execute:
 
 ```bash
-node followup-cadence.mjs
+npm run followup --
 ```
 
 Parse the JSON output. It contains:
@@ -29,7 +29,7 @@ Parse the JSON output. It contains:
 | `cadenceConfig` | Cadence rules (applied: 7 days, responded: 3 days, interview: 1 day) |
 
 If no actionable entries, tell the user:
-> "No active applications to follow up on. Apply to some roles first with `/career-ops` and come back when they're aging."
+> "No active applications to follow up on. Apply to some roles first with `/ucareer` and come back when they're aging."
 
 ## Step 2 — Display Dashboard
 
@@ -53,15 +53,15 @@ Use visual indicators:
 For each **overdue** or **urgent** entry only:
 
 1. Read the linked report (`reportPath` from JSON) for company context
-2. Read `cv.md` for proof points
-3. Read `config/profile.yml` for candidate name and identity
+2. Read `workspace/profile/cv.md` for proof points
+3. Read `workspace/profile/profile.yml` for candidate name and identity
 
 ### Email Follow-up Framework (first follow-up, followupCount == 0)
 
 Generate a 3-4 sentence email:
 
 1. **Sentence 1:** Reference the specific role + when you applied. Be specific — mention the company name and role title.
-2. **Sentence 2:** One concrete value-add from the report's Block B match or a proof point from cv.md. Quantify if possible.
+2. **Sentence 2:** One concrete value-add from the report's Block B match or a proof point from workspace/profile/cv.md. Quantify if possible.
 3. **Sentence 3:** Soft ask + availability. Offer a specific time window ("this week" or "next Tuesday").
 4. **Sentence 4 (optional):** Brief mention of a relevant recent project or achievement.
 
@@ -72,7 +72,7 @@ Generate a 3-4 sentence email:
 - Reference something specific to THAT company (from report Block A)
 - Keep under 150 words
 - Include a subject line
-- Use the candidate's name from `config/profile.yml`
+- Use the candidate's name from `workspace/profile/profile.yml`
 
 **Example tone:**
 > Subject: Re: Senior PHP/Laravel Developer — IxDF
@@ -90,7 +90,7 @@ Generate a 3-4 sentence email:
 
 Reuse the contacto framework: 3 sentences, 300 character max.
 - Hook specific to company → proof point → soft ask
-- Suggest the user run `/career-ops contacto {company}` to find the right person first
+- Suggest the user run `/ucareer contacto {company}` to find the right person first
 
 ### Second Follow-up (followupCount == 1)
 
@@ -104,7 +104,7 @@ Shorter than first (2-3 sentences). Take a **new angle**:
 Do NOT generate another follow-up. Instead suggest:
 > "This application has had {N} follow-ups with no response. Consider:
 > - Updating status to `Discarded` if the role seems filled
-> - Trying a different contact via `/career-ops contacto`
+> - Trying a different contact via `/ucareer contacto`
 > - Keeping in `Applied` status but deprioritizing"
 
 ## Step 4 — Present Drafts
@@ -114,7 +114,7 @@ For each draft, show:
 ```
 ## Follow-up: {Company} — {Role} (#{num})
 
-**To:** {email or "No contact found — run `/career-ops contacto` first"}
+**To:** {email or "No contact found — run `/ucareer contacto` first"}
 **Subject:** {subject line}
 **Days since application:** {N}
 **Follow-ups sent:** {N}
@@ -145,7 +145,7 @@ After the user reviews and says they've sent a follow-up, record it:
    - `Contact` = who it was sent to
    - `Notes` = brief note (e.g., "First follow-up, referenced Barbeiro.app")
 
-3. Optionally update the Notes column in `data/applications.md` with "Follow-up {N} sent {YYYY-MM-DD}"
+3. Optionally update the Notes column in `workspace/ops/data/applications.md` with "Follow-up {N} sent {YYYY-MM-DD}"
 
 **IMPORTANT:** Only record follow-ups the user confirms they actually sent. Never record a draft as sent.
 
@@ -170,4 +170,4 @@ After showing all drafts, summarize:
 | Responded | 1 day (urgent reply) | Every 3 days | No limit |
 | Interview | 1 day after (thank-you) | Every 3 days | No limit |
 
-These defaults can be overridden via `node followup-cadence.mjs --applied-days N`.
+These defaults can be overridden via `npm run followup -- --applied-days N`.

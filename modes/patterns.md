@@ -6,15 +6,15 @@ Analyze all tracked applications to find patterns in outcomes and surface action
 
 ## Inputs
 
-- `data/applications.md` — Application tracker
-- `reports/` — Individual evaluation reports
-- `config/profile.yml` — User profile (for recommendation context)
-- `modes/_profile.md` — User archetypes and framing
-- `portals.yml` — Portal config (for filter update recommendations)
+- `workspace/ops/data/applications.md` — Application tracker
+- `workspace/jobs/reports/` — Individual evaluation reports
+- `workspace/profile/profile.yml` — User profile (for recommendation context)
+- `workspace/profile/_profile.md` — User archetypes and framing
+- `workspace/profile/portals.yml` — Portal config (for filter update recommendations)
 
 ## Minimum Threshold
 
-Before running analysis, check: does `data/applications.md` have at least 5 entries with status beyond "Evaluated" (i.e., Applied, Responded, Interview, Offer, Rejected, Discarded, SKIP)?
+Before running analysis, check: does `workspace/ops/data/applications.md` have at least 5 entries with status beyond "Evaluated" (i.e., Applied, Responded, Interview, Offer, Rejected, Discarded, SKIP)?
 
 If not, tell the user:
 > "Not enough data yet -- {N}/5 applications have progressed beyond evaluation. Keep applying and come back when you have more outcomes to analyze."
@@ -26,7 +26,7 @@ Exit gracefully.
 Execute:
 
 ```bash
-node analyze-patterns.mjs
+npm run patterns --
 ```
 
 Parse the JSON output. It contains:
@@ -48,7 +48,7 @@ If the script returns `error`, display the error message and exit.
 
 ## Step 2 — Generate Report
 
-Write the report to `reports/pattern-analysis-{YYYY-MM-DD}.md`.
+Write the report to `workspace/jobs/reports/pattern-analysis-{YYYY-MM-DD}.md`.
 
 ### Report Structure
 
@@ -124,23 +124,23 @@ Example:
 > - Regional/global remote roles convert at 57-67% -- these are your sweet spot
 > - No positive outcomes below 4.2/5 -- consider this your score floor
 >
-> Full report: `reports/pattern-analysis-2026-04-08.md`
+> Full report: `workspace/jobs/reports/pattern-analysis-2026-04-08.md`
 
 ## Step 4 — Offer to Apply Recommendations
 
 Ask the user if they want to act on any recommendations:
 
 > "Want me to apply any of these recommendations? I can:
-> - Update `portals.yml` to filter out geo-restricted roles
-> - Set a score threshold in `_profile.md` for PDF generation
+> - Update `workspace/profile/portals.yml` to filter out geo-restricted roles
+> - Set a score threshold in `workspace/profile/_profile.md` for PDF generation
 > - Adjust archetype targeting based on what's converting
 >
 > Just say which ones, or 'all' to apply everything."
 
 If the user agrees:
-- For portal filter changes: edit `portals.yml`
-- For profile/archetype changes: edit `modes/_profile.md` (NEVER `_shared.md`)
-- For score threshold: add to `config/profile.yml` under a `patterns` key
+- For portal filter changes: edit `workspace/profile/portals.yml`
+- For profile/archetype changes: edit `workspace/profile/_profile.md` (NEVER `_shared.md`)
+- For score threshold: add to `workspace/profile/profile.yml` under a `patterns` key
 
 ## Outcome Classification
 

@@ -1,4 +1,5 @@
-import type { CareerProfileOverview, ExperienceMetadataItem, ExperienceOverview } from "@offeru/shared";
+import type { CareerProfileOverview, ExperienceMetadataItem, ExperienceOverview } from "@ucareer/shared";
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 
 interface ExperienceSectionProps {
@@ -49,7 +50,7 @@ export function ExperienceSection({ experienceOverview, profile }: ExperienceSec
           <summary>
             <h3>我的职业画像</h3>
             <span className="experience-asset-count">{profileAssets.length} 个</span>
-            <span className="experience-asset-toggle" aria-hidden="true">⌄</span>
+            <span className="experience-asset-toggle" aria-hidden="true" />
           </summary>
           <div className="experience-file-list">
             {profileAssets.map((asset) => (
@@ -66,11 +67,11 @@ export function ExperienceSection({ experienceOverview, profile }: ExperienceSec
             ))}
           </div>
         </details>
-        <details className="experience-asset-group" open>
+        <details className="experience-asset-group">
           <summary>
             <h3>项目经历文件</h3>
             <span className="experience-asset-count">{experiences.length} 个</span>
-            <span className="experience-asset-toggle" aria-hidden="true">⌄</span>
+            <span className="experience-asset-toggle" aria-hidden="true" />
           </summary>
           <div className="experience-file-list">
             {assets.filter((asset) => asset.type === "experience").map((asset) => (
@@ -87,11 +88,11 @@ export function ExperienceSection({ experienceOverview, profile }: ExperienceSec
             ))}
           </div>
         </details>
-        <details className="experience-asset-group" open>
+        <details className="experience-asset-group">
           <summary>
             <h3>职业照资产</h3>
             <span className="experience-asset-count">{photos.length} 个</span>
-            <span className="experience-asset-toggle" aria-hidden="true">⌄</span>
+            <span className="experience-asset-toggle" aria-hidden="true" />
           </summary>
           <div className="experience-file-list">
             {assets.filter((asset) => asset.type === "photo").length ? assets.filter((asset) => asset.type === "photo").map((asset) => (
@@ -108,11 +109,11 @@ export function ExperienceSection({ experienceOverview, profile }: ExperienceSec
             )) : <div className="experience-asset-empty">还没有职业照。</div>}
           </div>
         </details>
-        <details className="experience-asset-group" open>
+        <details className="experience-asset-group">
           <summary>
             <h3>职业意向偏好资产</h3>
             <span className="experience-asset-count">{intentions.length} 个</span>
-            <span className="experience-asset-toggle" aria-hidden="true">⌄</span>
+            <span className="experience-asset-toggle" aria-hidden="true" />
           </summary>
           <div className="experience-file-list">
             {assets.filter((asset) => asset.type === "intention").length ? assets.filter((asset) => asset.type === "intention").map((asset) => (
@@ -169,7 +170,6 @@ function ExperienceProfileOverview({ model }: { model: ReturnType<typeof buildEx
 }
 
 function ExperienceSourcePreview({ item }: { item: ExperienceMetadataItem }) {
-  const sections = markdownSections(item.sourceContent || item.summary);
   return (
     <section className="experience-source-preview-v2">
       <p className="eyebrow">{item.category || "项目经历"}</p>
@@ -178,16 +178,7 @@ function ExperienceSourcePreview({ item }: { item: ExperienceMetadataItem }) {
       <div className="experience-tags">
         {item.tags.slice(0, 10).map((tag) => <span key={tag}>{tag}</span>)}
       </div>
-      {sections.map((section) => (
-        <section className="experience-source-section" key={section.title}>
-          <h2>{section.title}</h2>
-          {section.items.length ? (
-            <ul>{section.items.map((line) => <li key={line}>{line}</li>)}</ul>
-          ) : (
-            <p>{section.body || "待补充。"}</p>
-          )}
-        </section>
-      ))}
+      <MarkdownDocument markdown={stripLeadingTitle(item.sourceContent || item.summary, item.title)} />
     </section>
   );
 }
@@ -204,33 +195,21 @@ function HeadshotPreview({ item }: { item: ExperienceOverview["photos"][number] 
 }
 
 function IntentionPreview({ item }: { item: ExperienceOverview["intentions"][number] }) {
-  const sections = markdownSections(item.content || `# ${item.title}`);
   return (
     <section className="experience-source-preview-v2">
       <p className="eyebrow">职业意向偏好资产</p>
       <h1>{item.title}</h1>
-      {sections.map((section) => (
-        <section className="experience-source-section" key={section.title}>
-          <h2>{section.title}</h2>
-          {section.items.length ? <ul>{section.items.map((line) => <li key={line}>{line}</li>)}</ul> : <p>{section.body || "待补充。"}</p>}
-        </section>
-      ))}
+      <MarkdownDocument markdown={stripLeadingTitle(item.content || `# ${item.title}`, item.title)} />
     </section>
   );
 }
 
 function ProfileSourcePreview({ title, subtitle, markdown }: { title: string; subtitle: string; markdown: string }) {
-  const sections = markdownSections(markdown || `# ${title}\n待补充。`);
   return (
     <section className="experience-source-preview-v2">
       <p className="eyebrow">{subtitle}</p>
       <h1>{title}</h1>
-      {sections.length ? sections.map((section) => (
-        <section className="experience-source-section" key={section.title}>
-          <h2>{section.title}</h2>
-          {section.items.length ? <ul>{section.items.map((line) => <li key={line}>{line}</li>)}</ul> : <p>{section.body || "待补充。"}</p>}
-        </section>
-      )) : <p>待补充。</p>}
+      <MarkdownDocument markdown={stripLeadingTitle(markdown || `# ${title}\n待补充。`, title)} />
     </section>
   );
 }
@@ -257,7 +236,7 @@ function buildExperienceAssets(overview: ExperienceOverview | null, profile: Car
       type: "overlay",
       id: "__profile_overlay__",
       title: "求职画像与评分偏好",
-      subtitle: "modes/_profile.md",
+      subtitle: "workspace/profile/_profile.md",
       profile,
     },
   ] : [];
@@ -350,22 +329,221 @@ function buildExperienceProfileModel(overview: ExperienceOverview | null, profil
   };
 }
 
-function markdownSections(markdown: string): Array<{ title: string; body: string; items: string[] }> {
-  const sections = markdown.split(/\n(?=##\s+)/).map((block) => block.trim()).filter(Boolean);
-  return sections.slice(0, 8).map((block) => {
-    const title = block.match(/^##\s+(.+)$/m)?.[1]?.replace(/^\d+\.\s*/, "") || block.match(/^#\s+(.+)$/m)?.[1] || "项目说明";
-    const bodyLines = block
-      .split(/\r?\n/)
-      .filter((line) => !/^#{1,3}\s+/.test(line))
-      .map((line) => line.trim())
-      .filter(Boolean);
-    const items = bodyLines
-      .map((line) => line.match(/^[-*]\s+(.+)$/)?.[1] || "")
-      .filter(Boolean)
-      .filter((line) => !line.includes("待补充"));
-    const body = bodyLines.filter((line) => !/^[-*]\s+/.test(line)).join(" ");
-    return { title, body, items };
-  });
+type MarkdownBlock =
+  | { type: "heading"; level: 1 | 2 | 3; text: string }
+  | { type: "paragraph"; text: string }
+  | { type: "list"; ordered: boolean; items: string[] }
+  | { type: "table"; headers: string[]; rows: string[][] }
+  | { type: "code"; text: string };
+
+function MarkdownDocument({ markdown }: { markdown: string }) {
+  const blocks = parseMarkdownBlocks(markdown);
+  if (!blocks.length) return <p>待补充。</p>;
+  return (
+    <div className="experience-rendered-markdown">
+      {blocks.map((block, index) => {
+        if (block.type === "heading") {
+          const Heading = (`h${block.level}` as "h1" | "h2" | "h3");
+          return <Heading key={index}>{renderInlineMarkdown(block.text)}</Heading>;
+        }
+        if (block.type === "list") {
+          const List = block.ordered ? "ol" : "ul";
+          return (
+            <List key={index}>
+              {block.items.map((item, itemIndex) => <li key={`${itemIndex}-${item}`}>{renderInlineMarkdown(item)}</li>)}
+            </List>
+          );
+        }
+        if (block.type === "table") {
+          return (
+            <div className="experience-markdown-table-wrap" key={index}>
+              <table>
+                <thead>
+                  <tr>{block.headers.map((header, cellIndex) => <th key={`${cellIndex}-${header}`}>{renderInlineMarkdown(header)}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {block.rows.map((row, rowIndex) => (
+                    <tr key={rowIndex}>
+                      {block.headers.map((_, cellIndex) => <td key={cellIndex}>{renderInlineMarkdown(row[cellIndex] || "")}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+        if (block.type === "code") {
+          return <pre key={index}><code>{block.text}</code></pre>;
+        }
+        return <p key={index}>{renderInlineMarkdown(block.text)}</p>;
+      })}
+    </div>
+  );
+}
+
+function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
+  const lines = markdown
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\r\n/g, "\n")
+    .split("\n");
+  const blocks: MarkdownBlock[] = [];
+  let paragraph: string[] = [];
+  let listItems: string[] = [];
+  let listOrdered = false;
+  let codeLines: string[] | null = null;
+
+  function flushParagraph() {
+    if (!paragraph.length) return;
+    blocks.push({ type: "paragraph", text: paragraph.join(" ").trim() });
+    paragraph = [];
+  }
+
+  function flushList() {
+    if (!listItems.length) return;
+    blocks.push({ type: "list", ordered: listOrdered, items: listItems });
+    listItems = [];
+    listOrdered = false;
+  }
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index] || "";
+    const trimmed = rawLine.trim();
+
+    if (trimmed.startsWith("```")) {
+      flushParagraph();
+      flushList();
+      if (codeLines) {
+        blocks.push({ type: "code", text: codeLines.join("\n") });
+        codeLines = null;
+      } else {
+        codeLines = [];
+      }
+      continue;
+    }
+
+    if (codeLines) {
+      codeLines.push(rawLine);
+      continue;
+    }
+
+    if (!trimmed) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,3})\s+(.+)$/u);
+    if (headingMatch) {
+      flushParagraph();
+      flushList();
+      blocks.push({
+        type: "heading",
+        level: Math.min(headingMatch[1]?.length || 1, 3) as 1 | 2 | 3,
+        text: cleanupMarkdownText(headingMatch[2] || ""),
+      });
+      continue;
+    }
+
+    if (isTableHeader(trimmed, lines[index + 1] || "")) {
+      flushParagraph();
+      flushList();
+      const headers = parseTableRow(trimmed);
+      index += 1;
+      const rows: string[][] = [];
+      while (index + 1 < lines.length && isTableDataRow(lines[index + 1] || "")) {
+        index += 1;
+        rows.push(parseTableRow(lines[index] || ""));
+      }
+      blocks.push({ type: "table", headers, rows });
+      continue;
+    }
+
+    const unorderedMatch = trimmed.match(/^[-*]\s+(.+)$/u);
+    const orderedMatch = trimmed.match(/^\d+[.)]\s+(.+)$/u);
+    if (unorderedMatch || orderedMatch) {
+      flushParagraph();
+      const ordered = Boolean(orderedMatch);
+      if (listItems.length && listOrdered !== ordered) flushList();
+      listOrdered = ordered;
+      listItems.push(cleanupMarkdownText(orderedMatch?.[1] || unorderedMatch?.[1] || ""));
+      continue;
+    }
+
+    flushList();
+    paragraph.push(cleanupMarkdownText(trimmed));
+  }
+
+  if (codeLines) blocks.push({ type: "code", text: codeLines.join("\n") });
+  flushParagraph();
+  flushList();
+  return blocks;
+}
+
+function stripLeadingTitle(markdown: string, title: string): string {
+  const normalizedTitle = normalizeMarkdownTitle(title);
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const firstContentIndex = lines.findIndex((line) => line.trim() && !line.trim().startsWith("<!--"));
+  if (firstContentIndex < 0) return markdown;
+  const match = lines[firstContentIndex]?.trim().match(/^#\s+(.+)$/u);
+  if (match && normalizeMarkdownTitle(match[1] || "") === normalizedTitle) {
+    lines.splice(firstContentIndex, 1);
+  }
+  return lines.join("\n").trim();
+}
+
+function normalizeMarkdownTitle(value: string): string {
+  return value.replace(/[#*_`-]/g, "").replace(/\s+/g, "").toLowerCase();
+}
+
+function isTableHeader(line: string, nextLine: string): boolean {
+  return line.includes("|") && /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(nextLine);
+}
+
+function isTableDataRow(line: string): boolean {
+  return line.trim().includes("|") && !/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
+}
+
+function parseTableRow(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cleanupMarkdownText(cell.trim()));
+}
+
+function cleanupMarkdownText(value: string): string {
+  return value
+    .replace(/^\|+|\|+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /(\[[^\]]+\]\((?:https?:\/\/|mailto:)[^)]+\)|https?:\/\/[^\s<]+|\*\*[^*]+\*\*|`[^`]+`)/gu;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text))) {
+    if (match.index > cursor) nodes.push(text.slice(cursor, match.index));
+    const token = match[0];
+    const key = `${match.index}-${token}`;
+    const linkMatch = token.match(/^\[([^\]]+)\]\(((?:https?:\/\/|mailto:)[^)]+)\)$/u);
+    if (linkMatch) {
+      nodes.push(<a href={linkMatch[2]} key={key} rel="noreferrer" target="_blank">{linkMatch[1]}</a>);
+    } else if (token.startsWith("http")) {
+      nodes.push(<a href={token} key={key} rel="noreferrer" target="_blank">{token}</a>);
+    } else if (token.startsWith("**") && token.endsWith("**")) {
+      nodes.push(<strong key={key}>{token.slice(2, -2)}</strong>);
+    } else if (token.startsWith("`") && token.endsWith("`")) {
+      nodes.push(<code key={key}>{token.slice(1, -1)}</code>);
+    } else {
+      nodes.push(token);
+    }
+    cursor = match.index + token.length;
+  }
+  if (cursor < text.length) nodes.push(text.slice(cursor));
+  return nodes;
 }
 
 function fitRolesForExperience(item: ExperienceMetadataItem): string[] {

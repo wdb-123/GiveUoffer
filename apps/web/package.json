@@ -1,10 +1,11 @@
 {
-  "name": "@offeru/web",
+  "name": "@ucareer/web",
   "version": "0.1.0",
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 5173",
+    "web": "npm run dev",
+    "dev": "vite --host 127.0.0.1 --port 12345 --strictPort",
     "build": "vite build"
   },
   "dependencies": {

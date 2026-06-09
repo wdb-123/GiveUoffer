@@ -12,7 +12,7 @@ Mode interactif pour le moment ou le candidat remplit un formulaire de candidatu
 ```
 1. DETECTER     -> Lire l'onglet Chrome actif (capture/URL/titre)
 2. IDENTIFIER   -> Extraire entreprise + role depuis la page
-3. RECHERCHER   -> Matcher avec les reports existants dans reports/
+3. RECHERCHER   -> Matcher avec les reports existants dans workspace/jobs/reports/
 4. CHARGER      -> Lire le report complet + Bloc G (si existant)
 5. COMPARER     -> Le role a l'ecran correspond-il a celui evalue ? Si changement -> alerter
 6. ANALYSER     -> Identifier TOUTES les questions visibles du formulaire
@@ -32,7 +32,7 @@ Mode interactif pour le moment ou le candidat remplit un formulaire de candidatu
 ## Etape 2 -- Identifier et charger le contexte
 
 1. Extraire le nom de l'entreprise et le titre du poste depuis la page
-2. Chercher dans `reports/` par nom d'entreprise (Grep case-insensitive)
+2. Chercher dans `workspace/jobs/reports/` par nom d'entreprise (Grep case-insensitive)
 3. Si match -> charger le report complet
 4. Si Bloc G present -> charger les brouillons de reponses precedents comme base
 5. Si PAS de match -> alerter le candidat et proposer un auto-pipeline rapide
@@ -56,7 +56,7 @@ Identifier TOUTES les questions visibles :
 
 Classifier chaque question :
 - **Deja repondue dans le Bloc G** -> reprendre la reponse existante
-- **Nouvelle question** -> generer la reponse depuis le report + `cv.md`
+- **Nouvelle question** -> generer la reponse depuis le report + `workspace/profile/cv.md`
 
 ## Etape 5 -- Generer les reponses
 
@@ -66,7 +66,7 @@ Pour chaque question, construire la reponse selon ce schema :
 2. **Bloc G precedent** : Si un brouillon existe, le prendre comme base et affiner
 3. **Ton "Je vous choisis"** : meme framework que dans l'auto-pipeline -- confiant, pas suppliant
 4. **Specificite** : citer quelque chose de concret de l'offre visible a l'ecran
-5. **career-ops proof point** : inclure dans "Informations complementaires" si un tel champ existe
+5. **Ucareer proof point** : inclure dans "Informations complementaires" si un tel champ existe
 
 **Champs specifiques aux formulaires francais courants :**
 - **Pretentions salariales (brut annuel)** -> Fourchette depuis `profile.yml`, en EUR, avec mention "negociable selon le package global"
@@ -104,7 +104,7 @@ Notes :
 Si le candidat confirme que la candidature est envoyee :
 1. Mettre a jour le statut dans `applications.md` de "Evaluated" a "Applied"
 2. Mettre a jour le Bloc G du report avec les reponses finales
-3. Suggerer l'etape suivante : `/career-ops contacto` pour du LinkedIn outreach vers le hiring manager
+3. Suggerer l'etape suivante : `/ucareer contacto` pour du LinkedIn outreach vers le hiring manager
 
 ## Gestion du defilement
 

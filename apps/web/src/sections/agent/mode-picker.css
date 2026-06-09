@@ -1,0 +1,130 @@
+.agent-mode-picker {
+  font-family: inherit;
+  position: relative;
+}
+
+.agent-mode-trigger {
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: var(--agent-control-radius, 8px);
+  color: #64748b;
+  display: inline-grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: var(--agent-control-height, 28px);
+  min-width: 94px;
+  padding: 0 8px;
+  text-align: left;
+}
+
+.agent-mode-trigger.is-followup {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+
+.agent-mode-trigger:hover,
+.agent-mode-trigger[aria-expanded="true"] {
+  border-color: #94a3b8;
+}
+
+.agent-mode-trigger span {
+  display: block;
+  min-width: 0;
+}
+
+.agent-mode-trigger strong {
+  color: inherit;
+  display: block;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-mode-trigger strong {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.agent-mode-trigger b {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.agent-mode-menu {
+  background: #ffffff;
+  border: 1px solid rgba(203, 213, 225, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
+  display: grid;
+  gap: 5px;
+  left: 0;
+  max-height: min(320px, 42vh);
+  overflow-y: auto;
+  padding: 6px;
+  position: absolute;
+  top: calc(100% + 8px);
+  width: min(360px, calc(100vw - 48px));
+  z-index: 45;
+}
+
+.agent-mode-menu button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: #334155;
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  min-height: 42px;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
+}
+
+.agent-mode-menu button:hover,
+.agent-mode-menu button.is-selected {
+  background: #eef2f7;
+  border-color: rgba(203, 213, 225, 0.8);
+  color: #111827;
+}
+
+.agent-mode-menu span {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-mode-menu small,
+.agent-mode-empty {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.agent-mode-history {
+  border-top: 1px solid rgba(226, 232, 240, 0.95);
+  display: grid;
+  gap: 5px;
+  padding-top: 5px;
+}
+
+.agent-mode-section-label {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 6px 10px 2px;
+}
+
+.agent-mode-empty {
+  padding: 10px;
+}

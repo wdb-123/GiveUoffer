@@ -1,0 +1,103 @@
+.agent-journey-line {
+  display: block;
+  overflow: visible;
+}
+
+.agent-journey-line path {
+  animation: agent-journey-path-arrive 1.4s cubic-bezier(0.22, 0.72, 0.2, 1) both;
+  fill: none;
+  stroke-dasharray: 470;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.agent-journey-line circle {
+  animation: agent-journey-point-arrive 1.4s cubic-bezier(0.22, 0.72, 0.2, 1) both;
+  fill: #0b132b;
+}
+
+.agent-journey-line circle:nth-of-type(2) {
+  animation-delay: 0.12s;
+  fill: #4f8cff;
+}
+
+.agent-journey-line circle:nth-of-type(3) {
+  animation-delay: 0.22s;
+  fill: #22d3ee;
+}
+
+.agent-journey-line.is-looping path {
+  animation: agent-journey-path-loop 1.65s cubic-bezier(0.42, 0, 0.2, 1) infinite;
+}
+
+.agent-journey-line.is-looping circle {
+  animation: agent-journey-point-loop 1.65s ease-in-out infinite;
+}
+
+.agent-journey-line.is-looping circle:nth-of-type(2) {
+  animation-delay: 0.14s;
+}
+
+.agent-journey-line.is-looping circle:nth-of-type(3) {
+  animation-delay: 0.28s;
+}
+
+@keyframes agent-journey-path-arrive {
+  from {
+    opacity: 0;
+    stroke-dashoffset: 470;
+  }
+  to {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes agent-journey-point-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes agent-journey-path-loop {
+  0% {
+    opacity: 0.35;
+    stroke-dashoffset: 470;
+  }
+  42%,
+  72% {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+  100% {
+    opacity: 0.35;
+    stroke-dashoffset: -470;
+  }
+}
+
+@keyframes agent-journey-point-loop {
+  0%,
+  100% {
+    opacity: 0.28;
+    transform: translateY(2px) scale(0.82);
+  }
+  45%,
+  72% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-journey-line path,
+  .agent-journey-line circle,
+  .agent-journey-line.is-looping path,
+  .agent-journey-line.is-looping circle {
+    animation: none;
+  }
+}
