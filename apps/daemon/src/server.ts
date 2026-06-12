@@ -18,6 +18,7 @@ import { registerAgentRoutes } from "./routes/agent-routes";
 import { registerApplicationRoutes } from "./routes/application-routes";
 import { registerAttachmentRoutes } from "./routes/attachment-routes";
 import { registerAuthRoutes } from "./routes/auth-routes";
+import { registerChromeBridgeRoutes } from "./routes/chrome-bridge-routes";
 import { registerConnectorRoutes } from "./routes/connector-routes";
 import type { DaemonRouteContext } from "./routes/context";
 import { error, ok, readSessionToken } from "./routes/context";
@@ -32,6 +33,7 @@ import { registerSearchRoutes } from "./routes/search-routes";
 import { registerSyncRoutes } from "./routes/sync-routes";
 import { registerWorkflowRoutes } from "./routes/workflow-routes";
 import { createAttachmentParserService } from "./services/attachment-parser-service";
+import { createChromeBridgeService } from "./services/chrome-bridge-service";
 import { createJobSearchService } from "./services/jobsearch-service";
 import { createResumeExportService } from "./services/resume-export-service";
 import { createWorkflowRunService } from "./services/workflow-run-service";
@@ -56,6 +58,7 @@ const authStore = createAuthStore(daemonDbPath);
 const taskStore = createSqliteTaskStore(daemonDbPath);
 const workflowRunStore = createSqliteWorkflowRunStore(daemonDbPath);
 const app = Fastify({ logger: false });
+const chromeBridgeService = createChromeBridgeService();
 
 const ctx: DaemonRouteContext = {
   app,
@@ -78,7 +81,8 @@ const ctx: DaemonRouteContext = {
   },
   services: {
     attachmentParserService: createAttachmentParserService(workspaceRoot),
-    jobSearchService: createJobSearchService(workspaceRoot),
+    chromeBridgeService,
+    jobSearchService: createJobSearchService(workspaceRoot, chromeBridgeService),
     resumeExportService: createResumeExportService(workspaceRoot),
     workflowRunService: createWorkflowRunService({ workflowRunStore }),
   },
@@ -91,7 +95,7 @@ app.setErrorHandler((cause: unknown, _request, reply) => {
 
 app.addHook("onRequest", async (_request, reply) => {
   reply.header("Access-Control-Allow-Origin", "*");
-  reply.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  reply.header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
   reply.header("Access-Control-Allow-Headers", "content-type,x-ucareer-session");
 });
 
@@ -116,6 +120,7 @@ app.get("/health", async (): Promise<ApiEnvelope<{ service: string; workspaceRoo
 });
 
 registerAuthRoutes(ctx);
+registerChromeBridgeRoutes(ctx);
 registerConnectorRoutes(ctx);
 registerAttachmentRoutes(ctx);
 registerWorkflowRoutes(ctx);

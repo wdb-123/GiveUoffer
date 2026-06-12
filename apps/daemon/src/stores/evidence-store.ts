@@ -1,7 +1,8 @@
-import { appendFile, mkdir, readFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import type {
   EvidenceRequestsOverview,
+  EvidenceRequest,
   FulfillEvidenceRequestInput,
   FulfillEvidenceRequestResult,
 } from "@ucareer/shared";
@@ -9,6 +10,8 @@ import { isInsideDir } from "../path-guards";
 
 export interface EvidenceStore {
   listEvidenceRequests(): Promise<EvidenceRequestsOverview>;
+  upsertEvidenceRequest(input: Partial<EvidenceRequest> & { id?: string; direction: string; gap: string }): Promise<EvidenceRequest>;
+  deleteEvidenceRequest(id: string): Promise<string>;
   fulfillEvidenceRequest(input: FulfillEvidenceRequestInput): Promise<FulfillEvidenceRequestResult>;
 }
 
@@ -22,6 +25,27 @@ export function createEvidenceStore(workspaceRoot: string): EvidenceStore {
         summary: { open: 0, highPriority: 0 },
         requests: [],
       });
+    },
+
+    async upsertEvidenceRequest(input) {
+      const overview = await this.listEvidenceRequests();
+      const request = normalizeEvidenceRequest(input);
+      const index = overview.requests.findIndex((item) => item.id === request.id);
+      const requests = [...overview.requests];
+      if (index >= 0) requests[index] = { ...requests[index], ...request };
+      else requests.push(request);
+      await writeEvidenceRequests(evidenceRequestsPath, { ...overview, requests });
+      return request;
+    },
+
+    async deleteEvidenceRequest(id) {
+      const requestId = String(id || "").trim();
+      if (!requestId) throw new Error("Missing evidence request id");
+      const overview = await this.listEvidenceRequests();
+      const requests = overview.requests.filter((item) => item.id !== requestId);
+      if (requests.length === overview.requests.length) throw new Error(`Evidence request not found: ${requestId}`);
+      await writeEvidenceRequests(evidenceRequestsPath, { ...overview, requests });
+      return requestId;
     },
 
     async fulfillEvidenceRequest(input) {
@@ -55,6 +79,42 @@ export function createEvidenceStore(workspaceRoot: string): EvidenceStore {
       };
     },
   };
+}
+
+function normalizeEvidenceRequest(input: Partial<EvidenceRequest> & { id?: string; direction: string; gap: string }): EvidenceRequest {
+  const id = String(input.id || `ev-${Date.now().toString(36)}`).trim();
+  const priority = String(input.priority || "medium").trim();
+  const status = String(input.status || "open").trim();
+  return {
+    id,
+    priority,
+    status,
+    direction: String(input.direction || "").trim(),
+    gap: String(input.gap || "").trim(),
+    marketSignal: String(input.marketSignal || "").trim(),
+    currentEvidence: String(input.currentEvidence || "").trim(),
+    askHuman: Array.isArray(input.askHuman) ? input.askHuman.map((item) => String(item).trim()).filter(Boolean) : [],
+    targetFile: String(input.targetFile || "workspace/jobs/project-notes/evidence.md").trim(),
+    resumeImpact: String(input.resumeImpact || "").trim(),
+  };
+}
+
+async function writeEvidenceRequests(path: string, overview: EvidenceRequestsOverview): Promise<void> {
+  const requests = overview.requests || [];
+  const open = requests.filter((request) => request.status === "open").length;
+  const highPriority = requests.filter((request) => request.priority === "high").length;
+  const next: EvidenceRequestsOverview = {
+    ...overview,
+    updatedAt: new Date().toISOString(),
+    summary: {
+      ...overview.summary,
+      open,
+      highPriority,
+    },
+    requests,
+  };
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(next, null, 2)}\n`, "utf8");
 }
 
 function isSafeTargetFile(path: string): boolean {

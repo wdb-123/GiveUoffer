@@ -121,7 +121,7 @@ export function createSqliteTaskStore(path: string): TaskStore {
         FROM agent_events
         WHERE task_id = ?
         ORDER BY created_at ASC, rowid ASC
-      `).all(taskId).map((row) => JSON.parse((row as { payload: string }).payload) as AgentEvent);
+      `).all(taskId).map((row) => sanitizeDisplayEvent(JSON.parse((row as { payload: string }).payload) as AgentEvent));
     },
 
     createApproval(input) {
@@ -265,9 +265,23 @@ export function createSqliteTaskStore(path: string): TaskStore {
 function extractDisplayPrompt(prompt: string): string {
   const normalized = prompt.replace(/\r\n/g, "\n").trim();
   const markerMatch = normalized.match(/(?:最新输入|输入内容)\s*[:：]\s*([\s\S]*)$/u);
-  if (markerMatch?.[1]?.trim()) return markerMatch[1].trim();
+  if (markerMatch?.[1]?.trim()) return stripLeakedPageContext(markerMatch[1]);
   if (/你是\s+Ucareer\s+职业旅程工作台的统一入口\s+Agent/u.test(normalized)) return "";
-  return normalized;
+  return stripLeakedPageContext(normalized);
+}
+
+function sanitizeDisplayEvent(event: AgentEvent): AgentEvent {
+  if (event.type !== "message" || event.role !== "user") return event;
+  return { ...event, text: stripLeakedPageContext(event.text) };
+}
+
+function stripLeakedPageContext(text: string): string {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  if (!normalized.startsWith("page: ")) return normalized;
+  const lines = normalized.split("\n");
+  const writePathsIndex = lines.findIndex((line) => line.trim().startsWith("write paths:"));
+  if (writePathsIndex >= 0) return lines.slice(writePathsIndex + 1).join("\n").trim();
+  return normalized.replace(/^page:\s+[\s\S]*?(?:write paths:\s*[^\n]*(?:\n|$))/u, "").trim();
 }
 
 function parseStartAgentGrant(command: string | undefined, sourceApprovalId: string) {

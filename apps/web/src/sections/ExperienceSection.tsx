@@ -42,7 +42,6 @@ export function ExperienceSection({ experienceOverview, profile }: ExperienceSec
     <div className="experience-classic-workspace">
       <aside className="experience-asset-rail">
         <div className="experience-rail-head">
-          <p className="section-eyebrow">Experience Assets</p>
           <h2>经历资产</h2>
           <span>{experienceOverview?.updatedAt ? `更新于 ${formatShortDate(experienceOverview.updatedAt)}` : profile ? "画像已加载" : "等待更新"}</span>
         </div>

@@ -4,11 +4,10 @@ import type { AgentAttachment, AgentAttachmentKind, ParsedAttachment, UploadAgen
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
 import { isInsideDir } from "../path-guards";
-import { classifyIntake } from "../workflow/classify-intake";
-import { getSkillFileManagement } from "../workflow/skill-registry";
 
 const maxUploadBytes = 12 * 1024 * 1024;
 const maxParsedTextChars = 24_000;
+const attachmentInboxFolder = "inbox";
 
 export function createAttachmentParserService(workspaceRoot: string) {
   const attachmentsDir = resolve(workspaceRoot, "workspace/ops/imports/agent-attachments");
@@ -28,11 +27,9 @@ export function createAttachmentParserService(workspaceRoot: string) {
       const mimeType = input.mimeType || inferMimeType(fileName);
       const kind = inferKind(fileName, mimeType);
       const parsed = await parseAttachment({ buffer, fileName, kind, mimeType });
-      const storageRoute = routeAttachmentStorage({ fileName, kind, parsed });
-
       const date = formatDate(new Date());
       const dateDir = resolve(attachmentsDir, date);
-      const routedDir = resolve(dateDir, storageRoute.folder);
+      const routedDir = resolve(dateDir, attachmentInboxFolder);
       if (!isInsideDir(attachmentsDir, routedDir)) throw new Error("Invalid attachment route path");
       mkdirSync(routedDir, { recursive: true });
 
@@ -53,9 +50,7 @@ export function createAttachmentParserService(workspaceRoot: string) {
           ...parsed,
           metadata: {
             ...parsed.metadata,
-            storageFolder: storageRoute.folder,
-            routedSkillId: storageRoute.skillId,
-            ...(storageRoute.workflowId ? { routedWorkflowId: storageRoute.workflowId } : {}),
+            storageFolder: attachmentInboxFolder,
           },
         },
       };
@@ -154,31 +149,6 @@ function uniqueStoredName(dir: string, preferredName: string): string {
     index += 1;
   }
   return candidate;
-}
-
-function routeAttachmentStorage(input: {
-  fileName: string;
-  kind: AgentAttachmentKind;
-  parsed: ParsedAttachment;
-}): { folder: string; skillId: string; workflowId?: string } {
-  const routeText = [input.fileName, input.parsed.summary, input.parsed.text].filter(Boolean).join("\n\n");
-  const decision = routeText.trim()
-    ? classifyIntake({ text: routeText })
-    : undefined;
-  const folder = folderForRoute(decision?.skillId, input.kind);
-  return {
-    folder,
-    skillId: decision?.skillId || "agent.general",
-    ...(decision?.workflowId ? { workflowId: decision.workflowId } : {}),
-  };
-}
-
-function folderForRoute(skillId: string | undefined, kind: AgentAttachmentKind): string {
-  const managedFolder = skillId ? getSkillFileManagement(skillId)?.intakeFolder : undefined;
-  if (managedFolder) return managedFolder;
-  if (kind === "image") return "images";
-  if (kind === "text") return "documents";
-  return "general";
 }
 
 function inferKind(fileName: string, mimeType: string): AgentAttachmentKind {

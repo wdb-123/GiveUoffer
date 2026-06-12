@@ -253,6 +253,16 @@ export class PaperclipAdapterProvider implements AgentProvider {
           text: `UC_TOOL_RESULT ${toolResult}`,
           createdAt: new Date().toISOString(),
         });
+        if (toolCall.tool === "jobsearch.search_jobs") {
+          input.taskStore.appendEvent(input.taskId, {
+            type: "message",
+            role: "assistant",
+            text: formatJobSearchAnswer(toolResult),
+            createdAt: new Date().toISOString(),
+          });
+          input.taskStore.updateTaskStatus(input.taskId, "completed");
+          return;
+        }
         appendProcessStatus(input.taskStore, input.taskId, summarizeToolResult(toolCall.tool, toolResult));
         prompt = `${prompt}\n\n---\nUC_TOOL_RESULT for ${toolCall.tool}:\n${toolResult}\n\n请基于工具结果回答用户。不要再次输出同一个工具调用，除非确实需要分页读取更多结果。`;
       } catch (cause) {
@@ -274,6 +284,81 @@ export class PaperclipAdapterProvider implements AgentProvider {
       createdAt: new Date().toISOString(),
     });
     input.taskStore.updateTaskStatus(input.taskId, "failed");
+  }
+
+  async executeRouterPrompt(input: {
+    prompt: string;
+    workspacePath: string;
+  }): Promise<string> {
+    const server = await this.loadServerModule();
+    const parser = await this.loadStdoutParser();
+    const config = this.buildConfig(input.workspacePath);
+    const assistantOutput: string[] = [];
+    const lineBuffers: Record<"stdout" | "stderr", string> = { stdout: "", stderr: "" };
+    const stderrOutput: string[] = [];
+
+    const result = await server.execute({
+      runId: `router_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      agent: {
+        id: this.id,
+        companyId: "ucareer",
+        name: this.label,
+        adapterType: this.definition.adapterType,
+        adapterConfig: config,
+      },
+      runtime: {
+        sessionId: null,
+        sessionParams: null,
+        sessionDisplayId: null,
+        taskKey: "ucareer-router",
+      },
+      config: {
+        ...config,
+        timeoutSec: readPositiveInteger(process.env.UCAREER_ROUTER_TIMEOUT_SEC, 120),
+      },
+      context: {
+        ucareerPrompt: input.prompt,
+        paperclipWorkspace: {
+          cwd: input.workspacePath,
+          source: "configured",
+          strategy: "local",
+          workspaceId: "ucareer",
+        },
+      },
+      onMeta: async () => {},
+      onSpawn: async () => {},
+      onLog: async (stream: "stdout" | "stderr", chunk: string) => {
+        if (stream === "stderr") stderrOutput.push(chunk);
+        lineBuffers[stream] = consumeAdapterChunk({
+          buffer: lineBuffers[stream],
+          chunk,
+          stream,
+          parseStdoutLine: parser,
+          onEntry: (entry) => {
+            if (entry.kind === "assistant" && entry.text) assistantOutput.push(entry.text);
+            if ((entry.kind === "stdout" || entry.kind === "result") && entry.text) assistantOutput.push(entry.text);
+          },
+        });
+      },
+    });
+
+    for (const stream of ["stdout", "stderr"] as const) {
+      const remainder = lineBuffers[stream].trim();
+      if (!remainder) continue;
+      const ts = new Date().toISOString();
+      const entries = stream === "stdout" ? parser(remainder, ts) : [{ kind: "stderr", ts, text: remainder }];
+      for (const entry of entries) {
+        if (entry.kind === "assistant" && entry.text) assistantOutput.push(entry.text);
+        if ((entry.kind === "stdout" || entry.kind === "result") && entry.text) assistantOutput.push(entry.text);
+      }
+    }
+
+    if (result.exitCode !== 0) {
+      throw new Error(normalizeRuntimeDiagnostic(result.errorMessage || stderrOutput.join("").trim() || `${this.label} router exited with ${result.exitCode}`));
+    }
+    const output = assistantOutput.join("\n").trim();
+    if (!output) throw new Error(`${this.label} router returned no output`);
+    return output;
   }
 
   private buildConfig(cwd: string): Record<string, unknown> {
@@ -319,8 +404,14 @@ export function isPaperclipAdapterProvider(provider: AgentProvider): provider is
     taskStore: TaskStore;
     toolExecutor?: AgentToolExecutor;
   }): Promise<void>;
+  executeRouterPrompt(input: {
+    prompt: string;
+    workspacePath: string;
+  }): Promise<string>;
 } {
-  return typeof (provider as { executePaperclipTask?: unknown }).executePaperclipTask === "function";
+  const candidate = provider as { executePaperclipTask?: unknown; executeRouterPrompt?: unknown };
+  return typeof candidate.executePaperclipTask === "function"
+    && typeof candidate.executeRouterPrompt === "function";
 }
 
 function consumeAdapterChunk(input: {
@@ -411,6 +502,42 @@ function summarizeToolResult(toolName: string, toolResult: string): string {
     return `工具 ${toolName} 已返回结果，正在整理`;
   }
   return `工具 ${toolName} 已返回结果，正在整理`;
+}
+
+function formatJobSearchAnswer(toolResult: string): string {
+  try {
+    const parsed = JSON.parse(toolResult) as {
+      status?: string;
+      stats?: { added?: number; candidatesSeen?: number; duplicatesSkipped?: number; failedQueries?: number };
+      message?: string;
+      jobs?: Array<Record<string, unknown>>;
+      omittedJobs?: number;
+    };
+    const jobs = Array.isArray(parsed.jobs) ? parsed.jobs : [];
+    const stats = parsed.stats || {};
+    const lines = [
+      parsed.status === "failed" ? "岗位搜索没有成功完成。" : "岗位搜索已完成。",
+      `新增 ${Number(stats.added || 0)} 个，候选 ${Number(stats.candidatesSeen || 0)} 个，重复 ${Number(stats.duplicatesSkipped || 0)} 个。`,
+      parsed.message ? `说明：${parsed.message}` : "",
+      jobs.length ? "" : "这次没有拿到可展示岗位。可以换成 `source: \"china-crawler\"` 或减少关键词后重试。",
+      ...jobs.slice(0, 12).map((job, index) => {
+        const company = stringField(job.company) || "公司待复核";
+        const role = stringField(job.role) || stringField(job.title) || "岗位待复核";
+        const location = stringField(job.location);
+        const salary = stringField(job.salary);
+        const url = stringField(job.url);
+        return `${index + 1}. ${company}｜${role}${location ? `｜${location}` : ""}${salary ? `｜${salary}` : ""}${url ? `\n   ${url}` : ""}`;
+      }),
+      parsed.omittedJobs ? `还有 ${parsed.omittedJobs} 个结果已省略，可在岗位列表查看。` : "",
+    ].filter(Boolean);
+    return lines.join("\n");
+  } catch {
+    return "岗位搜索工具已返回结果，但结果格式无法直接展示。请在岗位列表查看最新入库岗位。";
+  }
+}
+
+function stringField(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function readString(value: unknown): string {

@@ -17,6 +17,8 @@ import type {
   GenerateResumePreviewResult,
   ImportEmailMessagesRequest,
   ImportEmailMessagesResult,
+  ImportJobRequest,
+  ImportJobResult,
   ExperienceOverview,
   ApiEnvelope,
   ApprovalDecisionRequest,
@@ -310,8 +312,22 @@ export async function exportResume(input: ExportResumeRequest): Promise<ExportRe
   );
 }
 
+export async function downloadExportedResume(file: string): Promise<Blob> {
+  return requestBlob(`/api/resumes/export-file?file=${encodeURIComponent(file)}`);
+}
+
 export async function getRecruitmentMarket(): Promise<RecruitmentMarket> {
   return unwrap(await request<ApiEnvelope<RecruitmentMarket>>("/api/recruitment-market"));
+}
+
+export async function importMarketJob(input: ImportJobRequest): Promise<ImportJobResult> {
+  return unwrap(
+    await request<ApiEnvelope<ImportJobResult>>("/api/recruitment-market/import", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
 }
 
 export async function getJobSearchSources(): Promise<JobSearchSource[]> {
@@ -407,6 +423,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (sessionToken && !headers.has("x-ucareer-session")) headers.set("x-ucareer-session", sessionToken);
   const response = await fetch(apiUrl(path), { ...init, headers });
   return (await response.json()) as T;
+}
+
+async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const headers = new Headers(init?.headers);
+  if (sessionToken && !headers.has("x-ucareer-session")) headers.set("x-ucareer-session", sessionToken);
+  const response = await fetch(apiUrl(path), { ...init, headers });
+  if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    const envelope = (await response.json()) as ApiEnvelope<unknown>;
+    throw new Error(envelope.ok ? "Download failed" : envelope.error?.message || "Download failed");
+  }
+  return response.blob();
 }
 
 function apiUrl(path: string): string {

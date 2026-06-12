@@ -1,15 +1,27 @@
 /* Resume workspace styles live next to the Resume React modules. */
 
+.view-resumes {
+  background: #f5f6f8;
+  padding: 16px 24px;
+}
+
 .resume-classic-workspace {
-  --resume-paper-max-width: 575px;
-  --resume-rail-offset: 14px;
+  --resume-paper-max-width: 528px;
+  --resume-rail-offset: 0;
   display: grid;
-  column-gap: 28px;
-  row-gap: 16px;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 320px);
+  column-gap: 18px;
+  row-gap: 0;
+  grid-template-columns: minmax(640px, 1fr) 286px;
   grid-template-rows: minmax(0, 1fr);
   justify-content: stretch;
-  min-height: calc(100vh - 20px);
+  height: calc(100vh - 32px);
+  min-height: 0;
+}
+
+.resume-classic-workspace.is-spread {
+  --resume-paper-max-width: min(100%, 900px);
+  column-gap: 12px;
+  grid-template-columns: minmax(0, 1fr) 220px;
 }
 
 .resume-top-toolbar {
@@ -127,15 +139,19 @@
 .resume-paper-stage {
   --resume-paper-width: min(var(--resume-paper-max-width), 100%);
   --resume-page-controls-left: 50%;
-  --resume-page-controls-top: 18px;
-  background: transparent;
+  --resume-page-controls-top: 28px;
+  background: #f0f2f5;
+  border: 1px solid #e1e4e8;
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 #ffffff;
+  box-sizing: border-box;
   cursor: pointer;
   grid-column: 1;
   grid-row: 1;
   min-width: 0;
   min-height: 0;
-  overflow: visible;
-  padding: 34px 0 34px;
+  overflow: auto;
+  padding: 56px 28px 30px;
   position: relative;
 }
 
@@ -153,23 +169,96 @@
   z-index: 2;
 }
 
+.resume-paper-deck.is-spread {
+  aspect-ratio: 420 / 297;
+  max-width: 900px;
+  perspective: none;
+  width: min(100%, 900px);
+}
+
 .resume-page-v2 {
   aspect-ratio: 210 / 297;
   background: #ffffff;
-  border: 1px solid #e5e7eb;
+  border: 1px solid #e6e8ec;
   backface-visibility: hidden;
   box-sizing: border-box;
   box-shadow:
-    0 18px 52px rgba(15, 23, 42, 0.12),
-    -1px 0 0 rgba(15, 23, 42, 0.08) inset;
+    0 24px 64px rgba(17, 24, 39, 0.10),
+    -1px 0 0 rgba(17, 24, 39, 0.05) inset;
   height: 100%;
   overflow: hidden;
-  padding: 46px 52px 44px;
+  padding: var(--resume-page-padding-y, 44px) var(--resume-page-padding-x, 52px);
   position: relative;
   transform-origin: center center;
   transform-style: preserve-3d;
   width: 100%;
   z-index: 3;
+}
+
+.resume-spread-window {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 auto;
+  width: 100%;
+}
+
+.resume-spread-window .resume-page-v2 {
+  box-shadow:
+    0 18px 42px rgba(17, 24, 39, 0.09),
+    -1px 0 0 rgba(17, 24, 39, 0.05) inset;
+  height: auto;
+  min-width: 0;
+  padding: var(--resume-spread-page-padding-y, 34px) var(--resume-spread-page-padding-x, 38px);
+}
+
+.resume-classic-workspace.is-spread .resume-paper-stage {
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.resume-classic-workspace.is-spread .resume-page-content-v2 {
+  font-size: 9.3px;
+  line-height: 1.38;
+}
+
+.resume-classic-workspace.is-spread .resume-header-v2 {
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) 54px;
+}
+
+.resume-classic-workspace.is-spread .resume-identity-v2 h1 {
+  font-size: 18px;
+}
+
+.resume-classic-workspace.is-spread .resume-avatar-v2,
+.resume-classic-workspace.is-spread .resume-avatar-v2 img {
+  width: 54px;
+}
+
+.resume-classic-workspace.is-spread .resume-page-content-v2 h2 {
+  font-size: 10.4px;
+  margin: 8px 0 5px;
+}
+
+.resume-classic-workspace.is-spread .resume-page-content-v2 h3 {
+  font-size: 9.8px;
+}
+
+.resume-classic-workspace.is-spread .resume-page-controls span {
+  min-width: 58px;
+}
+
+.resume-classic-workspace.is-spread .resume-side-card {
+  --resume-side-text: 11px;
+  --resume-side-title: 12px;
+  padding: 8px;
+}
+
+.resume-classic-workspace.is-spread .resume-side-tabs button {
+  min-height: 28px;
+  padding: 5px 3px;
 }
 
 .resume-slide-window {
@@ -325,106 +414,424 @@
 }
 
 .resume-deck-controls-v2 {
+  --resume-toolbar-control-height: 22px;
+  --resume-toolbar-gap: 4px;
+  --resume-toolbar-radius: 5px;
+  --resume-toolbar-page-font: 11px;
+  --resume-toolbar-bg: #ffffff;
+  --resume-toolbar-line: #d8dbe0;
+  --resume-toolbar-ink: #111827;
+  --resume-toolbar-soft: #f5f6f8;
+  --resume-toolbar-file: #2563eb;
+  --resume-toolbar-file-soft: #eff6ff;
+  --resume-toolbar-format: #0891b2;
+  --resume-toolbar-format-soft: #ecfeff;
+  --resume-toolbar-edit: #7c3aed;
+  --resume-toolbar-edit-soft: #f5f3ff;
+  --resume-toolbar-view: #6366f1;
+  --resume-toolbar-view-soft: #eef2ff;
+  --resume-toolbar-margin: #059669;
+  --resume-toolbar-margin-soft: #ecfdf5;
+  --resume-toolbar-diagnosis: #b45309;
+  --resume-toolbar-diagnosis-soft: #fffbeb;
+  --resume-toolbar-shadow: 0 5px 12px rgba(17, 24, 39, 0.05);
   align-items: center;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(203, 213, 225, 0.78);
-  border-radius: 999px;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--resume-toolbar-line);
+  border-radius: 7px;
+  box-shadow: var(--resume-toolbar-shadow);
+  box-sizing: border-box;
   cursor: default;
   display: flex;
   gap: 6px;
+  justify-content: center;
   left: var(--resume-page-controls-left);
-  padding: 4px;
+  max-width: min(360px, calc(100% - 28px));
+  padding: 3px;
   position: absolute;
   top: var(--resume-page-controls-top);
   transform: translate(-50%, -50%);
+  width: auto;
   z-index: 10;
 }
 
-.resume-deck-controls-v2 button {
+.resume-toolbar-group,
+.resume-page-controls {
   align-items: center;
+  box-sizing: border-box;
+  display: flex;
+  gap: var(--resume-toolbar-gap);
+  height: var(--resume-toolbar-control-height);
+  min-width: 0;
+  padding: 0;
+}
+
+.resume-toolbar-group-right {
+  justify-content: flex-end;
+}
+
+.resume-page-controls {
+  flex: 0 0 auto;
+  justify-content: center;
+}
+
+.resume-deck-controls-v2 [data-tooltip] {
+  position: relative;
+}
+
+.resume-deck-controls-v2 [data-tooltip]::after {
   background: #111827;
-  border-radius: 999px;
+  border-radius: 5px;
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.14);
+  color: #ffffff;
+  content: attr(data-tooltip);
+  font-size: 11px;
+  font-weight: 800;
+  left: 50%;
+  line-height: 1;
+  opacity: 0;
+  padding: 6px 7px;
+  pointer-events: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  transform: translate(-50%, 3px);
+  transition: opacity 120ms ease, transform 120ms ease;
+  white-space: nowrap;
+  z-index: 50;
+}
+
+.resume-deck-controls-v2 [data-tooltip]::before {
+  border-bottom: 4px solid #111827;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  content: "";
+  left: 50%;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  transform: translateX(-50%);
+  transition: opacity 120ms ease;
+  z-index: 50;
+}
+
+.resume-deck-controls-v2 [data-tooltip]:hover::after,
+.resume-deck-controls-v2 [data-tooltip]:hover::before,
+.resume-deck-controls-v2 [data-tooltip]:focus-visible::after,
+.resume-deck-controls-v2 [data-tooltip]:focus-visible::before {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.resume-deck-controls-v2 [data-tooltip]:focus-visible::before {
+  transform: translateX(-50%);
+}
+
+.resume-page-controls button {
+  align-items: center;
+  background: var(--resume-toolbar-ink);
+  border: 0;
+  border-radius: var(--resume-toolbar-radius);
+  box-sizing: border-box;
   color: #ffffff;
   display: flex;
-  font-size: 18px;
+  font-size: var(--resume-toolbar-page-font);
   font-weight: 900;
-  height: 28px;
+  height: var(--resume-toolbar-control-height);
   justify-content: center;
   line-height: 1;
   margin-top: 0;
   padding: 0;
-  width: 28px;
+  width: var(--resume-toolbar-control-height);
 }
 
-.resume-deck-controls-v2 button:disabled {
-  background: #cbd5e1;
-  color: #64748b;
+.resume-page-controls button:disabled,
+.resume-tool-button:disabled {
+  background: #e5e7eb;
+  border-color: #e5e7eb;
+  color: var(--resume-toolbar-ink);
+  cursor: not-allowed;
+  opacity: 0.72;
 }
 
-.resume-deck-controls-v2 span {
-  color: #334155;
+.resume-page-controls span {
+  align-items: center;
+  color: var(--resume-toolbar-ink);
+  display: inline-flex;
   font-size: 11px;
   font-weight: 900;
-  line-height: 1.15;
-  min-width: 42px;
-  text-align: center;
+  height: var(--resume-toolbar-control-height);
+  justify-content: center;
+  line-height: 1;
+  min-width: 38px;
   writing-mode: horizontal-tb;
 }
 
+.resume-tool-button,
+.resume-format-trigger {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--resume-toolbar-radius);
+  box-sizing: border-box;
+  color: var(--resume-toolbar-ink);
+  font-size: 12px;
+  font-weight: 800;
+  height: var(--resume-toolbar-control-height);
+  line-height: 1;
+}
+
+.resume-tool-button {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  justify-content: center;
+  margin-top: 0;
+  min-width: var(--resume-toolbar-control-height);
+  padding: 0;
+  white-space: nowrap;
+  width: var(--resume-toolbar-control-height);
+}
+
+.resume-tool-button:hover:not(:disabled),
+.resume-format-trigger:hover,
+.resume-format-trigger[aria-expanded="true"] {
+  background: var(--resume-toolbar-soft);
+  border-color: var(--resume-toolbar-line);
+}
+
+.resume-tool-button.is-file-tool {
+  color: var(--resume-toolbar-file);
+}
+
+.resume-tool-button.is-file-tool:hover:not(:disabled) {
+  background: var(--resume-toolbar-file-soft);
+  border-color: rgba(37, 99, 235, 0.18);
+}
+
+.resume-tool-button.is-edit-tool {
+  color: var(--resume-toolbar-edit);
+}
+
+.resume-tool-button.is-edit-tool:hover:not(:disabled) {
+  background: var(--resume-toolbar-edit-soft);
+  border-color: rgba(124, 58, 237, 0.18);
+}
+
+.resume-tool-button.is-view-tool {
+  color: var(--resume-toolbar-view);
+}
+
+.resume-tool-button.is-view-tool:hover:not(:disabled),
+.resume-tool-button.is-view-tool.is-active {
+  background: var(--resume-toolbar-view-soft);
+  border-color: rgba(99, 102, 241, 0.18);
+}
+
+.resume-tool-button.is-margin-tool {
+  color: var(--resume-toolbar-margin);
+}
+
+.resume-tool-button.is-margin-tool:hover:not(:disabled) {
+  background: var(--resume-toolbar-margin-soft);
+  border-color: rgba(5, 150, 105, 0.18);
+}
+
+.resume-tool-button.is-diagnosis-tool {
+  color: var(--resume-toolbar-diagnosis);
+}
+
+.resume-tool-button.is-diagnosis-tool:hover:not(:disabled) {
+  background: var(--resume-toolbar-diagnosis-soft);
+  border-color: rgba(180, 83, 9, 0.18);
+}
+
+.resume-tool-button.is-primary {
+  background: var(--resume-toolbar-ink);
+  border-color: var(--resume-toolbar-ink);
+  color: #ffffff;
+}
+
+.resume-tool-button.is-primary:hover:not(:disabled) {
+  background: var(--resume-toolbar-ink);
+}
+
+.resume-format-menu {
+  display: flex;
+  height: var(--resume-toolbar-control-height);
+  position: relative;
+}
+
+.resume-format-trigger {
+  align-self: center;
+  background: var(--resume-toolbar-format-soft);
+  border-color: transparent;
+  color: var(--resume-toolbar-format);
+  cursor: pointer;
+  display: inline-flex;
+  flex: 0 0 48px;
+  justify-content: center;
+  align-items: center;
+  line-height: 1;
+  margin: 0;
+  min-height: var(--resume-toolbar-control-height);
+  min-width: 0;
+  padding: 0 6px;
+  text-align: center;
+  width: 48px;
+}
+
+.resume-format-options {
+  background: var(--resume-toolbar-bg);
+  border: 1px solid var(--resume-toolbar-line);
+  border-radius: 6px;
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.10);
+  display: grid;
+  gap: 2px;
+  left: 50%;
+  min-width: 58px;
+  padding: 3px;
+  position: absolute;
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+  z-index: 30;
+}
+
+.resume-format-options button {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--resume-toolbar-ink);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  height: 22px;
+  line-height: 1;
+  margin: 0;
+  padding: 0 8px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.resume-format-options button:hover,
+.resume-format-options button.is-selected {
+  background: var(--resume-toolbar-format);
+  color: #ffffff;
+}
+
+.resume-margin-menu {
+  display: flex;
+  height: var(--resume-toolbar-control-height);
+  position: relative;
+}
+
+.resume-margin-options {
+  background: var(--resume-toolbar-bg);
+  border: 1px solid var(--resume-toolbar-line);
+  border-radius: 6px;
+  box-shadow: 0 8px 18px rgba(17, 24, 39, 0.10);
+  display: none;
+  gap: 2px;
+  left: 50%;
+  padding: 3px;
+  position: absolute;
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+  z-index: 30;
+}
+
+.resume-margin-menu:hover .resume-margin-options,
+.resume-margin-menu:focus-within .resume-margin-options,
+.resume-margin-menu.is-open .resume-margin-options {
+  display: flex;
+}
+
+.resume-margin-options button {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--resume-toolbar-ink);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  height: 22px;
+  line-height: 1;
+  margin: 0;
+  min-width: 30px;
+  padding: 0 7px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.resume-margin-options button:hover,
+.resume-margin-options button.is-selected {
+  background: var(--resume-toolbar-margin);
+  color: #ffffff;
+}
+
 .resume-diagnosis-rail {
-  align-self: start;
+  align-self: stretch;
   grid-column: 2;
   grid-row: 1;
   justify-self: end;
   margin-top: 0;
   position: sticky;
   top: 20px;
-  width: min(320px, 100%);
+  width: 100%;
   z-index: 24;
 }
 
 .resume-side-card {
-  background: #ffffff;
-  border: 1px solid rgba(214, 221, 229, 0.86);
-  border-radius: 10px;
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
+  --resume-side-radius: 10px;
+  --resume-side-text: 12px;
+  --resume-side-title: 13px;
+  --resume-side-bg: #ffffff;
+  --resume-side-ink: #111827;
+  --resume-side-soft: #eceef1;
+  --resume-side-item-line: #d8dbe0;
+  --resume-side-line: #d8dbe0;
+  --resume-side-selected: #4f8cff;
+  --resume-side-selected-bg: #eef5ff;
+  background: var(--resume-side-bg);
+  border: 1px solid var(--resume-side-line);
+  border-radius: var(--resume-side-radius);
+  box-shadow: 0 18px 42px rgba(17, 24, 39, 0.08);
   box-sizing: border-box;
   display: grid;
-  gap: 10px;
+  gap: 9px;
   margin-top: var(--resume-rail-offset);
-  max-height: calc(100vh - 54px);
+  max-height: 100%;
   overflow: auto;
-  padding: 12px;
+  padding: 10px;
 }
 
 .resume-side-tabs {
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
-  border-radius: 8px;
+  background: var(--resume-side-soft);
+  border: 1px solid var(--resume-side-line);
+  border-radius: var(--resume-side-radius);
   display: grid;
   gap: 2px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 0 0 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 3px;
 }
 
 .resume-side-tabs button {
   background: transparent;
   border: 0;
-  border-radius: 6px;
-  color: #64748b;
-  font-size: 12px;
+  border-radius: 8px;
+  color: var(--resume-side-ink);
+  font-size: var(--resume-side-text);
   font-weight: 900;
   margin-top: 0;
   min-height: 32px;
   padding: 6px 4px;
   white-space: nowrap;
+  width: 100%;
 }
 
 .resume-side-tabs button:hover,
 .resume-side-tabs button.is-active {
-  background: #111827;
+  background: var(--resume-side-ink);
   color: #ffffff;
 }
 
@@ -447,37 +854,55 @@
 }
 
 .resume-context-head h2 {
-  color: #111827;
-  font-size: 16px;
+  color: var(--resume-side-ink);
+  font-size: var(--resume-side-title);
   line-height: 1.15;
   margin: 0;
 }
 
 .resume-context-head span {
-  color: var(--muted);
-  font-size: 11px;
+  color: var(--resume-side-ink);
+  font-size: var(--resume-side-text);
   font-weight: 800;
 }
 
 .resume-side-list {
+  background: var(--resume-side-soft);
+  border-radius: var(--resume-side-radius);
   display: grid;
   gap: 6px;
+  padding: 7px;
+  scrollbar-color: var(--resume-side-ink) var(--resume-side-soft);
+}
+
+.resume-side-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.resume-side-list::-webkit-scrollbar-track {
+  background: var(--resume-side-soft);
+}
+
+.resume-side-list::-webkit-scrollbar-thumb {
+  background: var(--resume-side-ink);
+  border: 2px solid var(--resume-side-soft);
+  border-radius: var(--resume-side-radius);
 }
 
 .resume-list-filters {
   display: grid;
-  gap: 6px;
+  gap: 7px;
   grid-template-columns: minmax(0, 1fr);
-  margin-bottom: 8px;
+  margin-bottom: 9px;
 }
 
 .resume-list-filters input,
 .resume-list-filters select {
-  background: #f8fafc;
-  border: 1px solid rgba(203, 213, 225, 0.88);
-  border-radius: 8px;
-  color: #111827;
-  font-size: 12px;
+  background: var(--resume-side-bg);
+  border: 1px solid var(--resume-side-line);
+  border-radius: var(--resume-side-radius);
+  color: var(--resume-side-ink);
+  font-size: var(--resume-side-text);
   margin-top: 0;
   min-height: 34px;
   min-width: 0;
@@ -486,7 +911,7 @@
 }
 
 .resume-list-filters input::placeholder {
-  color: #94a3b8;
+  color: var(--resume-side-ink);
 }
 
 .resume-inline-select {
@@ -497,12 +922,12 @@
 
 .resume-inline-select-trigger {
   align-items: center;
-  background: #f8fafc;
-  border: 1px solid rgba(203, 213, 225, 0.88);
-  border-radius: 8px;
-  color: #111827;
+  background: var(--resume-side-bg);
+  border: 1px solid var(--resume-side-line);
+  border-radius: var(--resume-side-radius);
+  color: var(--resume-side-ink);
   display: grid;
-  font-size: 12px;
+  font-size: var(--resume-side-text);
   font-weight: 800;
   gap: 8px;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -521,21 +946,21 @@
 }
 
 .resume-inline-select-trigger b {
-  color: #64748b;
-  font-size: 12px;
+  color: var(--resume-side-ink);
+  font-size: var(--resume-side-text);
   line-height: 1;
 }
 
 .resume-inline-select-trigger:hover,
 .resume-inline-select-trigger[aria-expanded="true"] {
-  background: #edf5ff;
-  border-color: rgba(59, 130, 246, 0.34);
+  background: var(--resume-side-bg);
+  border-color: var(--resume-side-ink);
 }
 
 .resume-inline-select-options {
-  background: #ffffff;
-  border: 1px solid rgba(203, 213, 225, 0.9);
-  border-radius: 8px;
+  background: var(--resume-side-bg);
+  border: 1px solid var(--resume-side-line);
+  border-radius: var(--resume-side-radius);
   display: grid;
   gap: 4px;
   max-height: 204px;
@@ -546,9 +971,9 @@
 .resume-inline-select-options button {
   background: transparent;
   border: 0;
-  border-radius: 6px;
-  color: #334155;
-  font-size: 12px;
+  border-radius: calc(var(--resume-side-radius) - 2px);
+  color: var(--resume-side-ink);
+  font-size: var(--resume-side-text);
   font-weight: 800;
   line-height: 1.35;
   margin-top: 0;
@@ -560,33 +985,38 @@
 
 .resume-inline-select-options button:hover,
 .resume-inline-select-options button.is-selected {
-  background: #edf5ff;
-  color: #111827;
+  background: var(--resume-side-ink);
+  color: #ffffff;
 }
 
 .resume-side-list button {
-  background: transparent;
-  border: 1px solid rgba(226, 232, 240, 0.9);
-  border-radius: 8px;
-  color: #334155;
+  background: var(--resume-side-bg);
+  border: 1px solid transparent;
+  border-radius: var(--resume-side-radius);
+  color: var(--resume-side-ink);
   display: grid;
   gap: 4px;
   margin-top: 0;
-  min-height: 44px;
-  padding: 9px 10px;
+  min-height: 48px;
+  padding: 10px 11px;
   text-align: left;
   width: 100%;
 }
 
 .resume-side-list button:hover,
 .resume-side-list button.is-active {
-  background: #edf5ff;
-  border-color: rgba(59, 130, 246, 0.34);
+  background: var(--resume-side-selected-bg);
+  border-color: var(--resume-side-selected);
+  box-shadow: 0 1px 0 rgba(17, 24, 39, 0.04);
+}
+
+.resume-side-list button.is-active {
+  box-shadow: inset 3px 0 0 var(--resume-side-selected);
 }
 
 .resume-side-list strong {
-  color: #111827;
-  font-size: 13px;
+  color: var(--resume-side-ink);
+  font-size: var(--resume-side-title);
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -595,8 +1025,8 @@
 
 .resume-side-list span,
 .resume-side-empty {
-  color: #64748b;
-  font-size: 11px;
+  color: var(--resume-side-ink);
+  font-size: var(--resume-side-text);
   font-weight: 800;
   line-height: 1.35;
   margin: 0;
@@ -605,36 +1035,138 @@
 
 .resume-edit-panel {
   display: grid;
-  gap: 10px;
+  gap: 9px;
 }
 
-.resume-edit-panel label {
-  color: #111827;
+.resume-edit-field {
+  color: var(--resume-side-ink);
   display: grid;
-  font-size: 12px;
+  font-size: var(--resume-side-text);
   font-weight: 900;
-  gap: 7px;
+  gap: 6px;
+  min-width: 0;
 }
 
-.resume-edit-panel select {
-  background: #ffffff;
-  border-color: rgba(203, 213, 225, 0.96);
-  border-radius: 8px;
-  color: #111827;
-  font-size: 13px;
-  min-height: 38px;
+.resume-edit-field > span {
+  min-width: 0;
 }
 
-.resume-edit-panel button {
-  margin-top: 0;
-  min-height: 38px;
+.resume-bounded-select {
+  min-width: 0;
+  position: relative;
   width: 100%;
 }
 
+.resume-bounded-select-trigger {
+  align-items: center;
+  background: var(--resume-side-bg);
+  border: 1px solid var(--resume-side-line);
+  border-radius: var(--resume-side-radius);
+  color: var(--resume-side-ink);
+  display: grid;
+  font-size: var(--resume-side-text);
+  font-weight: 800;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-top: 0;
+  min-height: 34px;
+  min-width: 0;
+  padding: 0 9px;
+  text-align: left;
+  width: 100%;
+}
+
+.resume-bounded-select-trigger span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-bounded-select-trigger b {
+  color: var(--resume-side-ink);
+  font-size: var(--resume-side-text);
+  line-height: 1;
+}
+
+.resume-bounded-select-trigger:hover,
+.resume-bounded-select-trigger[aria-expanded="true"] {
+  border-color: var(--resume-side-ink);
+}
+
+.resume-bounded-select-options {
+  background: var(--resume-side-bg);
+  border: 1px solid var(--resume-side-line);
+  border-radius: var(--resume-side-radius);
+  box-shadow: 0 14px 30px rgba(17, 24, 39, 0.12);
+  box-sizing: border-box;
+  display: grid;
+  gap: 3px;
+  left: 0;
+  max-height: min(260px, calc(100vh - 260px));
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 5px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: 100%;
+  z-index: 60;
+}
+
+.resume-bounded-select-options button {
+  background: transparent;
+  border: 0;
+  border-radius: calc(var(--resume-side-radius) - 2px);
+  color: var(--resume-side-ink);
+  display: block;
+  font-size: var(--resume-side-text);
+  font-weight: 800;
+  line-height: 1.25;
+  margin: 0;
+  min-height: 30px;
+  overflow: hidden;
+  padding: 7px 8px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.resume-bounded-select-options button:hover,
+.resume-bounded-select-options button.is-selected {
+  background: var(--resume-side-ink);
+  color: #ffffff;
+}
+
+.resume-edit-panel > button {
+  background: var(--resume-side-ink);
+  border: 1px solid var(--resume-side-ink);
+  border-radius: var(--resume-side-radius);
+  color: #ffffff;
+  font-size: var(--resume-side-text);
+  font-weight: 900;
+  margin-top: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.resume-edit-panel > button.secondary {
+  background: var(--resume-side-bg);
+  color: var(--resume-side-ink);
+}
+
+.resume-edit-panel > button:disabled {
+  background: #e5e7eb;
+  border-color: #e5e7eb;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
 .resume-context-tabs {
-  background: #f8fafc;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  background: var(--resume-side-bg);
+  border: 1px solid var(--resume-side-line);
+  border-radius: var(--resume-side-radius);
   display: grid;
   gap: 4px;
   grid-template-columns: 1fr 1fr;
@@ -654,34 +1186,44 @@
 }
 
 .resume-direction-clues section {
-  border-top: 1px solid rgba(226, 232, 240, 0.88);
-  padding: 12px 0;
+  background: var(--resume-side-bg);
+  border: 0;
+  border-top: 1px solid var(--resume-side-item-line);
+  border-radius: 0;
+  padding: 12px 2px;
 }
 
 .resume-direction-clues section:first-child {
-  border-top: 0;
-  padding-top: 0;
+  background: var(--resume-side-bg);
+  border: 0;
+  border-radius: 0;
+  padding: 2px 2px 12px;
+}
+
+.resume-direction-clues section:first-child strong {
+  font-size: var(--resume-side-title);
 }
 
 .resume-direction-clues h3 {
-  color: #64748b;
-  font-size: 11px;
+  color: var(--resume-side-ink);
+  font-size: var(--resume-side-text);
   font-weight: 900;
   line-height: 1.15;
-  margin: 0 0 7px;
+  margin: 0 0 8px;
 }
 
 .resume-direction-clues strong {
-  color: #111827;
+  color: var(--resume-side-ink);
   display: block;
-  font-size: 13px;
+  font-size: var(--resume-side-title);
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .resume-direction-clues p,
 .resume-direction-clues li {
-  color: #334155;
-  font-size: 12px;
+  color: var(--resume-side-ink);
+  font-size: var(--resume-side-text);
   line-height: 1.48;
   margin: 0;
 }
@@ -693,7 +1235,7 @@
 
 .resume-direction-clues ul {
   display: grid;
-  gap: 3px;
+  gap: 6px;
   margin: 0;
   padding-left: 16px;
 }
@@ -701,24 +1243,71 @@
 .resume-clue-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 6px 7px;
   padding-top: 0;
 }
 
 .resume-clue-tags span {
-  background: #eef2f7;
-  border-radius: 999px;
-  color: #29313d;
-  font-size: 11px;
+  background: var(--resume-side-bg);
+  border: 0;
+  border-radius: var(--resume-side-radius);
+  color: var(--resume-side-ink);
+  font-size: var(--resume-side-text);
   font-weight: 900;
   line-height: 1.1;
-  padding: 6px 8px;
+  padding: 6px 9px;
 }
 
 .resume-empty-paper {
   color: var(--muted);
   padding: 80px 0;
   text-align: center;
+}
+
+@media (max-width: 1180px) {
+  .resume-classic-workspace {
+    grid-template-columns: minmax(0, 1fr) 278px;
+  }
+
+  .resume-paper-stage {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+
+@media (max-width: 980px) {
+  .resume-classic-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    height: auto;
+    min-height: calc(100vh - 40px);
+  }
+
+  .resume-classic-workspace.is-spread {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .resume-paper-deck.is-spread {
+    aspect-ratio: auto;
+    width: min(100%, 528px);
+  }
+
+  .resume-spread-window {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .resume-diagnosis-rail {
+    grid-column: 1;
+    grid-row: 2;
+    position: relative;
+    top: auto;
+  }
+
+  .resume-side-card {
+    max-height: none;
+    position: relative;
+    top: auto;
+  }
 }
 
 @media (max-width: 760px) {
@@ -732,8 +1321,27 @@
   }
 
   .resume-paper-stage {
-    --resume-page-controls-top: 14px;
-    padding: 28px 0 6px;
+    --resume-page-controls-top: 48px;
+    padding: 96px 12px 14px;
+  }
+
+  .resume-deck-controls-v2 {
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: calc(100% - 24px);
+    width: auto;
+  }
+
+  .resume-page-controls {
+    order: 3;
+  }
+
+  .resume-tool-button {
+    padding: 0;
+  }
+
+  .resume-format-trigger {
+    width: 48px;
   }
 
   .resume-page-v2 {

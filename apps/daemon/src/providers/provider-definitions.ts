@@ -11,11 +11,11 @@ export function createProviderDefinitions(): PaperclipAdapterDefinition[] {
       command: process.env.CODEX_BIN || "codex",
       contextWindow: {
         tokens: 400_000,
-        model: "gpt-5.3-codex",
+        model: "gpt-5.5",
         source: "model_default",
         note: "Codex local adapter primary model context window.",
       },
-      capabilities: { structuredRunner: true, ptyRunner: true, resumeSession: true, approvals: true, mcp: false },
+      capabilities: { structuredRunner: true, ptyRunner: true, resumeSession: true, approvals: true, mcp: true },
     },
     {
       id: "claude",

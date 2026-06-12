@@ -2,21 +2,33 @@ import { spawn } from "node:child_process";
 import process from "node:process";
 import { join } from "node:path";
 import type { MarketJob, JobSearchRequest, JobSearchResult, JobSearchSource, JobSearchSourceId } from "@ucareer/shared";
+import type { ChromeBridgeService } from "./chrome-bridge-service";
 
 const DEFAULT_QUERIES = ["机器人系统工程师", "ROS2 机器人", "机器人软件 SDK", "具身智能 数据", "AI工具链 Agent RAG"];
 const DEFAULT_CITY = "深圳";
-const DEFAULT_MAX = 25;
-const COMMAND_TIMEOUT_MS = 90_000;
+const DEFAULT_MAX = 12;
+const COMMAND_TIMEOUT_MS = 60_000;
+const CODEX_CHROME_COMMAND_TIMEOUT_MS = 360_000;
+
+type RadarCommand = { label: string; args: string[]; timeoutMs?: number };
 
 export interface JobSearchService {
   listSources(): Promise<JobSearchSource[]>;
   search(input: JobSearchRequest): Promise<JobSearchResult>;
 }
 
-export function createJobSearchService(workspaceRoot: string): JobSearchService {
+export function createJobSearchService(workspaceRoot: string, chromeBridgeService?: ChromeBridgeService): JobSearchService {
   return {
     async listSources() {
       return [
+        {
+          id: "codex-chrome",
+          label: "Codex Chrome",
+          description: "通过 Ucareer Chrome 扩展 bridge 读取已登录 Boss 页面，把具体岗位详情写入岗位市场。",
+          available: true,
+          requiresAuth: true,
+          defaultCity: DEFAULT_CITY,
+        },
         {
           id: "boss-agent",
           label: "Boss Agent",
@@ -58,6 +70,28 @@ export function createJobSearchService(workspaceRoot: string): JobSearchService 
       const commands = buildCommands(workspaceRoot, request);
       const results: JobSearchResult[] = [];
 
+      if (request.source === "codex-chrome" && chromeBridgeService) {
+        const result = await chromeBridgeService.runBossSearch({
+          city: request.city,
+          queries: request.queries,
+          max: request.max,
+          dryRun: request.dryRun,
+        }, CODEX_CHROME_COMMAND_TIMEOUT_MS);
+        return {
+          runId,
+          source: request.source,
+          status: result.ok ? "completed" : "failed",
+          startedAt,
+          completedAt: new Date().toISOString(),
+          added: numberFrom(result.added, result.discovered?.length || 0),
+          candidatesSeen: numberFrom(result.stats?.candidatesSeen, result.discovered?.length || 0),
+          duplicatesSkipped: numberFrom(result.stats?.duplicatesSkipped, 0),
+          failedQueries: numberFrom(result.stats?.failedQueries, result.ok ? 0 : request.queries.length),
+          jobs: normalizeJobs(result.discovered),
+          ...(result.message ? { message: trimMessage(result.message) } : {}),
+        };
+      }
+
       for (const command of commands) {
         results.push(await runRadarCommand(runId, startedAt, request.source, command));
       }
@@ -75,18 +109,25 @@ function normalizeSearchRequest(input: JobSearchRequest): Required<Pick<JobSearc
     queries: Array.isArray(input.queries) && input.queries.length
       ? input.queries.map((query) => String(query).trim()).filter(Boolean)
       : DEFAULT_QUERIES,
-    max: Number.isFinite(max) ? Math.max(1, Math.min(100, Math.floor(max))) : DEFAULT_MAX,
+    max: Number.isFinite(max) ? Math.max(1, Math.min(50, Math.floor(max))) : DEFAULT_MAX,
     minMatchScore: Number(input.minMatchScore || 0),
     withDetails: Boolean(input.withDetails),
     dryRun: Boolean(input.dryRun),
   };
 }
 
-function buildCommands(workspaceRoot: string, request: ReturnType<typeof normalizeSearchRequest>): Array<{ label: string; args: string[] }> {
+function buildCommands(workspaceRoot: string, request: ReturnType<typeof normalizeSearchRequest>): RadarCommand[] {
   if (request.source === "portals") {
     throw new Error("官网门户扫描还没有接入 jobsearch，请先使用 Boss Agent 或中国平台爬虫。");
   }
-  const sources: Exclude<JobSearchSourceId, "all" | "portals">[] = request.source === "all"
+  if (request.source === "codex-chrome") {
+    const args = [join(workspaceRoot, "scripts/research/codex-chrome-boss-radar.mjs"), "--max", String(request.max), "--city", request.city];
+    if (request.dryRun) args.push("--dry-run");
+    request.queries.forEach((query) => args.push("--query", query));
+    return [{ label: "Codex Chrome Boss", args, timeoutMs: CODEX_CHROME_COMMAND_TIMEOUT_MS }];
+  }
+
+  const sources: Exclude<JobSearchSourceId, "codex-chrome" | "all" | "portals">[] = request.source === "all"
     ? ["boss-agent", "china-crawler"]
     : [request.source];
 
@@ -108,9 +149,9 @@ async function runRadarCommand(
   runId: string,
   startedAt: string,
   source: JobSearchSourceId,
-  command: { label: string; args: string[] },
+  command: RadarCommand,
 ): Promise<JobSearchResult> {
-  const output = await spawnNode(command.args);
+  const output = await spawnNode(command.args, command.timeoutMs);
   if (!output.ok) {
     return {
       runId,
@@ -161,7 +202,7 @@ async function runRadarCommand(
   };
 }
 
-function spawnNode(args: string[]): Promise<{ ok: boolean; stdout: string; stderr: string }> {
+function spawnNode(args: string[], timeoutMs = COMMAND_TIMEOUT_MS): Promise<{ ok: boolean; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, args, {
       cwd: process.cwd(),
@@ -173,7 +214,7 @@ function spawnNode(args: string[]): Promise<{ ok: boolean; stdout: string; stder
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
       stderr = `${stderr}\njobsearch command timed out`.trim();
-    }, COMMAND_TIMEOUT_MS);
+    }, timeoutMs);
     child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
     child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
     child.on("error", (error) => {

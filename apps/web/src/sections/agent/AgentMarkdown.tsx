@@ -8,10 +8,18 @@ type AgentMarkdownBlock =
   | { type: "quote"; text: string }
   | { type: "code"; text: string };
 
-export function AgentMarkdown({ text, onOpenFilePreview }: { text: string; onOpenFilePreview?: ((path: string) => void) | undefined }) {
+export function AgentMarkdown({
+  text,
+  onOpenFilePreview,
+  streaming = false,
+}: {
+  text: string;
+  onOpenFilePreview?: ((path: string) => void) | undefined;
+  streaming?: boolean;
+}) {
   const blocks = parseAgentMarkdown(text);
   return (
-    <div className="agent-markdown">
+    <div className={streaming ? "agent-markdown is-streaming" : "agent-markdown"}>
       {blocks.map((block, index) => {
         if (block.type === "heading") {
           const Heading = (`h${block.level}` as "h1" | "h2" | "h3");
@@ -59,6 +67,7 @@ export function AgentMarkdown({ text, onOpenFilePreview }: { text: string; onOpe
         }
         return <p key={index}>{renderInlineMarkdown(block.text, onOpenFilePreview)}</p>;
       })}
+      {streaming ? <span className="agent-stream-cursor" aria-hidden="true" /> : null}
     </div>
   );
 }

@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Ucareer Job Importer",
+  "version": "0.1.0",
+  "description": "Read the current job page and import it into the local Ucareer workspace.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Ucareer Job Importer"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "alarms",
+    "scripting",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:12345/*",
+    "http://127.0.0.1:54321/*",
+    "http://localhost:12345/*",
+    "http://localhost:54321/*",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

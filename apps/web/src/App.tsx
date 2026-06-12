@@ -6,6 +6,7 @@ import { useJobSearch } from "./hooks/useJobSearch";
 import { useUcareerData } from "./hooks/useUcareerData";
 import { AppLayout } from "./layout/AppLayout";
 import { ViewRenderer } from "./layout/ViewRenderer";
+import { buildAgentPageContext } from "./agentPageContext";
 import { views, type ViewId } from "./views";
 import type { AuthSession } from "@ucareer/shared";
 
@@ -13,6 +14,7 @@ const SESSION_STORAGE_KEY = "ucareer.session";
 
 export function App() {
   const [activeView, setActiveView] = useState<ViewId>("agent");
+  const [lastWorkspaceView, setLastWorkspaceView] = useState<ViewId>("resumes");
   const [session, setSession] = useState<AuthSession | null>(() => readStoredSession());
   setApiSessionToken(session?.token || "");
   const { actions, state } = useUcareerData(Boolean(session));
@@ -56,6 +58,13 @@ export function App() {
     window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
   }
 
+  function handleViewChange(viewId: ViewId) {
+    setActiveView(viewId);
+    if (viewId !== "agent") {
+      setLastWorkspaceView(viewId);
+    }
+  }
+
   if (!session) {
     return <LoginPage onLogin={handleLogin} />;
   }
@@ -65,7 +74,7 @@ export function App() {
         activeView={activeView}
         accountEmail={session.account.email}
         agentConversations={{
-          onDeleteTask: (taskId) => void agentActions.onDeleteTask(taskId),
+          onDeleteTask: (taskId) => agentActions.onDeleteTask(taskId),
           onSelectTask: (taskId) => void agentActions.onSelectTask(taskId),
           onStartNewTask: agentActions.onStartNewTask,
           selectedProvider: agentState.selectedProvider,
@@ -75,11 +84,11 @@ export function App() {
         authMethod="password"
         views={views}
       onLogout={handleLogout}
-      onViewChange={setActiveView}
+      onViewChange={handleViewChange}
     >
       <ViewRenderer
         activeView={activeView}
-        onViewChange={setActiveView}
+        onViewChange={handleViewChange}
         views={views}
         agent={{
           approvals: agentState.approvals,
@@ -87,7 +96,25 @@ export function App() {
           onCheckProvider: (providerId) => void agentActions.onCheckProvider(providerId),
           onCancelTask: (taskId) => void agentActions.onCancelTask(taskId),
           onCreateLocalCommand: (command, args) => void agentActions.onCreateLocalCommand(command, args),
-          onCreateTask: (promptOverride, permissionMode, attachments) => agentActions.onCreateTask(promptOverride, permissionMode, attachments),
+          onCreateTask: (promptOverride, permissionMode, attachments, pageContext) => agentActions.onCreateTask(
+            promptOverride,
+            permissionMode,
+            attachments,
+            pageContext || buildAgentPageContext({
+              applications: state.applications,
+              evidence: state.evidenceRequests,
+              experience: state.experienceOverview,
+              market: state.market,
+              profile: state.profile,
+              reports: state.reports,
+              resumes: {
+                data: state.resumes,
+                selectedResume: state.selectedResume,
+              },
+              selectedReport: state.selectedReport,
+              viewId: activeView === "agent" ? lastWorkspaceView : activeView,
+            }),
+          ),
           onDecideApproval: (approvalId, decision) => void agentActions.onDecideApproval(approvalId, decision),
           onPromptChange: agentActions.setPrompt,
           onProviderChange: agentActions.setSelectedProvider,
@@ -133,6 +160,7 @@ export function App() {
           sources: jobSearch.sources,
           status: jobSearch.status,
         }}
+        onImportMarketJob={(input) => actions.onImportMarketJob(input)}
         profile={state.profile}
         reports={{
           data: state.reports,

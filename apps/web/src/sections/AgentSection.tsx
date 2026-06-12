@@ -1,6 +1,7 @@
 import type {
   AgentEvent,
   AgentAttachment,
+  AgentPageContext,
   AgentTask,
   AgentTaskTurn,
   ApprovalDecisionRequest,
@@ -20,9 +21,11 @@ import { AgentFilePreviewDrawer } from "./agent/AgentFilePreviewDrawer";
 import { AgentConnectorBar } from "./agent/AgentConnectorBar";
 import { AgentGuidePrompts, type AgentGuidePrompt } from "./agent/AgentGuidePrompts";
 import { AgentJourneyLine } from "./agent/AgentJourneyLine";
-import { AgentTurnView } from "./agent/AgentTurnView";
+import { AgentTurnView, getVisibleProcessMessages } from "./agent/AgentTurnView";
 import {
   buildTaskTranscript,
+  extractTaskUserQuestion,
+  findLastMessageIndex,
   formatTokenCount,
   groupConversationTurns,
   providerLabel,
@@ -47,7 +50,7 @@ interface AgentSectionProps {
   onCancelTask(taskId?: string): void | Promise<void>;
   onProviderChange(value: string): void;
   onPromptChange(value: string): void;
-  onCreateTask(promptOverride?: string, permissionMode?: CreateAgentTaskRequest["permissionMode"], attachments?: AgentAttachment[]): void | Promise<void>;
+  onCreateTask(promptOverride?: string, permissionMode?: CreateAgentTaskRequest["permissionMode"], attachments?: AgentAttachment[], pageContext?: AgentPageContext): void | Promise<void>;
   onDecideApproval(approvalId: string, decision: ApprovalDecisionRequest["decision"]): void;
   onRunJobSearch(input?: Partial<JobSearchRequest>): void | Promise<void>;
   onSelectTask(taskId: string): void;
@@ -58,13 +61,18 @@ interface AgentSectionProps {
     lastResult: JobSearchResult | null;
     error: string;
   };
+  pageContext?: AgentPageContext;
 }
 export function AgentSection(props: AgentSectionProps) {
   const [intakeText, setIntakeText] = useState("");
   const [attachments, setAttachments] = useState<AgentAttachment[]>([]);
   const [attachmentStatus, setAttachmentStatus] = useState("");
   const [localMessages, setLocalMessages] = useState<AgentChatMessage[]>([]);
-  const [pendingResponseId, setPendingResponseId] = useState<string | null>(null);
+  const [pendingDraft, setPendingDraft] = useState<{
+    user: AgentChatMessage;
+    pending: AgentChatMessage;
+    sentAt: number;
+  } | null>(null);
   const [permissionMenuOpen, setPermissionMenuOpen] = useState(false);
   const [permissionMode, setPermissionMode] = useState<CreateAgentTaskRequest["permissionMode"]>("auto_review");
   const [providerMenuOpen, setProviderMenuOpen] = useState(false);
@@ -100,22 +108,30 @@ export function AgentSection(props: AgentSectionProps) {
     [selectedTask, props.selectedTaskEvents],
   );
   const baseMessages = selectedTask ? taskMessages : localMessages;
-  const visibleMessages = pendingResponseId
-    ? [...baseMessages, { id: pendingResponseId, role: "pending" as const, text: "", createdAt: new Date().toISOString() }]
+  const pendingMessages = pendingDraft && !hasBackendUserMessageAfter(baseMessages, pendingDraft.user.text, pendingDraft.sentAt)
+    ? [pendingDraft.user, pendingDraft.pending]
+    : pendingDraft && !hasBackendAssistantAfterUserAfter(baseMessages, pendingDraft.user.text, pendingDraft.sentAt)
+      ? [pendingDraft.pending]
+      : [];
+  const visibleMessages = pendingMessages.length
+    ? [...baseMessages, ...pendingMessages]
     : baseMessages;
-  const conversationTurns = selectedTask && props.selectedTaskTurns.length
+  const backendConversationTurns = selectedTask && props.selectedTaskTurns.length
     ? props.selectedTaskTurns.map(agentTaskTurnToConversationTurn)
     : groupConversationTurns(visibleMessages);
+  const conversationTurns = pendingMessages.length
+    ? mergePendingMessagesIntoTurns(backendConversationTurns, pendingMessages)
+    : backendConversationTurns;
   const visibleApprovals = selectedTask
     ? props.approvals.filter((approval) => approval.taskId === selectedTask.id)
     : props.approvals.slice(0, 3);
   const agentBusy = Boolean(
-    pendingResponseId
+    pendingDraft
       || selectedTask?.status === "queued"
       || selectedTask?.status === "running"
       || selectedTask?.status === "waiting_approval",
   );
-  const executionStatusLabel = pendingResponseId
+  const executionStatusLabel = pendingDraft
     ? "正在启动对话"
     : selectedTask?.status === "waiting_approval"
       ? "等待执行审批"
@@ -124,6 +140,10 @@ export function AgentSection(props: AgentSectionProps) {
         : selectedTask?.status === "running"
           ? "Agent 正在执行中"
           : "";
+  const currentProcessMessages = agentBusy
+    ? getCurrentProcessMessages(conversationTurns)
+    : [];
+  const showCurrentProcess = agentBusy && (currentProcessMessages.length > 0 || executionStatusLabel);
   const contextUsage = resolveContextUsage({
     providerId: props.selectedProvider,
     providers: providerOptions,
@@ -138,13 +158,17 @@ export function AgentSection(props: AgentSectionProps) {
     return () => document.removeEventListener("mousedown", closeMenus);
   }, []);
   useEffect(() => {
+    if (!pendingDraft) return;
     const taskFinished = props.selectedTaskEvents.some((event) => {
+      if (!isCreatedAtOrAfter(event.createdAt, pendingDraft.sentAt)) return false;
       if (event.type === "error") return true;
       if (event.type !== "task_status") return false;
       return event.status === "completed" || event.status === "failed" || event.status === "cancelled";
     });
-    if (props.selectedTaskEvents.length || taskFinished) setPendingResponseId(null);
-  }, [props.selectedTaskEvents]);
+    if (taskFinished || hasBackendAssistantAfterUserAfter(baseMessages, pendingDraft.user.text, pendingDraft.sentAt)) {
+      setPendingDraft(null);
+    }
+  }, [baseMessages, pendingDraft, props.selectedTaskEvents]);
   useEffect(() => {
     providerOptions.forEach((provider) => {
       if (props.installStatus[provider.id] || checkedProviderIds.current.has(provider.id)) return;
@@ -158,14 +182,15 @@ export function AgentSection(props: AgentSectionProps) {
   }, [conversationKey]);
   useEffect(() => {
     if (!shouldStickToLatestRef.current) return;
-    scrollDialogueToLatest("smooth");
+    scrollDialogueToLatest(agentBusy ? "auto" : "smooth");
   }, [
+    agentBusy,
     visibleMessages.length,
     conversationTurns.length,
     selectedTask?.status,
     props.selectedTaskEvents.length,
     props.selectedTaskTurns.length,
-    pendingResponseId,
+    pendingDraft,
   ]);
   function handleDialogueScroll() {
     const node = dialogueRef.current;
@@ -186,16 +211,18 @@ export function AgentSection(props: AgentSectionProps) {
     if ((!text && attachments.length === 0) || agentBusy) return;
     const currentAttachments = attachments;
     const sentAt = Date.now();
+    const userMessage: AgentChatMessage = { id: `local-user-${sentAt}`, role: "user", text, createdAt: new Date(sentAt).toISOString() };
+    const pendingMessage: AgentChatMessage = { id: `local-pending-${sentAt}`, role: "pending", text: "", createdAt: new Date(sentAt).toISOString() };
     shouldStickToLatestRef.current = true;
     setLocalMessages((current) => [
       ...current,
-      { id: `local-user-${sentAt}`, role: "user", text, createdAt: new Date(sentAt).toISOString() },
+      userMessage,
     ]);
-    setPendingResponseId(`local-pending-${sentAt}`);
+    setPendingDraft({ user: userMessage, pending: pendingMessage, sentAt });
     props.onPromptChange(text);
-    Promise.resolve(props.onCreateTask(text, permissionMode, currentAttachments)).catch((error: unknown) => {
+    Promise.resolve(props.onCreateTask(text, permissionMode, currentAttachments, props.pageContext)).catch((error: unknown) => {
       const message = error instanceof Error ? error.message : "Agent 创建任务失败";
-      setPendingResponseId(null);
+      setPendingDraft(null);
       setLocalMessages((current) => [
         ...current,
         {
@@ -213,7 +240,7 @@ export function AgentSection(props: AgentSectionProps) {
   function cancelCurrentTask() {
     if (!selectedTask?.id) return;
     void Promise.resolve(props.onCancelTask(selectedTask.id)).finally(() => {
-      setPendingResponseId(null);
+      setPendingDraft(null);
     });
   }
   function editLastUserMessage() {
@@ -345,7 +372,8 @@ export function AgentSection(props: AgentSectionProps) {
                     >
                       <AgentTurnView
                         turn={turn}
-                        runningLabel={agentBusy && index === conversationTurns.length - 1 ? executionStatusLabel : ""}
+                        runningProcessLabel={index === conversationTurns.length - 1 && showCurrentProcess ? executionStatusLabel : ""}
+                        runningProcessMessages={index === conversationTurns.length - 1 && showCurrentProcess ? currentProcessMessages : []}
                         onOpenFilePreview={openFilePreview}
                       />
                     </div>
@@ -418,12 +446,12 @@ export function AgentSection(props: AgentSectionProps) {
                 ) : null}
                 <textarea
                   aria-label="输入给 Agent 的内容"
-                  disabled={agentBusy}
-                  placeholder={agentBusy ? "等待当前步骤完成后可追问" : canContinueSelectedTask ? "继续追问当前 Agent 对话" : "随心输入"}
+                  placeholder={agentBusy ? "可以先输入，当前步骤完成后再发送" : canContinueSelectedTask ? "继续追问当前 Agent 对话" : "随心输入"}
                   value={intakeText}
                   onChange={(event) => setIntakeText(event.target.value)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {
+                      if (agentBusy) return;
                       event.preventDefault();
                       sendIntake();
                     }
@@ -600,6 +628,55 @@ function AgentTurnJumpMarkers({
   );
 }
 
+function hasBackendUserMessageAfter(messages: AgentChatMessage[], text: string, sentAt: number): boolean {
+  const normalized = normalizeMessageText(text);
+  if (!normalized) return false;
+  return messages.some((message) => (
+    message.role === "user"
+      && isCreatedAtOrAfter(message.createdAt, sentAt)
+      && normalizeMessageText(message.text) === normalized
+  ));
+}
+
+function hasBackendAssistantAfterUserAfter(messages: AgentChatMessage[], text: string, sentAt: number): boolean {
+  const normalized = normalizeMessageText(text);
+  if (!normalized) return false;
+  const userIndex = messages.findIndex((message) => (
+    message.role === "user"
+      && isCreatedAtOrAfter(message.createdAt, sentAt)
+      && normalizeMessageText(message.text) === normalized
+  ));
+  if (userIndex < 0) return false;
+  return messages.slice(userIndex + 1).some((message) => message.role === "assistant");
+}
+
+function isCreatedAtOrAfter(createdAt: string, timestamp: number): boolean {
+  const parsed = Date.parse(createdAt);
+  if (!Number.isFinite(parsed)) return false;
+  return parsed >= timestamp - 1000;
+}
+
+function mergePendingMessagesIntoTurns(
+  turns: AgentConversationTurn[],
+  pendingMessages: AgentChatMessage[],
+): AgentConversationTurn[] {
+  if (!pendingMessages.length) return turns;
+  const pendingUser = pendingMessages.find((message) => message.role === "user");
+  if (pendingUser) {
+    return [...turns, { id: pendingUser.id, messages: pendingMessages }];
+  }
+  const pendingOnly = pendingMessages.filter((message) => message.role === "pending");
+  if (!pendingOnly.length) return turns;
+  if (!turns.length) return [{ id: pendingOnly[0]?.id || "pending-turn", messages: pendingOnly }];
+  return turns.map((turn, index) => index === turns.length - 1
+    ? { ...turn, messages: [...turn.messages, ...pendingOnly] }
+    : turn);
+}
+
+function normalizeMessageText(text: string): string {
+  return extractTaskUserQuestion(text).replace(/\s+/g, " ").trim();
+}
+
 function agentTaskTurnToConversationTurn(turn: AgentTaskTurn): AgentConversationTurn {
   const messages: AgentChatMessage[] = [];
   const questionMessage = turn.question ? agentEventToChatMessage(turn.question, `${turn.id}:question`) : null;
@@ -611,6 +688,16 @@ function agentTaskTurnToConversationTurn(turn: AgentTaskTurn): AgentConversation
   const answerMessage = turn.answer ? agentEventToChatMessage(turn.answer, `${turn.id}:answer`, formatTurnDuration(turn.question?.createdAt, turn.answer.createdAt)) : null;
   if (answerMessage) messages.push(answerMessage);
   return { id: turn.id, messages };
+}
+
+function getCurrentProcessMessages(turns: AgentConversationTurn[]): AgentChatMessage[] {
+  const latestTurn = turns.at(-1);
+  if (!latestTurn) return [];
+  const finalAssistantIndex = findLastMessageIndex(latestTurn.messages, (message) => message.role === "assistant");
+  return getVisibleProcessMessages(latestTurn.messages.filter((message, index) => {
+    if (message.role === "user" || message.role === "pending") return false;
+    return index !== finalAssistantIndex;
+  }));
 }
 
 function formatDateForMailboxImport(date: Date): string {
@@ -757,7 +844,7 @@ function fileToBase64(file: File): Promise<string> {
 
 const fallbackProviderCapabilities: ProviderSummary["capabilities"] = { approvals: true, mcp: false, ptyRunner: true, resumeSession: false, structuredRunner: true };
 const fallbackProviderContextWindows: Record<string, NonNullable<ProviderSummary["contextWindow"]>> = {
-  codex: { tokens: 400_000, model: "gpt-5.3-codex", source: "model_default" },
+  codex: { tokens: 400_000, model: "gpt-5.5", source: "model_default" },
   claude: { tokens: 200_000, source: "provider_default" },
   gemini: { tokens: 1_000_000, model: "auto", source: "provider_default" },
 };

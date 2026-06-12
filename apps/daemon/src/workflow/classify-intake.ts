@@ -1,19 +1,23 @@
-import type { RouteDecision } from "@ucareer/shared";
+import type { AgentPageContext, RouteDecision } from "@ucareer/shared";
 import { buildAgentPrompt } from "./prompt-builder";
-import { getSkill } from "./skill-registry";
+import { getSkill, skillRegistry } from "./skill-registry";
 import { findWorkflowForRoute } from "./workflow-registry";
 
 type SkillMatch = Pick<RouteDecision, "inputKind" | "skillId" | "confidence" | "reason">;
 
-export function classifyIntake(input: {
+export async function classifyIntake(input: {
   text: string;
   preferredProviderId?: string;
   promptText?: string;
-}): RouteDecision {
-  const text = input.text.trim().toLowerCase();
-  const matched = chooseSkill(text);
-  const skill = getSkill(matched.skillId) || getSkill("agent.general");
-  if (!skill) throw new Error("Skill registry is missing agent.general");
+  pageContext?: AgentPageContext;
+  routeWithAgent(prompt: string): Promise<string>;
+}): Promise<RouteDecision> {
+  const matched = await chooseSkillWithLlm(input);
+  const skill = getSkill(matched.skillId);
+  if (!skill) throw new Error(`LLM router returned unknown skillId: ${matched.skillId}`);
+  if (!skill.inputKinds.includes(matched.inputKind)) {
+    throw new Error(`LLM router returned inputKind "${matched.inputKind}" which is not valid for ${skill.id}`);
+  }
   const workflow = findWorkflowForRoute({ skillId: skill.id, inputKind: matched.inputKind });
   const route: Omit<RouteDecision, "agentPrompt"> = {
     inputKind: matched.inputKind,
@@ -31,125 +35,69 @@ export function classifyIntake(input: {
       userText: input.promptText ?? input.text,
       skill,
       route,
+      ...(input.pageContext ? { pageContext: input.pageContext } : {}),
     }),
   };
 }
 
-function chooseSkill(text: string): SkillMatch {
-  const latestText = extractLatestInput(text);
-  const routeText = latestText || text;
-  if (!routeText) {
-    return {
-      inputKind: "general",
-      skillId: "agent.general",
-      confidence: "low",
-      reason: "输入为空，需要先澄清用户目标。",
-    };
+async function chooseSkillWithLlm(input: {
+  text: string;
+  pageContext?: AgentPageContext;
+  routeWithAgent(prompt: string): Promise<string>;
+}): Promise<SkillMatch> {
+  const raw = await input.routeWithAgent(buildRouterPrompt(input));
+  const parsed = parseRouterJson(raw);
+  if (!isRouterConfidence(parsed.confidence)) throw new Error("LLM router returned invalid confidence");
+  if (typeof parsed.skillId !== "string" || typeof parsed.inputKind !== "string") {
+    throw new Error("LLM router response must include skillId and inputKind");
   }
-
-  if (isJobSearchRequest(routeText)) {
-    return {
-      inputKind: "scan_request",
-      skillId: "job.scan",
-      confidence: "high",
-      reason: "检测到 jobsearch、岗位搜索或岗位雷达请求。",
-    };
-  }
-
-  if (score(routeText, ["greenhouse.io", "ashbyhq.com", "lever.co", "workable.com", "smartrecruiters.com", "/jobs/", "careers", "jd", "requirements", "responsibilities", "岗位", "招聘", "职位"]) > 0) {
-    return {
-      inputKind: routeText.includes("http") ? "job_url" : "job_description",
-      skillId: "job.evaluate",
-      confidence: "high",
-      reason: "检测到岗位链接、JD 文本或招聘关键词。",
-    };
-  }
-
-  if (score(routeText, ["scan", "扫描", "门户", "新岗位", "pipeline", "portals"]) > 0) {
-    return {
-      inputKind: "scan_request",
-      skillId: "job.scan",
-      confidence: "medium",
-      reason: "检测到岗位扫描或 pipeline 请求。",
-    };
-  }
-
-  if (score(routeText, ["简历", "resume", "cv", "pdf", "docx", "导出", "生成一份"]) > 0) {
-    return {
-      inputKind: "resume_request",
-      skillId: "resume.generate",
-      confidence: "medium",
-      reason: "检测到简历生成、导出或版本请求。",
-    };
-  }
-
-  if (score(routeText, ["邮箱", "邮件", "qq邮箱", "qq邮件", "qq mail", "qq", "imap", "收件箱", "前十条", "前10条", "最近十条", "最近10条", "更多邮件", "继续读取", "hr邮件", "hr消息", "面试", "邀约", "拒信", "投递", "已申请", "rejected", "interview", "application", "applied", "offer", "hr"]) > 0) {
-    const isMailboxRequest = score(routeText, ["邮箱", "邮件", "qq邮箱", "qq邮件", "qq mail", "qq", "imap", "收件箱", "前十条", "前10条", "最近十条", "最近10条", "更多邮件", "继续读取", "hr邮件", "hr消息"]) > 0;
-    return {
-      inputKind: isMailboxRequest ? "mailbox_messages" : "application_update",
-      skillId: isMailboxRequest ? "mailbox.read" : "application.progress",
-      confidence: "medium",
-      reason: "检测到邮箱消息、招聘进度、面试、拒信或投递状态。",
-    };
-  }
-
-  if (score(routeText, ["项目", "经历", "复盘", "证明", "证据", "github.com", "portfolio", "case study", "demo"]) > 0) {
-    return {
-      inputKind: "project_note",
-      skillId: "experience.capture",
-      confidence: "medium",
-      reason: "检测到项目经历、作品集或证据沉淀信号。",
-    };
-  }
-
-  if (score(routeText, ["为什么没过", "拒绝原因", "模式", "复盘", "转化率", "rejection", "pattern", "outcome"]) > 0) {
-    return {
-      inputKind: "outcome_feedback",
-      skillId: "outcome.learn",
-      confidence: "medium",
-      reason: "检测到结果学习或模式分析请求。",
-    };
-  }
-
   return {
-    inputKind: "general",
-    skillId: "agent.general",
-    confidence: "low",
-    reason: "未匹配到明确职业工作流，交给通用 Agent 先理解目标。",
+    skillId: parsed.skillId,
+    inputKind: parsed.inputKind,
+    confidence: parsed.confidence,
+    reason: typeof parsed.reason === "string" && parsed.reason.trim()
+      ? parsed.reason.trim().slice(0, 600)
+      : "LLM router selected this skill.",
   };
 }
 
-function extractLatestInput(text: string): string {
-  const matches = [...text.matchAll(/latest input:\s*([\s\S]*?)(?=\n(?:previous skill|previous input kind|previous source|latest input):|$)/giu)];
-  const latest = matches.at(-1)?.[1]?.trim();
-  return latest || "";
+function buildRouterPrompt(input: { text: string; pageContext?: AgentPageContext }): string {
+  const skills = skillRegistry.map((skill) => ({
+    id: skill.id,
+    label: skill.label,
+    domain: skill.domain,
+    description: skill.description,
+    inputKinds: skill.inputKinds,
+  }));
+  return [
+    "You are the Ucareer intake router. Choose exactly one skill and one valid inputKind for the user's request.",
+    "Return only JSON with this schema: {\"skillId\":\"...\",\"inputKind\":\"...\",\"confidence\":\"low|medium|high\",\"reason\":\"...\"}.",
+    "Do not call tools. Do not answer the user. Do not invent skill IDs or input kinds.",
+    "Route by the user's latest intent, not by the currently open page. Page context is only weak context.",
+    "If the user wants to go to Boss/BOSS/Zhipin, browse recruiting platforms, search job boards, find jobs, or run a radar, choose job.scan with inputKind scan_request.",
+    "If the user provides one specific job URL or a pasted JD to analyze, choose job.evaluate with inputKind job_url or job_description.",
+    "If the user asks to create, tailor, export, or manage resumes/CV files, choose resume.generate.",
+    "",
+    `Available skills:\n${JSON.stringify(skills, null, 2)}`,
+    input.pageContext ? `\nPage context:\n${JSON.stringify(input.pageContext, null, 2)}` : "",
+    `\nUser input:\n${input.text.trim() || "(empty input)"}`,
+  ].filter(Boolean).join("\n");
 }
 
-function isJobSearchRequest(text: string): boolean {
-  return score(text, [
-    "jobsearch",
-    "找岗位",
-    "找工作",
-    "找职位",
-    "搜岗位",
-    "搜一些岗位",
-    "随便搜",
-    "岗位给我",
-    "岗位搜索",
-    "职位搜索",
-    "岗位雷达",
-    "机会发现",
-    "跑雷达",
-    "招聘平台",
-    "新岗位",
-    "今天值得推进",
-    "boss",
-    "智联",
-    "猎聘",
-    "拉勾",
-  ]) > 0;
+function parseRouterJson(raw: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+  } catch {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+    }
+  }
+  throw new Error("LLM router returned invalid JSON");
 }
 
-function score(text: string, keywords: string[]): number {
-  return keywords.reduce((total, keyword) => total + (text.includes(keyword.toLowerCase()) ? 1 : 0), 0);
+function isRouterConfidence(value: unknown): value is SkillMatch["confidence"] {
+  return value === "low" || value === "medium" || value === "high";
 }

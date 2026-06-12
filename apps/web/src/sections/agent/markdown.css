@@ -6,6 +6,26 @@
   overflow-wrap: anywhere;
 }
 
+.agent-markdown.is-streaming {
+  position: relative;
+}
+
+.agent-stream-cursor {
+  animation: agent-stream-cursor-blink 0.9s steps(2, start) infinite;
+  background: #4f8cff;
+  border-radius: 999px;
+  display: inline-block;
+  height: 1em;
+  margin-left: 2px;
+  transform: translateY(2px);
+  width: 2px;
+}
+
+@keyframes agent-stream-cursor-blink {
+  0%, 45% { opacity: 1; }
+  46%, 100% { opacity: 0; }
+}
+
 .agent-markdown h1,
 .agent-markdown h2,
 .agent-markdown h3,

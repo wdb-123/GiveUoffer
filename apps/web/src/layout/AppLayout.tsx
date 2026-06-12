@@ -9,7 +9,7 @@ export interface SidebarAgentConversations {
   selectedProvider: string;
   selectedTaskId: string;
   tasks: AgentTask[];
-  onDeleteTask(taskId: string): void;
+  onDeleteTask(taskId: string): void | Promise<void>;
   onSelectTask(taskId: string): void;
   onStartNewTask(): void;
 }

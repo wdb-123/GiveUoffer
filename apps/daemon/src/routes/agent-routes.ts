@@ -26,8 +26,13 @@ export function registerAgentRoutes(ctx: DaemonRouteContext): void {
     workspaceRoot,
     workflowRunService: services.workflowRunService,
     toolExecutor: createAgentToolExecutor({
+      applicationStore: ctx.stores.applicationStore,
       connectorCredentialStore: ctx.stores.connectorCredentialStore,
+      evidenceStore: ctx.stores.evidenceStore,
+      experienceStore: ctx.stores.experienceStore,
       jobSearchService: services.jobSearchService,
+      marketStore: ctx.stores.marketStore,
+      resumeStore: ctx.stores.resumeStore,
     }),
   });
 

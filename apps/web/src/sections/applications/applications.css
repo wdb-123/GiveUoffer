@@ -189,7 +189,7 @@
 .applications-result-panel h2,
 .applications-pipeline-panel h2 {
   color: #111827;
-  font-size: 20px;
+  font-size: 14px;
   margin: 0;
 }
 
@@ -198,7 +198,7 @@
   border: 1px solid rgba(203, 213, 225, 0.96);
   border-radius: 8px;
   color: #334155;
-  font-size: 15px;
+  font-size: 12px;
   line-height: 1.5;
   margin-top: 12px;
   min-height: 150px;
@@ -220,7 +220,7 @@
 .applications-panel-title span,
 .applications-panel-title .text-button {
   color: #667085;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -242,6 +242,7 @@
   border: 1px dashed rgba(148, 163, 184, 0.78);
   border-radius: 8px;
   color: #667085;
+  font-size: 12px;
   margin-top: 20px;
   min-height: 160px;
   padding: 16px;
@@ -254,7 +255,7 @@
 
 .applications-result-box p,
 .applications-empty-pipeline {
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.6;
 }
 

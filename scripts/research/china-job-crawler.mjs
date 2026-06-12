@@ -9,8 +9,11 @@ const marketMdPath = 'workspace/ops/data/recruitment-market.md';
 const args = new Set(process.argv.slice(2));
 const maxArg = process.argv.find((arg) => arg.startsWith('--max='));
 const platformArg = process.argv.find((arg) => arg.startsWith('--platform='));
+const cityArg = process.argv.find((arg) => arg.startsWith('--city='));
 const maxAdded = Number(maxArg?.split('=')[1] || 25);
 const selectedPlatform = platformArg?.split('=')[1] || '';
+const selectedCity = cityArg?.split('=').slice(1).join('=').trim() || '深圳';
+const queryArgs = readRepeatedOption('--query');
 const dryRun = args.has('--dry-run');
 const headful = args.has('--headful');
 const enrichExisting = args.has('--enrich-existing');
@@ -79,6 +82,7 @@ const targets = [
   },
 ];
 
+const searchTargets = buildSearchTargets(targets, queryArgs, selectedCity);
 const market = await readRecruitmentMarket(marketPath, { mergeLegacyJobs: true });
 
 const existing = new Set((market.jobs || []).map(jobIdentityKey));
@@ -126,7 +130,7 @@ if (enrichExisting) {
   process.exit(0);
 }
 
-for (const target of targets) {
+for (const target of searchTargets) {
   if (selectedPlatform && target.id !== selectedPlatform) continue;
   stats.targets += 1;
   for (const url of target.urls) {
@@ -234,18 +238,19 @@ async function enrichContactInfo(page, job) {
 }
 
 function buildCrawlerJob(item, target) {
-  const text = `${item.title} ${item.text}`;
-  const role = cleanRole(item.title || inferRole(text));
+  const cardText = item.text || '';
+  const text = `${item.title} ${cardText}`;
+  const role = cleanRole(isCrawlerRoleTitle(item.title) ? item.title : inferRole(cardText || text));
   if (!role || !looksRelevant(text)) return null;
-  const company = inferCompany(text, role);
+  const company = inferCompany(cardText || text, role);
   const keywords = inferKeywords(text);
   const direction = inferDirection(text);
   return {
     id: '',
     company,
     role,
-    location: inferLocation(text),
-    salary: inferSalary(text),
+    location: inferLocation(cardText || text),
+    salary: inferSalary(cardText || text),
     source: target.source,
     url: normalizeUrl(item.url),
     direction,
@@ -310,8 +315,18 @@ function cleanRole(value) {
   return String(value || '')
     .replace(/\s+/g, ' ')
     .replace(/立即沟通|立即投递|收藏|高回复率/g, '')
+    .replace(/\s*【[^】]+】.*$/g, '')
+    .replace(/\s+\d+(?:\.\d+)?\s*[-~－]\s*\d+(?:\.\d+)?\s*[kK万].*$/g, '')
+    .replace(/\s+薪资面议.*$/g, '')
     .trim()
     .slice(0, 80);
+}
+
+function isCrawlerRoleTitle(value) {
+  const text = String(value || '').trim();
+  if (!text || text.length > 90) return false;
+  if (/有限公司|集团|科技|半导体|电子|新能源|民营|合资|\d+人/.test(text)) return false;
+  return /工程师|开发|算法|机器人|架构师|专家|产品经理|负责人/i.test(text);
 }
 
 function inferRole(text) {
@@ -323,10 +338,10 @@ function inferCompany(text, role) {
   const tokens = withoutRole.split(/\s+/).filter(Boolean);
   const educationIndex = tokens.findIndex((token) => /博士|硕士|本科|大专|学历不限/.test(token));
   const afterEducation = educationIndex >= 0 ? tokens[educationIndex + 1] : '';
-  if (afterEducation && /有限公司|集团|科技|机器人|智能|研究院|腾讯|字节|华为|美团|京东|比亚迪|智元|优必选|宇树|道通|速腾聚创|股份/.test(afterEducation)) {
+  if (afterEducation && /有限公司|集团|科技|机器人|智能|研究院|半导体|电子|腾讯|字节|华为|美团|京东|比亚迪|智元|优必选|宇树|道通|速腾聚创|股份/.test(afterEducation)) {
     return afterEducation.slice(0, 40);
   }
-  const company = withoutRole.match(/[\u4e00-\u9fa5A-Za-z0-9（）()·]{2,40}(有限公司|集团|科技|机器人|智能|研究院|腾讯|字节|华为|美团|京东|比亚迪|智元|优必选|宇树|道通|速腾聚创)/)?.[0];
+  const company = withoutRole.match(/[\u4e00-\u9fa5A-Za-z0-9（）()·]{2,40}(有限公司|集团|科技|机器人|智能|研究院|半导体|电子|腾讯|字节|华为|美团|京东|比亚迪|智元|优必选|宇树|道通|速腾聚创)/)?.[0];
   return company || '待复核';
 }
 
@@ -378,7 +393,7 @@ function inferLocation(text) {
 }
 
 function inferSalary(text) {
-  const match = text.match(/(\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?\s*万(?:[·*xX]\s*\d{1,2}薪?)?|\d{2,3}\s*[kK]\s*[-~－]\s*\d{2,3}\s*[kK](?:\s*[·*xX]\s*\d{1,2}薪?)?|\d{4,5}\s*-\s*\d{4,5}元(?:[·*xX]\s*\d{1,2}薪?)?|面议)/);
+  const match = text.match(/(\d+(?:\.\d+)?\s*-\s*\d+(?:\.\d+)?\s*万(?:[·*xX]\s*\d{1,2}薪?)?|\d{1,3}\s*[kK]\s*[-~－]\s*\d{1,3}\s*[kK]?(?:\s*[·*xX]\s*\d{1,2}薪?)?|\d{4,5}\s*-\s*\d{4,5}元(?:[·*xX]\s*\d{1,2}薪?)?|面议)/);
   return match?.[0]?.replace(/\s+/g, '') || '待复核';
 }
 
@@ -454,4 +469,71 @@ function todayChina() {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function readRepeatedOption(name) {
+  const values = [];
+  const argv = process.argv.slice(2);
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === name && argv[index + 1]) {
+      values.push(argv[index + 1]);
+      index += 1;
+    } else if (arg.startsWith(`${name}=`)) {
+      values.push(arg.slice(name.length + 1));
+    }
+  }
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))].slice(0, 12);
+}
+
+function buildSearchTargets(baseTargets, queries, city) {
+  if (!queries.length) return baseTargets;
+  const cityConfig = resolveCityConfig(city);
+  const byId = new Map(baseTargets.map((target) => [target.id, target]));
+  return [
+    dynamicTarget(byId.get('boss'), queries.map((query) => bossUrl(cityConfig.boss, query))),
+    dynamicTarget(byId.get('liepin'), queries.map((query) => liepinUrl(cityConfig.liepin, query))),
+    dynamicTarget(byId.get('51job'), queries.map((query) => job51Url(cityConfig.job51, query))),
+    dynamicTarget(byId.get('lagou'), queries.map((query) => lagouUrl(cityConfig.lagou, query))),
+    dynamicTarget(byId.get('iguopin'), queries.map((query) => iguopinUrl(query))),
+  ].filter(Boolean);
+}
+
+function dynamicTarget(target, urls) {
+  if (!target) return null;
+  return { ...target, urls };
+}
+
+function resolveCityConfig(city) {
+  const configs = {
+    深圳: { boss: '101280600', liepin: '050090', job51: '040000', lagou: '深圳' },
+    上海: { boss: '101020100', liepin: '020', job51: '020000', lagou: '上海' },
+    北京: { boss: '101010100', liepin: '010', job51: '010000', lagou: '北京' },
+    广州: { boss: '101280100', liepin: '050020', job51: '030200', lagou: '广州' },
+    杭州: { boss: '101210100', liepin: '070020', job51: '080200', lagou: '杭州' },
+    成都: { boss: '101270100', liepin: '280020', job51: '090200', lagou: '成都' },
+    大湾区: { boss: '101280600', liepin: '050090', job51: '040000', lagou: '深圳' },
+    远程: { boss: '101280600', liepin: '050090', job51: '040000', lagou: '深圳' },
+  };
+  return configs[String(city || '').trim()] || configs.深圳;
+}
+
+function bossUrl(cityCode, query) {
+  return `https://www.zhipin.com/web/geek/jobs?city=${cityCode}&query=${encodeURIComponent(query)}`;
+}
+
+function liepinUrl(cityCode, query) {
+  return `https://www.liepin.com/zhaopin/?key=${encodeURIComponent(query)}&dq=${cityCode}`;
+}
+
+function job51Url(cityCode, query) {
+  return `https://we.51job.com/pc/search?keyword=${encodeURIComponent(query)}&searchType=2&jobArea=${cityCode}`;
+}
+
+function lagouUrl(city, query) {
+  return `https://www.lagou.com/wn/zhaopin?city=${encodeURIComponent(city)}&kd=${encodeURIComponent(query)}`;
+}
+
+function iguopinUrl(query) {
+  return `https://www.iguopin.com/search?keyword=${encodeURIComponent(query)}`;
 }

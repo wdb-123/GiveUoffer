@@ -29,14 +29,14 @@ const jobSearchTool: NonNullable<SkillDefinition["connectorTools"]>[number] = {
   id: "jobsearch.search_jobs",
   connectorId: "jobsearch",
   label: "搜索招聘网站岗位",
-  description: "通过 jobsearch 搜索已接入招聘网站，把发现的新岗位写入本地岗位市场，并返回搜索统计和岗位摘要。适合用户说“找岗位”“跑岗位雷达”“从招聘网站搜今天值得推进的岗位”等请求。",
+  description: "通过 jobsearch 搜索已接入招聘网站，把发现的新岗位写入本地岗位市场，并返回搜索统计和岗位摘要。适合用户说“去 Boss/BOSS 直聘看看岗位”“在 Boss/智联/猎聘找职位”“找岗位”“跑岗位雷达”“从招聘网站搜今天值得推进的岗位”等请求。用户明确要求 Codex Chrome、已登录 Chrome、读取 Boss 当前页面时，source 选 codex-chrome。",
   capability: "import_jobs",
   risk: "medium",
   readonly: false,
   inputSchema: {
     type: "object",
     properties: {
-      source: { type: "string", enum: ["boss-agent", "china-crawler", "all"], default: "china-crawler", description: "搜索来源；默认 china-crawler 更适合无本地 Boss 登录态的通用搜索；all 会依次运行可用来源" },
+      source: { type: "string", enum: ["codex-chrome", "boss-agent", "china-crawler", "all"], default: "boss-agent", description: "搜索来源；默认 boss-agent，适合 Boss / 智联的本地登录态通道；用户明确要求 Codex Chrome 或已登录 Chrome 读取 Boss 时用 codex-chrome；all 会依次运行可用来源" },
       city: { type: "string", default: "深圳", description: "城市，例如 深圳、上海、北京、杭州" },
       queries: { type: "array", items: { type: "string" }, description: "岗位关键词数组，例如 ['机器人系统工程师','ROS2']" },
       max: { type: "number", default: 25, minimum: 1, maximum: 100, description: "最多新增/返回的候选岗位数量" },
@@ -46,6 +46,64 @@ const jobSearchTool: NonNullable<SkillDefinition["connectorTools"]>[number] = {
     },
   },
 };
+
+function workspaceTool(id: string, label: string, description: string, readonly: boolean, properties: Record<string, unknown> = {}): NonNullable<SkillDefinition["connectorTools"]>[number] {
+  return {
+    id,
+    connectorId: "local-workspace",
+    label,
+    description,
+    capability: readonly ? "export_artifacts" : "sync_events",
+    risk: readonly ? "low" : "medium",
+    readonly,
+    inputSchema: {
+      type: "object",
+      properties,
+    },
+  };
+}
+
+const applicationTools = [
+  workspaceTool("applications.list", "读取投递进度", "读取本地投递列表、指标和最近事件。", true, { limit: { type: "number" } }),
+  workspaceTool("applications.create_event", "新增投递事件", "为投递记录新增事件，例如已投递、HR 回复、面试、拒绝、备注。", false, {
+    application_id: { type: "string" },
+    company: { type: "string" },
+    role: { type: "string" },
+    event: { type: "string" },
+    next_action: { type: "string" },
+    note: { type: "string" },
+    evidence: { type: "string" },
+  }),
+  workspaceTool("applications.update_event", "更新投递事件", "按 event_id 更新一条投递事件。", false, { event_id: { type: "string" }, event: { type: "string" }, next_action: { type: "string" }, note: { type: "string" } }),
+  workspaceTool("applications.delete_event", "删除投递事件", "按 event_id 删除一条投递事件。", false, { event_id: { type: "string" } }),
+];
+
+const marketTools = [
+  workspaceTool("market.list", "读取岗位列表", "读取本地岗位市场，返回岗位摘要。", true, { limit: { type: "number", default: 80 } }),
+  workspaceTool("market.import", "导入岗位", "把岗位链接或岗位描述导入本地岗位市场。", false, { url: { type: "string" }, description: { type: "string" }, source: { type: "string" } }),
+  workspaceTool("market.update", "更新岗位", "按岗位 id 更新公司、岗位、薪资、方向、评分、关键词等字段。", false, { id: { type: "string" }, company: { type: "string" }, role: { type: "string" }, matchScore: { type: "number" }, keywords: { type: "array", items: { type: "string" } } }),
+  workspaceTool("market.delete", "删除岗位", "按岗位 id 从本地岗位市场删除岗位。", false, { id: { type: "string" } }),
+];
+
+const resumeTools = [
+  workspaceTool("resumes.list", "读取简历列表", "读取本地简历库列表和岗位绑定信息。", true),
+  workspaceTool("resumes.get", "读取简历", "按文件名读取一份简历 markdown。", true, { file: { type: "string" } }),
+  workspaceTool("resumes.save", "保存简历", "新增或更新一份简历 markdown。", false, { file: { type: "string" }, title: { type: "string" }, markdown: { type: "string" }, targetJobId: { type: "string" } }),
+  workspaceTool("resumes.delete", "删除简历", "按文件名删除一份本地简历。", false, { file: { type: "string" } }),
+];
+
+const experienceTools = [
+  workspaceTool("experience.list", "读取经历资产", "读取项目经历、职业画像资产、职业照和意向资产摘要。", true),
+  workspaceTool("experience.upsert", "新增或更新经历资产", "新增或更新一条经历 metadata。", false, { id: { type: "string" }, title: { type: "string" }, summary: { type: "string" }, tags: { type: "array", items: { type: "string" } }, evidence: { type: "array", items: { type: "string" } }, gaps: { type: "array", items: { type: "string" } } }),
+  workspaceTool("experience.delete", "删除经历资产", "按 id 删除一条经历 metadata。", false, { id: { type: "string" } }),
+];
+
+const evidenceTools = [
+  workspaceTool("evidence.list", "读取复盘证据请求", "读取复盘中心的证据请求列表。", true),
+  workspaceTool("evidence.upsert", "新增或更新证据请求", "新增或更新一个复盘/证据缺口请求。", false, { id: { type: "string" }, direction: { type: "string" }, gap: { type: "string" }, priority: { type: "string" }, targetFile: { type: "string" } }),
+  workspaceTool("evidence.fulfill", "补充证据", "按 requestId 把补充内容追加到目标项目文件。", false, { requestId: { type: "string" }, content: { type: "string" }, source: { type: "string" } }),
+  workspaceTool("evidence.delete", "删除证据请求", "按 id 删除证据请求。", false, { id: { type: "string" } }),
+];
 
 export const skillRegistry: SkillDefinition[] = [
   {
@@ -57,6 +115,7 @@ export const skillRegistry: SkillDefinition[] = [
     defaultProviderId: "codex",
     legacyModeFile: "modes/auto-pipeline.md",
     risk: "medium",
+    connectorTools: marketTools,
     fileManagement: {
       intakeFolder: "jobs",
       acceptedAttachmentKinds: ["text", "pdf", "docx"],
@@ -68,14 +127,14 @@ export const skillRegistry: SkillDefinition[] = [
   },
   {
     id: "job.scan",
-    label: "岗位扫描",
+    label: "招聘平台岗位搜索",
     domain: "job_intelligence",
-    description: "扫描配置的招聘门户，把新岗位写入 pipeline。",
+    description: "去 Boss/BOSS 直聘、智联、猎聘等招聘平台或公司招聘门户搜索岗位，把发现的新岗位写入本地岗位市场或 pipeline。用户想主动寻找、浏览、检索、扫描岗位时选这个；用户给出某一个具体岗位链接或完整 JD 时才选岗位评估。",
     inputKinds: ["scan_request"],
     defaultProviderId: "codex",
     legacyModeFile: "modes/scan.md",
     risk: "medium",
-    connectorTools: [jobSearchTool],
+    connectorTools: [jobSearchTool, ...marketTools],
     fileManagement: {
       intakeFolder: "jobs",
       acceptedAttachmentKinds: ["text"],
@@ -94,6 +153,7 @@ export const skillRegistry: SkillDefinition[] = [
     defaultProviderId: "codex",
     legacyModeFile: "modes/pdf.md",
     risk: "medium",
+    connectorTools: resumeTools,
     fileManagement: {
       intakeFolder: "resumes",
       acceptedAttachmentKinds: ["text", "pdf", "docx"],
@@ -111,7 +171,7 @@ export const skillRegistry: SkillDefinition[] = [
     inputKinds: ["mailbox_messages"],
     defaultProviderId: "codex",
     risk: "low",
-    connectorTools: [mailboxSearchTool],
+    connectorTools: [mailboxSearchTool, ...applicationTools],
     fileManagement: {
       intakeFolder: "applications",
       acceptedAttachmentKinds: ["text", "pdf", "docx", "image"],
@@ -129,7 +189,7 @@ export const skillRegistry: SkillDefinition[] = [
     inputKinds: ["application_update"],
     defaultProviderId: "codex",
     risk: "low",
-    connectorTools: [mailboxSearchTool],
+    connectorTools: [mailboxSearchTool, ...applicationTools],
     fileManagement: {
       intakeFolder: "applications",
       acceptedAttachmentKinds: ["text", "pdf", "docx", "image"],
@@ -148,6 +208,7 @@ export const skillRegistry: SkillDefinition[] = [
     defaultProviderId: "codex",
     legacyModeFile: "modes/project.md",
     risk: "low",
+    connectorTools: [...experienceTools, ...evidenceTools],
     fileManagement: {
       intakeFolder: "experience",
       acceptedAttachmentKinds: ["text", "pdf", "docx", "image"],
@@ -166,6 +227,7 @@ export const skillRegistry: SkillDefinition[] = [
     defaultProviderId: "codex",
     legacyModeFile: "modes/patterns.md",
     risk: "medium",
+    connectorTools: [...applicationTools, ...evidenceTools, ...experienceTools],
     fileManagement: {
       intakeFolder: "applications",
       acceptedAttachmentKinds: ["text", "pdf", "docx"],

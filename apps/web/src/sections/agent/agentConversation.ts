@@ -208,7 +208,7 @@ function contextLimitForProvider(providerId: string): number {
 export function extractTaskUserQuestion(prompt: string): string {
   const normalized = prompt.replace(/\r\n/g, "\n").trim();
   const markerMatch = normalized.match(/(?:最新输入|输入内容)\s*[:：]\s*([\s\S]*)$/u);
-  if (markerMatch?.[1]?.trim()) return markerMatch[1].trim();
+  if (markerMatch?.[1]?.trim()) return stripLeakedPageContext(markerMatch[1]);
 
   const wrapperIndex = normalized.search(/你是\s+Ucareer\s+职业旅程工作台的统一入口\s+Agent/u);
   if (wrapperIndex >= 0) {
@@ -216,10 +216,19 @@ export function extractTaskUserQuestion(prompt: string): string {
     const lastInputLine = [...lines].reverse().find((line) => line.startsWith("输入内容") || line.startsWith("最新输入"));
     if (lastInputLine) {
       const inlineInput = lastInputLine.replace(/^(?:最新输入|输入内容)\s*[:：]\s*/u, "").trim();
-      if (inlineInput) return inlineInput;
+      if (inlineInput) return stripLeakedPageContext(inlineInput);
     }
     return "";
   }
 
-  return normalized;
+  return stripLeakedPageContext(normalized);
+}
+
+function stripLeakedPageContext(text: string): string {
+  const normalized = text.replace(/\r\n/g, "\n").trim();
+  if (!normalized.startsWith("page: ")) return normalized;
+  const lines = normalized.split("\n");
+  const writePathsIndex = lines.findIndex((line) => line.trim().startsWith("write paths:"));
+  if (writePathsIndex >= 0) return lines.slice(writePathsIndex + 1).join("\n").trim();
+  return normalized.replace(/^page:\s+[\s\S]*?(?:write paths:\s*[^\n]*(?:\n|$))/u, "").trim();
 }

@@ -1,6 +1,7 @@
 import type {
   AgentEvent,
   AgentAttachment,
+  AgentPageContext,
   AgentTask,
   AgentTaskTurn,
   ApplicationsOverview,
@@ -12,6 +13,7 @@ import type {
   ExportResumeResult,
   ExperienceOverview,
   GenerateResumePreviewResult,
+  ImportJobRequest,
   ProviderInstallStatus,
   ProviderSummary,
   RecruitmentMarket,
@@ -51,7 +53,7 @@ export interface ViewRendererProps {
     onCheckProvider(providerId: string): void;
     onCancelTask(taskId?: string): void | Promise<void>;
     onCreateLocalCommand(command: string, args: string): void;
-    onCreateTask(promptOverride?: string, permissionMode?: CreateAgentTaskRequest["permissionMode"], attachments?: AgentAttachment[]): void | Promise<void>;
+    onCreateTask(promptOverride?: string, permissionMode?: CreateAgentTaskRequest["permissionMode"], attachments?: AgentAttachment[], pageContext?: AgentPageContext): void | Promise<void>;
     onDecideApproval(approvalId: string, decision: ApprovalDecisionRequest["decision"]): void;
     onPromptChange(value: string): void;
     onProviderChange(value: string): void;
@@ -92,6 +94,7 @@ export interface ViewRendererProps {
     error: string;
     onSearch(input: JobSearchRequest): void;
   };
+  onImportMarketJob(input: ImportJobRequest): Promise<void> | void;
   profile: CareerProfileOverview | null;
   reports: {
     data: ReportsOverview | null;
@@ -141,10 +144,14 @@ export function ViewRenderer(props: ViewRendererProps) {
   }
 
   if (props.activeView === "evidence") {
-    return <EvidenceSection evidenceRequests={props.evidence.data} onFulfillEvidence={props.evidence.onFulfillEvidence} />;
+    return (
+      <EvidenceSection evidenceRequests={props.evidence.data} onFulfillEvidence={props.evidence.onFulfillEvidence} />
+    );
   }
   if (props.activeView === "experience") {
-    return <ExperienceSection experienceOverview={props.experience.data} profile={props.profile} onUpdateExperience={props.experience.onUpdateExperience} />;
+    return (
+      <ExperienceSection experienceOverview={props.experience.data} profile={props.profile} onUpdateExperience={props.experience.onUpdateExperience} />
+    );
   }
   if (props.activeView === "applications") {
     return (
@@ -161,7 +168,23 @@ export function ViewRenderer(props: ViewRendererProps) {
       <MarketSection
         market={props.market}
         jobSearch={props.jobSearch}
-        onGenerateReport={(job) => props.agent.onCreateTask(buildMarketReportPrompt(job))}
+        onImportJob={props.onImportMarketJob}
+        onGenerateReport={(job) => props.agent.onCreateTask(buildMarketReportPrompt(job), undefined, undefined, {
+          pageId: "market",
+          pageLabel: "岗位列表",
+          suggestedSkillId: "job.evaluate",
+          suggestedInputKind: "job_description",
+          summary: `从岗位列表为「${job.company || "待复核公司"} - ${job.role || "待复核岗位"}」生成评估报告。`,
+          selectedEntity: {
+            type: "market_job",
+            id: job.id,
+            title: `${job.company || "待复核公司"} - ${job.role || "待复核岗位"}`,
+            ...(job.url ? { path: job.url } : {}),
+          },
+          readPaths: ["workspace/jobs/jds", "workspace/jobs/reports", "workspace/ops/data/applications.md"],
+          writePaths: ["workspace/jobs/jds", "workspace/jobs/reports", "workspace/ops/batch/tracker-additions", "workspace/ops/data/applications.md"],
+          capabilities: ["read", "write", "generate", "diagnose", "import"],
+        })}
         onClearReport={props.reports.onClearReport}
         onSelectReport={props.reports.onSelectReport}
         reports={props.reports.data}
@@ -173,6 +196,7 @@ export function ViewRenderer(props: ViewRendererProps) {
     <ResumeSection
       jobs={props.market?.jobs || []}
       exportResult={props.resumes.exportResult}
+      onExportResume={props.resumes.onExportResume}
       onGeneratePreview={props.resumes.onGeneratePreview}
       onSavePreview={props.resumes.onSavePreview}
       onSelectResume={props.resumes.onSelectResume}

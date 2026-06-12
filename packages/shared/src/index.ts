@@ -109,12 +109,17 @@ export interface MarketJob {
   salary?: string;
   source?: string;
   url?: string;
+  jdPath?: string;
   direction?: string;
   keywords?: string[];
   matchScore?: number;
   fitReason?: string;
   evidenceGap?: string;
   platform?: string;
+  importedAt?: string;
+  discoveredAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface RecruitmentMarket {
@@ -522,7 +527,7 @@ export interface ConnectorRegistryResponse {
   connectors: ConnectorDefinition[];
 }
 
-export type JobSearchSourceId = "boss-agent" | "china-crawler" | "portals" | "all";
+export type JobSearchSourceId = "codex-chrome" | "boss-agent" | "china-crawler" | "portals" | "all";
 
 export interface JobSearchSource {
   id: JobSearchSourceId;
@@ -729,6 +734,32 @@ export interface AgentTaskRouteMetadata {
   routeDecision?: RouteDecision;
 }
 
+export type WorkspacePageId =
+  | "resumes"
+  | "experience"
+  | "market"
+  | "applications"
+  | "evidence"
+  | "agent";
+
+export interface AgentPageContext {
+  pageId: WorkspacePageId;
+  pageLabel: string;
+  suggestedSkillId?: EntityId;
+  suggestedInputKind?: string;
+  summary: string;
+  selectedEntity?: {
+    type: string;
+    id?: EntityId;
+    title?: string;
+    file?: string;
+    path?: string;
+  };
+  readPaths: string[];
+  writePaths: string[];
+  capabilities: Array<"read" | "write" | "generate" | "diagnose" | "import" | "sync">;
+}
+
 export type WorkflowStepKind =
   | "route"
   | "agent_task"
@@ -814,6 +845,7 @@ export interface CreateAgentTaskRequest {
   continueTaskId?: EntityId;
   permissionMode?: "default" | "auto_review" | "full_access";
   routeMetadata?: AgentTaskRouteMetadata;
+  pageContext?: AgentPageContext;
 }
 
 export interface ApprovalDecisionRequest {

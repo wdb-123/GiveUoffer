@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <title>Ucareer Job Importer</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <strong>Ucareer</strong>
+        <span id="status">未连接</span>
+      </header>
+
+      <section class="actions">
+        <button id="connect">连接本地 Ucareer</button>
+        <button id="preview">读取当前页</button>
+        <button id="import" class="primary">读取并导入岗位</button>
+      </section>
+
+      <section class="field">
+        <label for="targetUrl">网页 URL</label>
+        <div class="url-row">
+          <input id="targetUrl" placeholder="粘贴 Boss / 猎聘 / 智联 / 官网 JD 链接，回车导入">
+          <button id="openRead" type="button">打开并读取</button>
+        </div>
+      </section>
+
+      <section class="field">
+        <label for="daemonUrl">Daemon</label>
+        <input id="daemonUrl" value="http://127.0.0.1:54321">
+      </section>
+
+      <section class="preview">
+        <div id="pageTitle">尚未读取页面</div>
+        <textarea id="pageText" placeholder="当前网页提取出的岗位正文会显示在这里，可以导入前微调。"></textarea>
+      </section>
+
+      <p id="message"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

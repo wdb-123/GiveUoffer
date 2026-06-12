@@ -1,7 +1,6 @@
 import type { ApplicationsOverview } from "@ucareer/shared";
 import { useState } from "react";
 import { Panel } from "../ui/Panel";
-import { SectionHeading } from "../ui/SectionHeading";
 
 export interface ApplicationEventFormInput {
   application_id: string;

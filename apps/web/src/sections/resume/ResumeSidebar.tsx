@@ -1,4 +1,4 @@
-import type { MarketJob, ResumeSummary } from "@ucareer/shared";
+import type { MarketJob, ResumeDocument, ResumeSummary } from "@ucareer/shared";
 import { useEffect, useState } from "react";
 
 export function formatJobLabel(job: MarketJob) {
@@ -6,6 +6,12 @@ export function formatJobLabel(job: MarketJob) {
   const role = job.role || "待确认岗位";
   const score = typeof job.matchScore === "number" ? ` · ${job.matchScore.toFixed(1)}` : "";
   return `${company} - ${role}${score}`;
+}
+
+export function formatResumeDisplayTitle(title: string) {
+  return String(title || "")
+    .replace(/^[\u4e00-\u9fa5]{2,4}\s*[-—–]\s*/, "")
+    .trim() || title;
 }
 
 export function ResumeFileList({
@@ -72,8 +78,8 @@ export function ResumeFileList({
             key={resume.file}
             onClick={() => onSelectResume(resume.file)}
           >
-            <strong>{resume.title}</strong>
-            <span>{resume.file}</span>
+            <strong>{formatResumeDisplayTitle(resume.title)}</strong>
+            <span>{resumeDisplayMeta(resume)}</span>
           </button>
         ))}
         {!filteredResumes.length ? <p className="resume-side-empty">没有符合筛选的简历。</p> : null}
@@ -82,59 +88,58 @@ export function ResumeFileList({
   );
 }
 
-export function ResumeEditPanel({
-  baseFile,
-  previewReady,
-  resumes,
-  onBaseFileChange,
-  onGeneratePreview,
-  onSavePreview,
-}: {
-  baseFile: string;
-  previewReady: boolean;
-  resumes: ResumeSummary[];
-  onBaseFileChange(file: string): void;
-  onGeneratePreview(): void;
-  onSavePreview(): void;
-}) {
-  return (
-    <div className="resume-edit-panel">
-      <label>
-        基础简历
-        <select value={baseFile} onChange={(event) => onBaseFileChange(event.target.value)}>
-          {resumes.map((resume) => (
-            <option key={resume.file} value={resume.file}>{resume.title}</option>
-          ))}
-        </select>
-      </label>
-      <button type="button" onClick={onGeneratePreview}>生成岗位简历</button>
-      <button type="button" className="secondary" disabled={!previewReady} onClick={onSavePreview}>保存预览</button>
-    </div>
-  );
-}
-
-export function ResumeDiagnosis({ job }: { job: MarketJob | null }) {
+export function ResumeDiagnosis({ resume, document, job }: { resume: ResumeSummary | null; document: ResumeDocument | null; job: MarketJob | null }) {
   const tags = (job?.keywords || []).slice(0, 6);
+  const title = formatResumeDisplayTitle(document?.title || resume?.title || "未选择简历");
+  const target = resume?.targetJobTitle || (job ? [job.company, job.role].filter(Boolean).join(" · ") : "");
+  const resumeSignals = inferResumeSignals(document?.markdown || "");
   return (
     <div className="resume-direction-clues">
       <section className="resume-diagnosis-focus">
-        <h3>方向</h3>
-        <strong>{job?.direction || job?.role || "目标岗位"}</strong>
+        <strong>{title}</strong>
+      </section>
+      <section className="resume-diagnosis-focus">
+        <strong>{target || "未绑定岗位"}</strong>
+        {job?.direction ? <p>{job.direction}</p> : <p>基础简历会按简历内容诊断；岗位定制简历会读取绑定岗位信号。</p>}
       </section>
       <section className="resume-diagnosis-signals">
-        <h3>JD 信号</h3>
+        <h3>{job ? "JD 信号" : "简历信号"}</h3>
         <div className="resume-clue-tags">
-          {tags.length ? tags.map((tag) => <span key={tag}>{tag}</span>) : <span>选择目标岗位后显示</span>}
+          {tags.length
+            ? tags.map((tag) => <span key={tag}>{tag}</span>)
+            : resumeSignals.map((tag) => <span key={tag}>{tag}</span>)}
         </div>
       </section>
       <section className="resume-diagnosis-actions">
         <h3>优先强化</h3>
         <ul>
-          {[job?.evidenceGap, job?.fitReason].filter(Boolean).map((item) => <li key={String(item)}>{item}</li>)}
+          {diagnosisActions(job, document).map((item) => <li key={item}>{item}</li>)}
         </ul>
       </section>
     </div>
   );
+}
+
+function inferResumeSignals(markdown: string): string[] {
+  const text = normalizeFilterText(markdown);
+  const signals = [
+    ["机器人", /机器人|ros|moveit|urdf|ethercat|canopen|sdk/.test(text)],
+    ["AI / Agent", /agent|rag|openai|gpt|模型|多模态/.test(text)],
+    ["数据工程", /pipeline|数据|标注|清洗|质检|仿真/.test(text)],
+    ["工程交付", /demo|文档|faq|客户|交付|部署/.test(text)],
+    ["系统调试", /调试|故障|定位|linux|csp|ethercat/.test(text)],
+  ];
+  return signals.filter(([, matched]) => matched).map(([label]) => String(label)).slice(0, 6);
+}
+
+function diagnosisActions(job: MarketJob | null, document: ResumeDocument | null): string[] {
+  const actions = [job?.evidenceGap, job?.fitReason].filter(Boolean).map(String);
+  if (actions.length) return actions;
+  if (!document) return ["先在“简历列表”选择一份简历，再查看诊断。"];
+  return [
+    "基础简历未绑定具体岗位，建议先选择岗位生成定制版，再看 JD 对齐诊断。",
+    "当前诊断按简历文本信号识别，重点检查项目顺序、关键词密度和可验证证据。",
+  ];
 }
 
 function ResumeInlineSelect({
@@ -191,6 +196,14 @@ function resumeType(resume: ResumeSummary): string {
   if (/auto-generated|generated/i.test(resume.file)) return "generated";
   if (resume.targetJobId || resume.targetJobTitle) return "targeted";
   return "base";
+}
+
+function resumeDisplayMeta(resume: ResumeSummary): string {
+  const type = resumeType(resume);
+  if (resume.targetJobTitle) return `岗位定制 · ${resume.targetJobTitle}`;
+  if (type === "generated") return "自动生成 · 待绑定岗位";
+  if (type === "targeted") return "岗位定制";
+  return "基础简历";
 }
 
 function normalizeFilterText(value: string): string {

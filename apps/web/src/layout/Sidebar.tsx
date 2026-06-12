@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppView, ViewId } from "../views";
 import type { LoginCredentials } from "../auth/LoginPage";
 import type { SidebarAgentConversations } from "./AppLayout";
@@ -19,10 +19,16 @@ interface SidebarProps {
 export function Sidebar({ activeView, accountEmail, agentConversations, authMethod, collapsed, views, onLogout, onToggleCollapsed, onViewChange }: SidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [conversationExpanded, setConversationExpanded] = useState(true);
+  const [deletingTaskId, setDeletingTaskId] = useState("");
+  const [confirmDeleteTaskId, setConfirmDeleteTaskId] = useState("");
+  const [deleteError, setDeleteError] = useState("");
   const settingsRef = useRef<HTMLElement | null>(null);
   const accountLabel = authMethod === "google" ? "Google 登录" : "个人空间";
   const navViews = views.filter((view) => view.id !== "agent");
-  const recentTasks = agentConversations?.tasks.slice(0, 6) || [];
+  const recentTasks = useMemo(
+    () => sortAgentTasksByActivity(agentConversations?.tasks || []).slice(0, 6),
+    [agentConversations?.tasks],
+  );
 
   useEffect(() => {
     if (!settingsOpen) return undefined;
@@ -50,6 +56,26 @@ export function Sidebar({ activeView, accountEmail, agentConversations, authMeth
   function startNewAgentTask() {
     agentConversations?.onStartNewTask();
     onViewChange("agent");
+  }
+
+  async function deleteAgentConversation(taskId: string) {
+    if (!agentConversations || deletingTaskId) return;
+    if (confirmDeleteTaskId !== taskId) {
+      setConfirmDeleteTaskId(taskId);
+      setDeleteError("");
+      return;
+    }
+    setDeletingTaskId(taskId);
+    setConfirmDeleteTaskId("");
+    setDeleteError("");
+    try {
+      await agentConversations.onDeleteTask(taskId);
+      onViewChange("agent");
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "删除对话失败");
+    } finally {
+      setDeletingTaskId("");
+    }
   }
 
   return (
@@ -124,24 +150,23 @@ export function Sidebar({ activeView, accountEmail, agentConversations, authMeth
                     >
                       <strong>{formatTaskName(task.prompt)}</strong>
                     </button>
-                    {selected ? (
-                      <button
-                        type="button"
-                        className="nav-agent-delete"
-                        aria-label="删除当前对话"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          if (!window.confirm("删除这个对话？")) return;
-                          agentConversations.onDeleteTask(task.id);
-                          onViewChange("agent");
-                        }}
-                      >
-                        ×
-                      </button>
-                    ) : null}
+                    <button
+                      type="button"
+                      className="nav-agent-delete"
+                      aria-label={confirmDeleteTaskId === task.id ? `确认删除对话：${formatTaskName(task.prompt)}` : `删除对话：${formatTaskName(task.prompt)}`}
+                      disabled={Boolean(deletingTaskId)}
+                      title={confirmDeleteTaskId === task.id ? "再次点击确认删除" : "删除对话"}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void deleteAgentConversation(task.id);
+                      }}
+                    >
+                      {deletingTaskId === task.id ? "…" : confirmDeleteTaskId === task.id ? "✓" : "×"}
+                    </button>
                   </div>
                 );
               })}
+              {deleteError ? <small className="nav-agent-delete-error">{deleteError}</small> : null}
             </div>
           ) : conversationExpanded ? (
             <div className="nav-agent-empty">暂无历史对话</div>
@@ -180,5 +205,21 @@ export function Sidebar({ activeView, accountEmail, agentConversations, authMeth
         ) : null}
       </section>
     </aside>
+  );
+}
+
+function sortAgentTasksByActivity<T extends { createdAt: string; updatedAt: string }>(tasks: T[]): T[] {
+  return [...tasks].sort((left, right) => {
+    const leftScore = conversationSortScore(left);
+    const rightScore = conversationSortScore(right);
+    if (leftScore !== rightScore) return rightScore - leftScore;
+    return right.createdAt.localeCompare(left.createdAt);
+  });
+}
+
+function conversationSortScore(task: { createdAt: string; updatedAt: string }): number {
+  return Math.max(
+    Date.parse(task.updatedAt) || 0,
+    Date.parse(task.createdAt) || 0,
   );
 }

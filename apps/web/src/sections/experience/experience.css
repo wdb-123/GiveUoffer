@@ -12,13 +12,15 @@
 }
 
 .experience-card h3 {
-  font-size: 16px;
+  font-size: var(--type-section-title);
+  line-height: var(--type-line-title);
   margin: 0 0 8px;
 }
 
 .experience-card p {
   color: var(--muted);
-  line-height: 1.5;
+  font-size: var(--type-body);
+  line-height: var(--type-line-body);
   margin: 8px 0;
 }
 
@@ -29,7 +31,8 @@
 }
 
 .experience-card li {
-  line-height: 1.45;
+  font-size: var(--type-body);
+  line-height: var(--type-line-body);
   margin: 4px 0;
 }
 
@@ -97,8 +100,8 @@
 .experience-rail-head h2,
 .experience-context-head h2 {
   color: #111827;
-  font-size: 18px;
-  line-height: 1.2;
+  font-size: 14px;
+  line-height: 1.25;
   margin: 0;
 }
 
@@ -106,7 +109,7 @@
 .experience-context-head span {
   color: var(--muted);
   display: block;
-  font-size: 12px;
+  font-size: var(--type-meta);
   font-weight: 800;
   margin-top: 6px;
 }
@@ -140,14 +143,15 @@
 
 .experience-asset-group h3 {
   color: #111827;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.3;
   margin: 0;
   min-width: 0;
 }
 
 .experience-asset-count {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--type-meta);
   font-weight: 800;
 }
 
@@ -222,12 +226,12 @@
   border: 1px solid rgba(17, 24, 39, 0.18);
   border-radius: 999px;
   color: #48615a;
-  font-size: 9px;
+  font-size: var(--type-meta);
   font-weight: 900;
   grid-row: 1 / span 2;
-  line-height: 1;
-  min-width: 34px;
-  padding: 3px 5px;
+  line-height: 1.1;
+  min-width: 42px;
+  padding: 4px 6px;
   text-align: center;
   text-transform: uppercase;
 }
@@ -243,7 +247,7 @@
 
 .experience-file-name {
   color: var(--muted);
-  font-size: 10px;
+  font-size: var(--type-meta);
   font-weight: 800;
   grid-column: 2;
   line-height: 1.2;
@@ -257,8 +261,8 @@
   border: 1px dashed var(--line);
   border-radius: 7px;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--type-meta);
+  line-height: var(--type-line-body);
   padding: 10px;
 }
 
@@ -287,8 +291,8 @@
   border-radius: 8px;
   box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
   color: #263445;
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: var(--type-body);
+  line-height: var(--type-line-body);
   margin: 0 auto;
   min-height: calc(100vh - 118px);
   padding: 34px 42px;
@@ -299,18 +303,29 @@
 .experience-markdown-paper-v2 h2,
 .experience-markdown-paper-v2 h3 {
   color: #111827;
-  line-height: 1.25;
+  line-height: var(--type-line-title);
 }
 
 .experience-markdown-paper-v2 h1 {
-  font-size: 30px;
+  font-size: var(--type-page-title);
   margin: 0 0 22px;
+}
+
+.experience-profile-overview h1 {
+  font-size: 14px;
+  line-height: 1.35;
+  margin-bottom: 14px;
+}
+
+.experience-profile-overview .profile-summary {
+  font-size: 12px;
+  line-height: 1.72;
 }
 
 .experience-markdown-paper-v2 h2 {
   border-bottom: 1px solid var(--line);
   color: var(--accent);
-  font-size: 17px;
+  font-size: var(--type-section-title);
   margin: 24px 0 10px;
   padding-bottom: 7px;
 }
@@ -319,7 +334,8 @@
   background: var(--soft);
   border-left: 4px solid var(--accent);
   color: #334155;
-  line-height: 1.65;
+  font-size: var(--type-body);
+  line-height: var(--type-line-body);
   margin: -10px 0 16px;
   padding: 13px 15px;
 }
@@ -344,15 +360,37 @@
 .experience-markdown-paper-v2 .profile-stat-grid strong {
   color: #111827;
   display: block;
-  font-size: 26px;
+  font-size: 13px;
   line-height: 1;
 }
 
 .experience-markdown-paper-v2 .profile-stat-grid span {
   color: var(--muted);
   display: block;
-  font-size: 12px;
+  font-size: var(--type-meta);
   font-weight: 800;
+}
+
+.experience-profile-overview .experience-asset-card {
+  margin-top: 16px;
+}
+
+.experience-profile-overview .experience-asset-card h4 {
+  color: #111827;
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 0 0 10px;
+}
+
+.experience-profile-overview .experience-asset-card ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.experience-profile-overview .experience-asset-card li {
+  font-size: 12px;
+  line-height: 1.62;
+  margin: 3px 0;
 }
 
 .experience-source-section p,
@@ -371,7 +409,8 @@
 }
 
 .experience-rendered-markdown h1 {
-  font-size: 24px;
+  font-size: var(--type-page-title);
+  line-height: var(--type-line-title);
   margin: 6px 0 2px;
 }
 
@@ -381,13 +420,15 @@
 
 .experience-rendered-markdown h3 {
   color: #334155;
-  font-size: 15px;
+  font-size: var(--type-section-title);
+  line-height: var(--type-line-title);
   margin: 8px 0 0;
 }
 
 .experience-rendered-markdown p {
   color: #334155;
-  line-height: 1.72;
+  font-size: var(--type-body);
+  line-height: var(--type-line-body);
   margin: 0;
 }
 
@@ -401,7 +442,8 @@
 }
 
 .experience-rendered-markdown li {
-  line-height: 1.62;
+  font-size: var(--type-body);
+  line-height: var(--type-line-body);
 }
 
 .experience-rendered-markdown strong {
@@ -462,8 +504,8 @@
 .experience-rendered-markdown td {
   border-bottom: 1px solid rgba(226, 232, 240, 0.95);
   color: #334155;
-  font-size: 12px;
-  line-height: 1.48;
+  font-size: var(--type-body);
+  line-height: var(--type-line-body);
   padding: 9px 10px;
   text-align: left;
   vertical-align: top;
@@ -501,7 +543,7 @@
 
 .headshot-preview p:last-child {
   color: var(--muted);
-  font-size: 12px;
+  font-size: var(--type-meta);
 }
 
 .experience-context-head {
@@ -514,14 +556,15 @@
 
 .diagnosis-block h4 {
   color: var(--accent-2);
-  font-size: 14px;
+  font-size: var(--type-section-title);
+  line-height: var(--type-line-title);
   margin: 0 0 9px;
 }
 
 .diagnosis-block ul {
   color: #334155;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: var(--type-body);
+  line-height: var(--type-line-body);
   margin: 0;
   padding-left: 18px;
 }
@@ -543,7 +586,7 @@
 .experience-metadata-editor label {
   color: #64748b;
   display: grid;
-  font-size: 11px;
+  font-size: var(--type-meta);
   font-weight: 800;
   gap: 5px;
 }
@@ -554,9 +597,8 @@
   border: 1px solid #d7dee8;
   border-radius: 8px;
   color: #263445;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--type-body);
+  line-height: var(--type-line-body);
   padding: 8px 9px;
   resize: vertical;
 }

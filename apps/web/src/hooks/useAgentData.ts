@@ -4,6 +4,7 @@ import type {
   AgentAttachment,
   AgentTask,
   AgentTaskTurn,
+  AgentPageContext,
   ApprovalDecisionRequest,
   ApprovalRequest,
   CreateAgentTaskRequest,
@@ -143,7 +144,12 @@ export function useAgentData(enabled = true) {
     dispatch({ type: "set_install_status", providerId, status: result });
   }
 
-  async function onCreateTask(promptOverride?: string, permissionMode?: CreateAgentTaskRequest["permissionMode"], attachments?: AgentAttachment[]) {
+  async function onCreateTask(
+    promptOverride?: string,
+    permissionMode?: CreateAgentTaskRequest["permissionMode"],
+    attachments?: AgentAttachment[],
+    pageContext?: AgentPageContext,
+  ) {
     const effectivePrompt = (promptOverride || state.prompt).trim();
     if (!effectivePrompt) return;
 
@@ -158,6 +164,7 @@ export function useAgentData(enabled = true) {
       ...(attachments?.length ? { attachments } : {}),
       ...(canContinueSelectedTask ? { continueTaskId: selectedTask.id } : {}),
       ...(permissionMode ? { permissionMode } : {}),
+      ...(pageContext ? { pageContext } : {}),
     };
     const result = await createAgentTask(request);
     const task = "task" in result ? result.task : result;

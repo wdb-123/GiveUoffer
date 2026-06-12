@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import type { MarketJob, RecruitmentMarket, ReportDocument, ReportsOverview, ReportSummary, JobSearchRequest, JobSearchResult, JobSearchSource } from "@ucareer/shared";
+import { useMemo, useState, type FormEvent } from "react";
+import type { ImportJobRequest, MarketJob, RecruitmentMarket, ReportDocument, ReportsOverview, ReportSummary, JobSearchRequest, JobSearchResult, JobSearchSource } from "@ucareer/shared";
 
 interface MarketSectionProps {
   market: RecruitmentMarket | null;
@@ -13,12 +13,16 @@ interface MarketSectionProps {
   };
   selectedReport: ReportDocument | null;
   onClearReport(): void;
+  onImportJob(input: ImportJobRequest): Promise<void> | void;
   onGenerateReport(job: MarketJob): void;
   onSelectReport(file: string): void;
 }
 
-export function MarketSection({ market, reports, jobSearch, selectedReport, onClearReport, onGenerateReport, onSelectReport }: MarketSectionProps) {
+export function MarketSection({ market, reports, jobSearch, selectedReport, onClearReport, onImportJob, onGenerateReport, onSelectReport }: MarketSectionProps) {
   const [activeImportTool, setActiveImportTool] = useState<"manual" | "radar">("manual");
+  const [manualUrl, setManualUrl] = useState("");
+  const [manualImportStatus, setManualImportStatus] = useState<"idle" | "running" | "done" | "failed">("idle");
+  const [manualImportMessage, setManualImportMessage] = useState("");
   const [radarSource, setRadarSource] = useState("boss-agent");
   const [radarCity, setRadarCity] = useState("深圳");
   const [radarMatch, setRadarMatch] = useState("3.0");
@@ -51,6 +55,10 @@ export function MarketSection({ market, reports, jobSearch, selectedReport, onCl
         job.direction,
         job.fitReason,
         job.evidenceGap,
+        job.importedAt,
+        job.discoveredAt,
+        job.createdAt,
+        job.updatedAt,
         ...(job.keywords || []),
       ].some((value) => String(value || "").toLowerCase().includes(normalizedQuery));
     });
@@ -59,6 +67,27 @@ export function MarketSection({ market, reports, jobSearch, selectedReport, onCl
   const companyTypes = useMemo(() => uniqueOptions(jobs.map(inferCompanyType)), [jobs]);
   const directions = useMemo(() => uniqueOptions(jobs.map((job) => job.direction || "未分类方向")), [jobs]);
   const locations = useMemo(() => uniqueOptions(jobs.map(inferLocationBucket)), [jobs]);
+
+  async function handleManualImport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const url = manualUrl.trim();
+    if (!url) {
+      setManualImportStatus("failed");
+      setManualImportMessage("请先粘贴岗位链接");
+      return;
+    }
+    setManualImportStatus("running");
+    setManualImportMessage("");
+    try {
+      await onImportJob({ url, source: "手工导入" });
+      setManualUrl("");
+      setManualImportStatus("done");
+      setManualImportMessage("已抓取公开页面并记录岗位");
+    } catch (error) {
+      setManualImportStatus("failed");
+      setManualImportMessage(error instanceof Error ? error.message : "导入失败");
+    }
+  }
 
   return (
     <div className="market-workspace market-legacy-workspace">
@@ -83,13 +112,20 @@ export function MarketSection({ market, reports, jobSearch, selectedReport, onCl
           {activeImportTool === "manual" ? (
             <div className="context-block market-manual-import">
               <h3>手工导入</h3>
-              <form className="market-manual-form" onSubmit={(event) => event.preventDefault()}>
+              <form className="market-manual-form" onSubmit={handleManualImport}>
                 <label className="market-manual-wide">
-                  <input type="url" placeholder="直接粘贴 Boss / 智联 / 猎聘 / 官网 JD 链接" />
+                  <input value={manualUrl} type="url" placeholder="粘贴 Boss / 智联 / 猎聘 / 官网 JD 链接，提交后抓取并记录" onChange={(event) => setManualUrl(event.target.value)} />
                 </label>
                 <div className="market-manual-actions">
-                  <button className="small-button primary-small-button" type="submit">导入并解析</button>
+                  <button className="small-button primary-small-button" type="submit" disabled={manualImportStatus === "running"}>
+                    {manualImportStatus === "running" ? "抓取中" : "抓取并记录"}
+                  </button>
                 </div>
+                {manualImportMessage ? (
+                  <small className={manualImportStatus === "failed" ? "market-manual-error" : "market-manual-result"}>
+                    {manualImportMessage}
+                  </small>
+                ) : null}
               </form>
             </div>
           ) : (
@@ -101,6 +137,7 @@ export function MarketSection({ market, reports, jobSearch, selectedReport, onCl
                     value={radarSource}
                     onChange={setRadarSource}
                     options={[
+                      { value: "codex-chrome", label: "Codex Chrome" },
                       { value: "boss-agent", label: "Boss Agent" },
                       { value: "china-crawler", label: "中国平台爬虫" },
                       { value: "all", label: "全部来源" },
@@ -177,44 +214,55 @@ export function MarketSection({ market, reports, jobSearch, selectedReport, onCl
         <div className="market-list-filters">
           <label>
             <span>公司类型</span>
-            <select value={companyType} onChange={(event) => setCompanyType(event.target.value)}>
-              <option value="">全部类型</option>
-              {companyTypes.map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
+            <MarketMiniSelect
+              value={companyType}
+              onChange={setCompanyType}
+              options={[{ value: "", label: "全部类型" }, ...companyTypes.map(toSelectOption)]}
+            />
           </label>
           <label>
             <span>方向</span>
-            <select value={direction} onChange={(event) => setDirection(event.target.value)}>
-              <option value="">全部方向</option>
-              {directions.map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
+            <MarketMiniSelect
+              value={direction}
+              onChange={setDirection}
+              options={[{ value: "", label: "全部方向" }, ...directions.map(toSelectOption)]}
+            />
           </label>
           <label>
             <span>薪资</span>
-            <select value={salary} onChange={(event) => setSalary(event.target.value)}>
-              <option value="">全部薪资</option>
-              <option value="45+">45K+</option>
-              <option value="35-45">35K-45K</option>
-              <option value="25-35">25K-35K</option>
-              <option value="<25">25K 以下</option>
-              <option value="hidden">未披露</option>
-            </select>
+            <MarketMiniSelect
+              value={salary}
+              onChange={setSalary}
+              options={[
+                { value: "", label: "全部薪资" },
+                { value: "45+", label: "45K+" },
+                { value: "35-45", label: "35K-45K" },
+                { value: "25-35", label: "25K-35K" },
+                { value: "<25", label: "25K 以下" },
+                { value: "hidden", label: "未披露" },
+              ]}
+            />
           </label>
           <label>
             <span>匹配</span>
-            <select value={match} onChange={(event) => setMatch(event.target.value)}>
-              <option value="">全部匹配</option>
-              <option value="4">4.0+</option>
-              <option value="3.5">3.5+</option>
-              <option value="3">3.0+</option>
-            </select>
+            <MarketMiniSelect
+              value={match}
+              onChange={setMatch}
+              options={[
+                { value: "", label: "全部匹配" },
+                { value: "4", label: "4.0+" },
+                { value: "3.5", label: "3.5+" },
+                { value: "3", label: "3.0+" },
+              ]}
+            />
           </label>
           <label>
             <span>地点</span>
-            <select value={location} onChange={(event) => setLocation(event.target.value)}>
-              <option value="">全部地点</option>
-              {locations.map((value) => <option key={value} value={value}>{value}</option>)}
-            </select>
+            <MarketMiniSelect
+              value={location}
+              onChange={setLocation}
+              options={[{ value: "", label: "全部地点" }, ...locations.map(toSelectOption)]}
+            />
           </label>
           <label className="market-search-filter">
             <span>搜索</span>
@@ -320,7 +368,7 @@ function MarketTable({
         <tr>
           <th>岗位</th>
           <th>薪资</th>
-          <th>来源</th>
+          <th>来源 / 入库</th>
           <th>评分</th>
           <th>评估报告</th>
           <th>操作</th>
@@ -392,6 +440,10 @@ function uniqueOptions(values: string[]) {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean))).sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
 }
 
+function toSelectOption(value: string) {
+  return { value, label: value };
+}
+
 function inferCompanyType(job: MarketJob) {
   const text = [job.company, job.role, job.direction, job.source, job.platform, ...(job.keywords || [])].join(" ");
   if (/猎头|Michael Page|Page|咨询|Recruiter/i.test(text)) return "猎头 / 第三方";
@@ -441,7 +493,28 @@ function platformLabel(job: MarketJob) {
 }
 
 function marketStoredAt(job: MarketJob) {
-  return job.id ? "已收录" : "待同步";
+  const value = job.importedAt || job.discoveredAt || job.createdAt || job.updatedAt;
+  return value ? `入库 ${formatMarketDateTime(value)}` : "入库时间待同步";
+}
+
+function formatMarketDateTime(value: string) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+
+  const normalized = text.includes("T") ? text : text.replace(" ", "T");
+  const date = new Date(normalized);
+  if (!Number.isNaN(date.getTime()) && /\d{4}-\d{2}-\d{2}T/.test(normalized)) {
+    return new Intl.DateTimeFormat("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(date);
+  }
+
+  return text;
 }
 
 function normalizeMatchText(value?: string) {

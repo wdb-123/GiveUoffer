@@ -107,9 +107,20 @@
   border-color: #dbeafe;
 }
 
+.agent-process-stream.is-running {
+  gap: 8px;
+}
+
+.agent-process-stream.is-running .agent-process-list {
+  max-height: 60px;
+  min-height: 20px;
+  overflow: hidden;
+}
+
 .agent-process-running-line {
   flex: 0 0 auto;
   height: 18px;
+  margin-left: 4px;
   width: 118px;
 }
 

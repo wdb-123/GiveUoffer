@@ -1,0 +1,24 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="16" fill="#111827"/>
+  <defs>
+    <mask id="ucareer-favicon-u" maskUnits="userSpaceOnUse" x="15" y="12" width="34" height="40">
+      <path d="M20 14V33C20 43 25 50 32 50C39 50 44 43 44 33V14" stroke="#fff" stroke-width="9" stroke-linecap="butt" stroke-linejoin="round"/>
+    </mask>
+    <linearGradient id="ucareer-favicon-gradient" x1="17" y1="17" x2="49" y2="18" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7B61FF"/>
+      <stop offset="0.55" stop-color="#4F8CFF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="ucareer-favicon-glow" x1="22" y1="37" x2="42" y2="49" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7B61FF" stop-opacity="0.45"/>
+      <stop offset="0.55" stop-color="#4F8CFF" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0.55"/>
+    </linearGradient>
+  </defs>
+  <g mask="url(#ucareer-favicon-u)">
+    <rect x="13" y="10" width="40" height="44" fill="url(#ucareer-favicon-gradient)"/>
+    <ellipse cx="26" cy="45" rx="11" ry="9" fill="#4F8CFF" opacity="0.42"/>
+    <ellipse cx="34" cy="47" rx="10" ry="8" fill="url(#ucareer-favicon-glow)"/>
+    <ellipse cx="44" cy="21" rx="7" ry="18" fill="#22D3EE" opacity="0.34"/>
+  </g>
+</svg>

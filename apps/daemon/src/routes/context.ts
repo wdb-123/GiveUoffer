@@ -27,6 +27,7 @@ export interface DaemonRouteContext {
   };
   services: {
     attachmentParserService: ReturnType<typeof import("../services/attachment-parser-service").createAttachmentParserService>;
+    chromeBridgeService: ReturnType<typeof import("../services/chrome-bridge-service").createChromeBridgeService>;
     jobSearchService: ReturnType<typeof import("../services/jobsearch-service").createJobSearchService>;
     resumeExportService: ReturnType<typeof import("../services/resume-export-service").createResumeExportService>;
     workflowRunService: ReturnType<typeof import("../services/workflow-run-service").createWorkflowRunService>;

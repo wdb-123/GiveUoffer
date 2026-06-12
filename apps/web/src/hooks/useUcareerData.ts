@@ -6,6 +6,7 @@ import type {
   ExportResumeResult,
   ExperienceOverview,
   GenerateResumePreviewResult,
+  ImportJobRequest,
   RecruitmentMarket,
   ReportDocument,
   ReportsOverview,
@@ -16,6 +17,7 @@ import type {
 import {
   createApplicationEvent,
   deleteApplicationEvent,
+  downloadExportedResume,
   exportResume,
   fulfillEvidenceRequest,
   generateResumePreview,
@@ -28,6 +30,7 @@ import {
   getReports,
   getResume,
   getResumes,
+  importMarketJob,
   pushSyncToCloud,
   saveExperienceMetadata,
   saveGeneratedResume,
@@ -88,6 +91,12 @@ export function useUcareerData(enabled = true) {
     setMarket(await getRecruitmentMarket());
   }
 
+  async function onImportMarketJob(input: ImportJobRequest) {
+    const result = await importMarketJob(input);
+    setMarket(await getRecruitmentMarket());
+    setStatus(result.imported ? `岗位已入库：${result.job.id}` : `岗位已更新：${result.job.id}`);
+  }
+
   async function onPushSync() {
     const result = await pushSyncToCloud();
     setStatus(`同步完成：发送 ${result.sent}，确认 ${result.marked}`);
@@ -126,6 +135,8 @@ export function useUcareerData(enabled = true) {
 
   async function onExportResume(file: string, format: ResumeExportFormat) {
     const result = await exportResume({ file, format });
+    const blob = await downloadExportedResume(result.file);
+    downloadBlob(blob, result.file);
     setResumeExportResult(result);
     setStatus(`简历已导出：${result.file}`);
   }
@@ -213,6 +224,7 @@ export function useUcareerData(enabled = true) {
       onExportResume,
       onFulfillEvidence,
       onGenerateResumePreview,
+      onImportMarketJob,
       onPushSync,
       refreshMarket,
       onSaveResumePreview,
@@ -222,4 +234,16 @@ export function useUcareerData(enabled = true) {
       onUpdateLatestApplicationEvent,
     },
   };
+}
+
+function downloadBlob(blob: Blob, fileName: string): void {
+  if (typeof document === "undefined") return;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }

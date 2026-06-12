@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type {
   GenerateResumePreviewRequest,
@@ -32,6 +32,8 @@ export interface ResumeStore {
   getResume(file: string): Promise<ResumeDocument | undefined>;
   generatePreview(input: GenerateResumePreviewRequest, jobs: MarketJob[]): Promise<GenerateResumePreviewResult>;
   saveGeneratedResume(input: SaveGeneratedResumeRequest): Promise<SaveGeneratedResumeResult>;
+  saveResume(input: { file?: string; title: string; markdown: string; baseFile?: string; targetJobId?: string; targetJobTitle?: string }): Promise<ResumeDocument>;
+  deleteResume(file: string): Promise<string>;
 }
 
 export function createResumeStore(workspaceRoot: string): ResumeStore {
@@ -120,7 +122,51 @@ export function createResumeStore(workspaceRoot: string): ResumeStore {
         generatedAt,
       };
     },
+
+    async saveResume(input) {
+      const title = String(input.title || "").trim() || extractResumeTitle(input.markdown || "", "generated-resume.md");
+      const markdown = normalizeGeneratedMarkdown(title, input.markdown);
+      const file = input.file && isResumeMarkdownFile(input.file)
+        ? input.file
+        : await nextGeneratedResumeFile(this);
+      const path = resolve(resumesDir, file);
+      if (!isInsideDir(resumesDir, path)) throw new Error("Invalid resume file");
+      await mkdir(resumesDir, { recursive: true });
+      await writeFile(path, markdown, "utf8");
+      const targetJobTitle = String(input.targetJobTitle || "").trim();
+      if (input.targetJobId || targetJobTitle || input.baseFile) {
+        const { company, role } = splitTargetJobTitle(targetJobTitle);
+        await upsertResumeJobLink(resumeJobLinksPath, {
+          file,
+          title,
+          baseFile: input.baseFile || "",
+          jobId: input.targetJobId || "",
+          jobTitle: targetJobTitle,
+          company,
+          role,
+          generatedAt: new Date().toISOString(),
+          engine: "agent-tool",
+        });
+      }
+      return { file, title, markdown };
+    },
+
+    async deleteResume(file) {
+      if (!isResumeMarkdownFile(file)) throw new Error("Invalid resume file");
+      const path = resolve(resumesDir, file);
+      if (!isInsideDir(resumesDir, path) || !existsSync(path)) throw new Error(`Resume not found: ${file}`);
+      await rm(path);
+      await removeResumeJobLink(resumeJobLinksPath, file);
+      return file;
+    },
   };
+}
+
+async function nextGeneratedResumeFile(store: Pick<ResumeStore, "listResumes">): Promise<string> {
+  const existing = await store.listResumes();
+  const used = new Set(existing.map((item) => Number(item.file.match(/^(\d{2})-/)?.[1] || 0)));
+  const nextIndex = Array.from({ length: 90 }, (_, index) => index + 10).find((index) => !used.has(index)) || 99;
+  return `${String(nextIndex).padStart(2, "0")}-agent-generated-resume.md`;
 }
 
 function isResumeMarkdownFile(file: string): boolean {
@@ -200,6 +246,17 @@ async function upsertResumeJobLink(path: string, link: NonNullable<ResumeJobLink
     links: [...links, link],
   };
   if (link.generatedAt) next.updatedAt = link.generatedAt;
+  await mkdir(resolve(path, ".."), { recursive: true });
+  await writeFile(path, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+}
+
+async function removeResumeJobLink(path: string, file: string): Promise<void> {
+  const current = await readResumeJobLinks(path);
+  const nextLinks = (current.links || []).filter((item) => item.file !== file);
+  const next: ResumeJobLinkStore = {
+    links: nextLinks,
+    updatedAt: new Date().toISOString(),
+  };
   await mkdir(resolve(path, ".."), { recursive: true });
   await writeFile(path, `${JSON.stringify(next, null, 2)}\n`, "utf8");
 }

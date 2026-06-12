@@ -17,6 +17,8 @@ interface ExperienceMetadataFile {
 export interface ExperienceStore {
   getExperienceOverview(): Promise<ExperienceOverview>;
   saveExperienceMetadata(input: SaveExperienceMetadataInput): Promise<ExperienceOverview>;
+  upsertExperience(input: Partial<ExperienceMetadataItem> & { title: string }): Promise<ExperienceMetadataItem>;
+  deleteExperience(id: string): Promise<string>;
 }
 
 export function createExperienceStore(workspaceRoot: string): ExperienceStore {
@@ -51,7 +53,49 @@ export function createExperienceStore(workspaceRoot: string): ExperienceStore {
       await writeFile(metadataPath, JSON.stringify(next, null, 2) + "\n", "utf8");
       return this.getExperienceOverview();
     },
+
+    async upsertExperience(input) {
+      const current = await readExperienceMetadata(metadataPath);
+      const experiences = current.experiences || [];
+      const normalizedInput = normalizeExperienceMetadata({
+        experiences: [{
+          id: input.id || slugId(input.title),
+          title: input.title,
+          category: input.category || "",
+          role: input.role || "",
+          sourceFile: input.sourceFile || "",
+          summary: input.summary || "",
+          tags: input.tags || [],
+          evidence: input.evidence || [],
+          gaps: input.gaps || [],
+          publicLevel: input.publicLevel || "",
+        }],
+      }).experiences[0];
+      if (!normalizedInput) throw new Error("Invalid experience item");
+      const index = experiences.findIndex((item) => item.id === normalizedInput.id);
+      const nextExperiences = [...experiences];
+      if (index >= 0) nextExperiences[index] = { ...nextExperiences[index], ...normalizedInput };
+      else nextExperiences.push(normalizedInput);
+      await this.saveExperienceMetadata({ metadata: { experiences: nextExperiences } });
+      return normalizedInput;
+    },
+
+    async deleteExperience(id) {
+      const experienceId = String(id || "").trim();
+      if (!experienceId) throw new Error("Missing experience id");
+      const current = await readExperienceMetadata(metadataPath);
+      const experiences = current.experiences || [];
+      const nextExperiences = experiences.filter((item) => item.id !== experienceId);
+      if (nextExperiences.length === experiences.length) throw new Error(`Experience not found: ${experienceId}`);
+      await this.saveExperienceMetadata({ metadata: { experiences: nextExperiences } });
+      return experienceId;
+    },
   };
+}
+
+function slugId(value: string): string {
+  const slug = String(value || "").trim().replace(/[^a-zA-Z0-9\u4e00-\u9fa5_-]+/g, "-").replace(/^-+|-+$/g, "");
+  return slug || `exp-${Date.now().toString(36)}`;
 }
 
 function normalizeExperienceMetadata(input: SaveExperienceMetadataInput["metadata"]): Required<SaveExperienceMetadataInput["metadata"]> {

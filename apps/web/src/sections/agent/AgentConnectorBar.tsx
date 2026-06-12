@@ -148,6 +148,7 @@ function JobSearchLogo({ site }: { site: ReturnType<typeof buildJobSearchSites>[
 
 function buildJobSearchSites(sources: JobSearchSource[]) {
   const sourceMap = new Map(sources.map((source) => [source.id, source]));
+  const codexChrome = sourceMap.get("codex-chrome");
   const bossAgent = sourceMap.get("boss-agent");
   const chinaCrawler = sourceMap.get("china-crawler");
   const portals = sourceMap.get("portals");
@@ -157,8 +158,10 @@ function buildJobSearchSites(sources: JobSearchSource[]) {
       label: "Boss 直聘",
       shortLabel: "B",
       logoUrl: "https://www.zhipin.com/favicon.ico",
-      connected: Boolean(bossAgent?.available || chinaCrawler?.available),
-      note: bossAgent?.available ? "Boss Agent 已接入，需要本地登录态" : "平台爬虫待验证",
+      connected: Boolean(codexChrome?.available || bossAgent?.available || chinaCrawler?.available),
+      note: codexChrome?.available
+        ? "Codex Chrome 已接入，可读已登录 Boss 标签页"
+        : bossAgent?.available ? "Boss Agent 已接入，需要本地登录态" : "平台爬虫待验证",
     },
     {
       id: "zhilian",

@@ -127,6 +127,24 @@
   font-weight: 800;
 }
 
+.market-manual-result,
+.market-manual-error {
+  align-self: center;
+  font-size: 11px;
+  font-weight: 800;
+  grid-column: 1 / -1;
+  line-height: 1.2;
+  min-height: 13px;
+}
+
+.market-manual-result {
+  color: #25635a;
+}
+
+.market-manual-error {
+  color: #b42318;
+}
+
 .market-radar-panel {
   align-content: center;
   display: grid;
@@ -332,6 +350,28 @@
   color: #334155;
   font-size: var(--market-text, 13px);
   font-weight: 700;
+}
+
+.market-list-filters .market-mini-select-trigger {
+  background: #ffffff;
+  min-height: 36px;
+}
+
+.market-list-filters .market-mini-select-trigger:focus-visible {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+  outline: none;
+}
+
+.market-list-filters .market-mini-select-options {
+  max-width: min(360px, calc(100vw - 48px));
+  min-width: 100%;
+}
+
+.market-list-filters .market-mini-select-options button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .jobs-table {

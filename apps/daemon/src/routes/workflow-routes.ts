@@ -1,4 +1,6 @@
 import type { RoutePreviewRequest } from "@ucareer/shared";
+import { getProvider } from "../index";
+import { isPaperclipAdapterProvider } from "../providers/paperclip-adapter-provider";
 import { classifyIntake } from "../workflow/classify-intake";
 import { skillRegistry } from "../workflow/skill-registry";
 import { getWorkflow } from "../workflow/workflow-registry";
@@ -7,7 +9,7 @@ import type { DaemonRouteContext } from "./context";
 import { ok } from "./context";
 
 export function registerWorkflowRoutes(ctx: DaemonRouteContext): void {
-  const { app, services } = ctx;
+  const { app, runtime, services, workspaceRoot } = ctx;
 
   app.get("/api/skills", async () => {
     return ok({ skills: skillRegistry, workflows: workflowRegistry });
@@ -25,9 +27,14 @@ export function registerWorkflowRoutes(ctx: DaemonRouteContext): void {
   app.post<{
     Body: RoutePreviewRequest;
   }>("/api/agent-route/preview", async (request) => {
-    return ok(classifyIntake({
+    const providerId = request.body?.preferredProviderId || runtime.providers[0]?.id || "";
+    const provider = getProvider(runtime, providerId);
+    if (!provider) throw new Error(`Provider not found: ${providerId}`);
+    if (!isPaperclipAdapterProvider(provider)) throw new Error(`Provider ${provider.id} does not support agent router execution`);
+    return ok(await classifyIntake({
       text: composePreviewText(request.body),
       ...(request.body?.preferredProviderId ? { preferredProviderId: request.body.preferredProviderId } : {}),
+      routeWithAgent: (prompt) => provider.executeRouterPrompt({ prompt, workspacePath: workspaceRoot }),
     }));
   });
 

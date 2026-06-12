@@ -1,5 +1,6 @@
 import { AgentMarkdown } from "./AgentMarkdown";
 import { AgentJourneyLine } from "./AgentJourneyLine";
+import { useEffect, useMemo, useState } from "react";
 import {
   extractTaskUserQuestion,
   findLastMessageIndex,
@@ -7,17 +8,22 @@ import {
   type AgentConversationTurn,
 } from "./agentConversation";
 
+const streamedAssistantMessageIds = new Set<string>();
+const STREAMABLE_MESSAGE_AGE_MS = 45_000;
+const RUNNING_PROCESS_PLACEHOLDER_CREATED_AT = "1970-01-01T00:00:00.000Z";
+
 export function AgentTurnView({
   turn,
-  runningLabel = "",
   onOpenFilePreview,
+  runningProcessLabel = "",
+  runningProcessMessages = [],
 }: {
   turn: AgentConversationTurn;
-  runningLabel?: string;
   onOpenFilePreview?: ((path: string) => void) | undefined;
+  runningProcessLabel?: string;
+  runningProcessMessages?: AgentChatMessage[];
 }) {
-  const isRunning = Boolean(runningLabel);
-  const finalAssistantIndex = isRunning ? -1 : findLastMessageIndex(turn.messages, (message) => message.role === "assistant");
+  const finalAssistantIndex = findLastMessageIndex(turn.messages, (message) => message.role === "assistant");
   const processMessages = turn.messages.filter((message, index) => {
     if (message.role === "user" || message.role === "pending") return false;
     return index !== finalAssistantIndex;
@@ -38,7 +44,9 @@ export function AgentTurnView({
           />
         );
       })}
-      {runningLabel ? <RunningProcessPanel label={runningLabel} messages={processMessages} /> : null}
+      {runningProcessLabel || runningProcessMessages.length ? (
+        <RunningProcessPanel label={runningProcessLabel} messages={runningProcessMessages} />
+      ) : null}
     </section>
   );
 }
@@ -53,7 +61,10 @@ function AssistantAnswerGroup({
   onOpenFilePreview?: ((path: string) => void) | undefined;
 }) {
   const visibleProcessMessages = getVisibleProcessMessages(processMessages);
-  if (!visibleProcessMessages.length) {
+  const inspectableProcessMessages = visibleProcessMessages.length
+    ? visibleProcessMessages
+    : getInspectableProcessMessages(processMessages);
+  if (!inspectableProcessMessages.length) {
     return (
       <div className="agent-answer-group">
         <AgentBubble message={message} onOpenFilePreview={onOpenFilePreview} />
@@ -67,7 +78,7 @@ function AssistantAnswerGroup({
         <summary className="agent-response-meta is-toggle">
           <span>{message.durationLabel || "已处理"} ›</span>
         </summary>
-        <ProcessLogPanel messages={visibleProcessMessages} onOpenFilePreview={onOpenFilePreview} />
+        <ProcessLogPanel messages={inspectableProcessMessages} onOpenFilePreview={onOpenFilePreview} />
       </details>
       <AgentBubble
         message={message}
@@ -78,12 +89,21 @@ function AssistantAnswerGroup({
   );
 }
 
-function getVisibleProcessMessages(messages: AgentChatMessage[]): AgentChatMessage[] {
+export function getVisibleProcessMessages(messages: AgentChatMessage[]): AgentChatMessage[] {
   return messages.filter((message) => {
     const normalized = message.text.replace(/\s+/g, " ").trim();
     if (!normalized) return false;
     if (isLowSignalRuntimeLog(normalized)) return false;
     if (isRoutineExecutionLog(normalized)) return false;
+    return true;
+  });
+}
+
+function getInspectableProcessMessages(messages: AgentChatMessage[]): AgentChatMessage[] {
+  return messages.filter((message) => {
+    const normalized = message.text.replace(/\s+/g, " ").trim();
+    if (!normalized) return false;
+    if (isLowSignalRuntimeLog(normalized)) return false;
     return true;
   });
 }
@@ -113,21 +133,46 @@ function ProcessLogPanel({
   );
 }
 
-function RunningProcessPanel({ label, messages }: { label: string; messages: AgentChatMessage[] }) {
+export function RunningProcessPanel({ label, messages }: { label: string; messages: AgentChatMessage[] }) {
   const visibleProcessMessages = getVisibleProcessMessages(messages);
+  const inspectableProcessMessages = visibleProcessMessages.length
+    ? visibleProcessMessages
+    : getInspectableProcessMessages(messages);
+  const latestProcessMessages = inspectableProcessMessages.slice(-6);
   const currentStatus = formatCurrentProcessStatus(visibleProcessMessages)
     || formatCurrentProcessStatus(messages)
     || label
     || "Agent 正在执行中";
+  const processRows = latestProcessMessages.length
+    ? latestProcessMessages
+    : [{
+      id: "running-process-placeholder",
+      role: "system" as const,
+      text: formatRunningPlaceholder(currentStatus),
+      createdAt: RUNNING_PROCESS_PLACEHOLDER_CREATED_AT,
+    }];
   return (
     <div className="agent-process-stream is-running" aria-live="polite" aria-label="执行过程">
       <div className="agent-process-stream-head">
         <span className="agent-process-status-dot" aria-hidden="true" />
-        <strong>{currentStatus}</strong>
+        <strong>执行过程</strong>
+        <small>{processRows.length} 条日志</small>
         <AgentJourneyLine className="agent-process-running-line" loop />
+      </div>
+      <div className="agent-process-list" aria-label="当前执行日志">
+        {processRows.map((log) => (
+          <article className={`agent-process-item is-${log.role}`} key={log.id}>
+            <AgentMarkdown text={formatProcessLogText(log.text)} />
+          </article>
+        ))}
       </div>
     </div>
   );
+}
+
+function formatRunningPlaceholder(status: string): string {
+  if (!status.trim()) return "正在等待第一条执行日志";
+  return `${status}，等待第一条执行日志`;
 }
 
 function isPluginSyncWarning(text: string): boolean {
@@ -244,12 +289,69 @@ function AgentBubble({
 }) {
   const displayText = message.role === "user" ? extractTaskUserQuestion(message.text) : message.text;
   const isProcessNote = message.role === "assistant" && isAssistantProcessNote(message.text);
+  const shouldStream = message.role === "assistant"
+    && !hideDuration
+    && !isProcessNote
+    && !streamedAssistantMessageIds.has(message.id)
+    && Date.now() - Date.parse(message.createdAt) < STREAMABLE_MESSAGE_AGE_MS;
+  const { text: renderedText, streaming } = useStreamingText(message.id, displayText, shouldStream);
   return (
     <article className={`agent-chat-bubble is-${message.role}${isProcessNote ? " is-process-note" : ""}`}>
       {message.role === "assistant" && message.durationLabel && !hideDuration && !isProcessNote ? (
         <span className="agent-response-meta">{message.durationLabel} ›</span>
       ) : null}
-      {displayText ? <AgentMarkdown text={displayText} onOpenFilePreview={onOpenFilePreview} /> : null}
+      {renderedText ? (
+        <AgentMarkdown
+          text={renderedText}
+          streaming={streaming}
+          onOpenFilePreview={onOpenFilePreview}
+        />
+      ) : null}
     </article>
   );
+}
+
+function useStreamingText(messageId: string, text: string, enabled: boolean): { text: string; streaming: boolean } {
+  const units = useMemo(() => Array.from(text), [text]);
+  const [visibleCount, setVisibleCount] = useState(enabled ? 0 : units.length);
+
+  useEffect(() => {
+    if (!enabled) {
+      setVisibleCount(units.length);
+      streamedAssistantMessageIds.add(messageId);
+      return undefined;
+    }
+
+    setVisibleCount(0);
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      setVisibleCount((current) => {
+        const next = Math.min(units.length, current + streamingStep(units.length, current));
+        if (next >= units.length) {
+          window.clearInterval(timer);
+          streamedAssistantMessageIds.add(messageId);
+        }
+        return next;
+      });
+      if (cancelled) window.clearInterval(timer);
+    }, 18);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [enabled, messageId, units.length]);
+
+  const streaming = enabled && visibleCount < units.length;
+  return {
+    text: streaming ? units.slice(0, visibleCount).join("") : text,
+    streaming,
+  };
+}
+
+function streamingStep(total: number, current: number): number {
+  if (total > 1200) return 28;
+  if (total > 600) return 18;
+  if (current < 24) return 2;
+  return 6;
 }

@@ -13,13 +13,14 @@ import { getProvider, type DaemonRuntime } from "../index";
 import { isInsideOrSameDir } from "../path-guards";
 import { evaluateActionPolicy, evaluateAgentExecutionPolicy } from "../policy/agent-execution-policy";
 import { runApprovedLocalCommand, runApprovedTask } from "../execution/runner";
+import { isPaperclipAdapterProvider } from "../providers/paperclip-adapter-provider";
 import type { TaskStore } from "../stores/task-store";
 import type { AgentToolExecutor } from "../tools/tool-executor";
 import { classifyIntake } from "../workflow/classify-intake";
 import type { WorkflowRunService } from "./workflow-run-service";
 
 export interface AgentTaskService {
-  createOrContinueTask(input: CreateAgentTaskRequest): AgentTask | { task: AgentTask; approval: ApprovalRequest } | ServiceError;
+  createOrContinueTask(input: CreateAgentTaskRequest): Promise<AgentTask | { task: AgentTask; approval: ApprovalRequest } | ServiceError>;
   createLocalCommand(input: CreateLocalCommandRequest): CreateLocalCommandResult | ServiceError;
   decideApproval(approvalId: string, input: ApprovalDecisionRequest): unknown | ServiceError;
 }
@@ -39,7 +40,7 @@ export function createAgentTaskService(input: {
   const { runtime, taskStore, workspaceRoot, workflowRunService, toolExecutor } = input;
 
   return {
-    createOrContinueTask(body) {
+    async createOrContinueTask(body) {
       if (!body?.providerId || !body.prompt?.trim()) {
         return serviceError("invalid_task", "providerId and prompt are required");
       }
@@ -49,7 +50,7 @@ export function createAgentTaskService(input: {
         if (!provider) {
           return serviceError("provider_not_found", `Provider not found: ${body.providerId}`);
         }
-        return continueTask({
+        return await continueTask({
           body,
           provider,
           runtime,
@@ -59,11 +60,11 @@ export function createAgentTaskService(input: {
         });
       }
 
-      const routedTask = resolveNewTaskRoute({ body, runtime });
-      const provider = getProvider(runtime, routedTask.providerId);
+      const provider = getProvider(runtime, body.providerId);
       if (!provider) {
-        return serviceError("provider_not_found", `Provider not found: ${routedTask.providerId}`);
+        return serviceError("provider_not_found", `Provider not found: ${body.providerId}`);
       }
+      const routedTask = await resolveNewTaskRoute({ body, provider, runtime });
 
       const routeMetadata = workflowRunService?.createRunMetadata(routedTask.routeMetadata) ?? routedTask.routeMetadata;
       const task = taskStore.createTask({
@@ -165,15 +166,16 @@ export function createAgentTaskService(input: {
   };
 }
 
-function resolveNewTaskRoute(input: {
+async function resolveNewTaskRoute(input: {
   body: CreateAgentTaskRequest;
+  provider: AgentProvider;
   runtime: DaemonRuntime;
-}): {
+}): Promise<{
   providerId: string;
   prompt: string;
   routeMetadata: NonNullable<CreateAgentTaskRequest["routeMetadata"]>;
-} {
-  const sourceText = input.body.routeMetadata?.sourceText?.trim() || composeSourceText(input.body);
+}> {
+  const displaySourceText = input.body.routeMetadata?.sourceText?.trim() || composeDisplaySourceText(input.body);
   if (input.body.routeMetadata) {
     return {
       providerId: input.body.providerId,
@@ -182,19 +184,26 @@ function resolveNewTaskRoute(input: {
     };
   }
 
-  const route = classifyIntake({
-    text: sourceText,
+  const route = await classifyIntake({
+    text: displaySourceText,
+    promptText: displaySourceText,
     preferredProviderId: input.body.providerId,
+    ...(input.body.pageContext ? { pageContext: input.body.pageContext } : {}),
+    routeWithAgent: (prompt) => runAgentRouterPrompt({
+      provider: input.provider,
+      workspacePath: input.body.workspacePath || input.runtime.workspaceRoot,
+      prompt,
+    }),
   });
   const recommendedProvider = getProvider(input.runtime, route.recommendedProviderId);
   return {
     providerId: recommendedProvider ? route.recommendedProviderId : input.body.providerId,
-    prompt: composePromptWithAttachments(route.agentPrompt || sourceText, input.body.attachments),
+    prompt: composePromptWithAttachments(route.agentPrompt || displaySourceText, input.body.attachments),
     routeMetadata: {
       skillId: route.skillId,
       ...(route.workflowId ? { workflowId: route.workflowId } : {}),
       inputKind: route.inputKind,
-      sourceText,
+      sourceText: displaySourceText,
       routeDecision: route,
     },
   };
@@ -204,14 +213,14 @@ export function isServiceError(value: unknown): value is ServiceError {
   return Boolean(value && typeof value === "object" && "errorCode" in value && "message" in value);
 }
 
-function continueTask(input: {
+async function continueTask(input: {
   body: CreateAgentTaskRequest;
   provider: AgentProvider;
   runtime: DaemonRuntime;
   taskStore: TaskStore;
   workflowRunService?: WorkflowRunService;
   toolExecutor?: AgentToolExecutor;
-}): AgentTask | { task: AgentTask; approval: ApprovalRequest } | ServiceError {
+}): Promise<AgentTask | { task: AgentTask; approval: ApprovalRequest } | ServiceError> {
   const { body, provider, taskStore, workflowRunService, toolExecutor } = input;
   const existingTask = taskStore.getTask(body.continueTaskId || "");
   if (!existingTask) return serviceError("task_not_found", `Task not found: ${body.continueTaskId}`);
@@ -224,11 +233,17 @@ function continueTask(input: {
 
   const now = new Date().toISOString();
   const userText = composePromptWithAttachments(body.prompt.trim(), body.attachments);
-  const sourceText = composeSourceText(body);
-  const route = classifyIntake({
-    text: buildContinuationRouteText(existingTask, sourceText),
+  const displaySourceText = composeDisplaySourceText(body);
+  const route = await classifyIntake({
+    text: buildContinuationRouteText(existingTask, displaySourceText),
     preferredProviderId: body.providerId,
-    promptText: sourceText,
+    promptText: displaySourceText,
+    ...(body.pageContext ? { pageContext: body.pageContext } : {}),
+    routeWithAgent: (prompt) => runAgentRouterPrompt({
+      provider,
+      workspacePath: body.workspacePath || existingTask.workspacePath,
+      prompt,
+    }),
   });
   taskStore.appendEvent(existingTask.id, {
     type: "message",
@@ -268,11 +283,25 @@ function continueTask(input: {
     : taskStore.getTask(existingTask.id) ?? continuedTask;
 }
 
-function composeSourceText(body: CreateAgentTaskRequest): string {
+function composeDisplaySourceText(body: CreateAgentTaskRequest): string {
   const attachmentSummary = (body.attachments || [])
     .map((attachment) => `[${attachment.kind}] ${attachment.fileName}: ${attachment.parsed.summary}`)
     .join("\n");
   return [body.prompt.trim(), attachmentSummary].filter(Boolean).join("\n\n");
+}
+
+async function runAgentRouterPrompt(input: {
+  provider: AgentProvider;
+  workspacePath: string;
+  prompt: string;
+}): Promise<string> {
+  if (!isPaperclipAdapterProvider(input.provider)) {
+    throw new Error(`Provider ${input.provider.id} does not support agent router execution`);
+  }
+  return await input.provider.executeRouterPrompt({
+    prompt: input.prompt,
+    workspacePath: input.workspacePath,
+  });
 }
 
 function buildContinuationRouteText(existingTask: AgentTask, latestSourceText: string): string {
@@ -299,6 +328,27 @@ function composePromptWithAttachments(prompt: string, attachments: CreateAgentTa
     ].join("\n");
   }).join("\n\n");
   return `${prompt}\n\n---\nUser uploaded attachments:\n${attachmentText}`;
+}
+
+function composePageContextSummary(context: NonNullable<CreateAgentTaskRequest["pageContext"]>): string {
+  const selected = context.selectedEntity
+    ? [
+      `selected type: ${context.selectedEntity.type}`,
+      context.selectedEntity.id ? `selected id: ${context.selectedEntity.id}` : "",
+      context.selectedEntity.title ? `selected title: ${context.selectedEntity.title}` : "",
+      context.selectedEntity.file ? `selected file: ${context.selectedEntity.file}` : "",
+      context.selectedEntity.path ? `selected path: ${context.selectedEntity.path}` : "",
+    ].filter(Boolean).join("\n")
+    : "";
+  return [
+    `page: ${context.pageLabel} (${context.pageId})`,
+    context.suggestedSkillId ? `suggested skill: ${context.suggestedSkillId}` : "",
+    context.suggestedInputKind ? `suggested input kind: ${context.suggestedInputKind}` : "",
+    `page summary: ${context.summary}`,
+    selected,
+    `read paths: ${context.readPaths.join(", ")}`,
+    `write paths: ${context.writePaths.join(", ")}`,
+  ].filter(Boolean).join("\n");
 }
 
 function requestAgentExecutionApproval(input: {
