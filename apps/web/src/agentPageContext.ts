@@ -56,7 +56,7 @@ function buildResumeContext(input: AgentPageContextInput): AgentPageContext {
   const selected = input.resumes.selectedResume;
   return {
     pageId: "resumes",
-    pageLabel: "我的简历库",
+    pageLabel: "我的简历",
     suggestedSkillId: "resume.generate",
     suggestedInputKind: "resume_request",
     summary: `当前共有 ${input.resumes.data.length} 份简历；${selected ? `选中「${selected.title}」` : "未选中具体简历"}。`,

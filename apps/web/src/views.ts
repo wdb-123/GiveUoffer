@@ -8,7 +8,7 @@ export interface AppView {
 
 export const views: AppView[] = [
   { id: "agent", label: "Ucareer", icon: "U" },
-  { id: "resumes", label: "我的简历库", icon: "▤" },
+  { id: "resumes", label: "我的简历", icon: "▤" },
   { id: "experience", label: "经历资产", icon: "✦" },
   { id: "market", label: "岗位列表", icon: "⌕" },
   { id: "applications", label: "投递进度", icon: "↗" },

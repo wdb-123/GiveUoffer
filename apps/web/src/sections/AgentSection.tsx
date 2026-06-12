@@ -856,7 +856,7 @@ const fallbackProviders: ProviderSummary[] = ["codex", "claude", "gemini"].map((
 }));
 const workspaceGuidePrompts: AgentGuidePrompt[] = [
   { icon: "⌕", viewId: "market", text: "从岗位列表里筛出今天最值得推进的 3 个岗位" },
-  { icon: "▤", viewId: "resumes", text: "检查我的简历库，告诉我哪一版最适合当前目标岗位" },
+  { icon: "▤", viewId: "resumes", text: "检查我的简历，告诉我哪一版最适合当前目标岗位" },
   { icon: "✦", viewId: "experience", text: "帮我整理经历资产里最能证明机器人和 AI 能力的项目" },
   { icon: "↗", viewId: "applications", text: "复盘投递进度，列出需要跟进、准备和关闭的事项" },
   { icon: "◎", viewId: "evidence", text: "查看复盘中心，把证据缺口按优先级排一下" },
