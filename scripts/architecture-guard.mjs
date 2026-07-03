@@ -183,9 +183,20 @@ function assertWorkspaceBoundary() {
 
 function assertUcareerNamespace() {
   assertContains("package.json", [
-    "npm --workspace @ucareer/daemon run dev",
+    "\"daemon\": \"npm run daemon:python\"",
+    "\"daemon:api\": \"npm run daemon:python\"",
+    "\"daemon:node\": \"npm --workspace @ucareer/daemon run dev\"",
     "npm --workspace @ucareer/web run build",
-  ], "root npm scripts use Ucareer workspaces");
+  ], "root npm scripts start the Python daemon by default and keep the Node daemon explicit");
+
+  assertContains("scripts/dev/dev-ucareer.mjs", [
+    "daemon:python",
+  ], "combined dev runner starts the Python daemon");
+
+  assertContains("apps/py-daemon/src/ucareer_py_daemon/config.py", [
+    "UCAREER_PY_PORT",
+    "54321",
+  ], "Python daemon owns the default frontend API port");
 
   assertContains("package-lock.json", [
     "\"name\": \"@ucareer/daemon\"",
