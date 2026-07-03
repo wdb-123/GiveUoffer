@@ -13,6 +13,7 @@ from .billing import BillingStore
 from .config import Settings, load_settings
 from .db import probe_database
 from .envelope import error, ok
+from .memory import get_memory_snapshot
 from .providers import check_provider, list_providers
 from .route_manifest import ROUTE_GROUPS
 from .routing import list_skills, list_workflows, preview_agent_route
@@ -221,6 +222,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             auth_store,
             "workspace.read",
             lambda _session: preview_agent_route(payload),
+        )
+
+    @app.get("/api/memory/sources")
+    async def memory_sources(request: Request) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: get_memory_snapshot(root, settings.daemon_db_path),
         )
 
     @app.get("/api/profile-overview")

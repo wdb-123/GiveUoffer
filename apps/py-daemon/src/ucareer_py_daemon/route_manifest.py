@@ -68,6 +68,7 @@ ROUTE_GROUPS: list[dict[str, object]] = [
             "GET /api/skills/file-management",
             "GET /api/skills/ui-contracts",
             "GET /api/skills/pages/:pageId",
+            "GET /api/memory/sources",
             "POST /api/agent-route/preview",
         ],
     },

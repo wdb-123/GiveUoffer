@@ -137,6 +137,40 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertEqual(boss_url_preview["data"]["skillId"], "job.evaluate")
             self.assertEqual(boss_url_preview["data"]["inputKind"], "job_url")
 
+    def test_memory_sources_report_tenant_workspace_availability(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=Path(tmp),
+                daemon_db_path=Path(tmp) / ".ucareer" / "daemon.sqlite",
+            )
+            client = TestClient(create_app(settings))
+            created = client.post(
+                "/api/auth/create-account",
+                json={
+                    "email": "memory@example.com",
+                    "password": "Password123",
+                    "displayName": "Memory",
+                    "tenantName": "Memory Workspace",
+                },
+            ).json()
+            self.assertTrue(created["ok"])
+            tenant_id = created["data"]["activeTenant"]["id"]
+            tenant_workspace = Path(tmp) / "workspace" / "tenants" / tenant_id / "workspace"
+            self._write_tenant_workspace_fixture(tenant_workspace)
+
+            memory = client.get("/api/memory/sources", headers={"x-ucareer-session": created["data"]["token"]}).json()
+
+        self.assertTrue(memory["ok"])
+        self.assertIn("generatedAt", memory["data"])
+        items = {item["id"]: item for item in memory["data"]["items"]}
+        self.assertEqual(items["profile.cv"]["summary"], "1/1 source path(s) available")
+        self.assertTrue(items["profile.cv"]["available"])
+        self.assertEqual(items["profile.preferences"]["summary"], "2/2 source path(s) available")
+        self.assertEqual(items["applications.history"]["summary"], "2/3 source path(s) available")
+        self.assertTrue(items["runtime.workflow_traces"]["available"])
+
     def test_auth_tenant_and_billing_routes_use_shared_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = Settings(
