@@ -141,6 +141,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             lambda root: ApplicationStore(root).list_applications(),
         )
 
+    @app.post("/api/application-events")
+    async def create_application_event(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "applications.write",
+            lambda root: {"event": ApplicationStore(root).create_application_event(payload)},
+        )
+
+    @app.post("/api/application-events/update")
+    async def update_application_event(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "applications.write",
+            lambda root: {"event": ApplicationStore(root).update_application_event(payload)},
+        )
+
+    @app.post("/api/application-events/delete")
+    async def delete_application_event(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "applications.write",
+            lambda root: {"deleted": ApplicationStore(root).delete_application_event(payload)},
+        )
+
     @app.get("/api/reports")
     async def reports(request: Request) -> dict[str, object]:
         return _handle_workspace(

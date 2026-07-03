@@ -3,9 +3,11 @@ from __future__ import annotations
 import base64
 import json
 import mimetypes
+import random
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +49,49 @@ class ApplicationStore:
         applications = [_parse_application_row(line) for line in tracker.splitlines() if re.match(r"^\|\s*\d+", line)]
         merged = _merge_application_events([item for item in applications if item], events)
         return {"applications": merged, "metrics": _application_metrics(merged)}
+
+    def create_application_event(self, payload: dict[str, Any]) -> dict[str, Any]:
+        tracker = read_text(workspace_data_path(self.workspace_root, "applications"))
+        applications = [item for item in (_parse_application_row(line) for line in tracker.splitlines() if re.match(r"^\|\s*\d+", line)) if item]
+        events_path = workspace_data_path(self.workspace_root, "applicationEvents")
+        existing_events = _read_jsonl(events_path)
+        event = _normalize_application_event(payload, existing_events, applications)
+        duplicate = _find_duplicate_application_event(event, existing_events)
+        if duplicate:
+            return duplicate
+        _write_application_email_snapshot(workspace_data_path(self.workspace_root, "applicationEmailSnapshots"), event)
+        events_path.parent.mkdir(parents=True, exist_ok=True)
+        with events_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")) + "\n")
+        return event
+
+    def update_application_event(self, payload: dict[str, Any]) -> dict[str, Any]:
+        event_id = str(payload.get("event_id") or payload.get("eventId") or "").strip()
+        if not event_id:
+            raise ValueError("Missing event_id")
+        events_path = workspace_data_path(self.workspace_root, "applicationEvents")
+        events = _read_jsonl(events_path)
+        index = next((idx for idx, event in enumerate(events) if event.get("event_id") == event_id), -1)
+        if index < 0:
+            raise ValueError("Application event not found")
+        updated = _normalize_updated_application_event(events[index], payload)
+        if payload.get("email_snapshot") or payload.get("emailSnapshot"):
+            _write_application_email_snapshot(workspace_data_path(self.workspace_root, "applicationEmailSnapshots"), updated)
+        events[index] = updated
+        _write_application_events(events_path, events)
+        return updated
+
+    def delete_application_event(self, payload: dict[str, Any]) -> str:
+        event_id = str(payload.get("event_id") or payload.get("eventId") or "").strip()
+        if not event_id:
+            raise ValueError("Missing event_id")
+        events_path = workspace_data_path(self.workspace_root, "applicationEvents")
+        events = _read_jsonl(events_path)
+        filtered = [event for event in events if event.get("event_id") != event_id]
+        if len(filtered) == len(events):
+            raise ValueError("Application event not found")
+        _write_application_events(events_path, filtered)
+        return event_id
 
 
 @dataclass
@@ -283,6 +328,12 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _write_application_events(path: Path, events: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    content = "\n".join(json.dumps(event, ensure_ascii=False, separators=(",", ":")) for event in events)
+    path.write_text(f"{content}\n" if content else "", encoding="utf-8")
+
+
 def _read_json(path: Path, fallback: Any) -> Any:
     try:
         text = read_text(path).strip()
@@ -341,6 +392,193 @@ def _merge_application_events(applications: list[dict[str, Any]], events: list[d
             "events": app_events,
         }
     return sorted(by_id.values(), key=lambda item: item["id"])
+
+
+def _normalize_application_event(payload: dict[str, Any], existing_events: list[dict[str, Any]], applications: list[dict[str, Any]]) -> dict[str, Any]:
+    event = str(payload.get("event") or "").strip().lower()
+    if event not in _allowed_application_events():
+        raise ValueError("Invalid application event")
+    due = str(payload.get("due") or "").strip()
+    if due and not re.match(r"^\d{4}-\d{2}-\d{2}$", due):
+        raise ValueError("Invalid due date")
+    groups = _group_events(existing_events)
+    company_input = str(payload.get("company") or payload.get("companyHint") or "").strip()
+    role_input = str(payload.get("role") or payload.get("roleHint") or "").strip()
+    matched_application_id = _find_existing_application_id(company_input, role_input, existing_events, applications)
+    application_id = matched_application_id or _normalize_progress_id(payload.get("application_id") or payload.get("applicationId")) or _next_progress_id(groups, applications)
+    latest_existing = groups.get(application_id, [])[-1] if groups.get(application_id) else {}
+    company = str(company_input or latest_existing.get("company") or "").strip()
+    role = str(role_input or latest_existing.get("role") or "").strip()
+    if not company or not role:
+        raise ValueError("Missing company or role")
+    now = _now_iso()
+    result = {
+        "event_id": f"evt_{int(datetime.now(UTC).timestamp() * 1000):x}_{random.randint(0, 36**6 - 1):06x}",
+        "date": str(payload.get("date") or _today_china()).strip(),
+        "application_id": application_id,
+        "company": company,
+        "role": role,
+        "event": event,
+        "source": str(payload.get("source") or "manual_import").strip(),
+        "next_action": str(payload.get("next_action") or payload.get("nextAction") or "").strip(),
+        "due": due,
+        "note": str(payload.get("note") or "").strip()[:500],
+        "evidence": str(payload.get("evidence") or "").strip()[:500],
+        "created_at": now,
+    }
+    snapshot = payload.get("email_snapshot") or payload.get("emailSnapshot")
+    if snapshot:
+        result["email_snapshot"] = _normalize_application_email_snapshot(snapshot)
+    return result
+
+
+def _normalize_updated_application_event(current: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    event = str(payload.get("event", current.get("event") or "")).strip().lower()
+    if event not in _allowed_application_events():
+        raise ValueError("Invalid application event")
+    due = str(payload.get("due", current.get("due") or "")).strip()
+    if due and not re.match(r"^\d{4}-\d{2}-\d{2}$", due):
+        raise ValueError("Invalid due date")
+    company = str(payload.get("company", current.get("company") or "")).strip()
+    role = str(payload.get("role", current.get("role") or "")).strip()
+    if not company or not role:
+        raise ValueError("Missing company or role")
+    updated = {
+        **current,
+        "company": company,
+        "role": role,
+        "event": event,
+        "source": str(payload.get("source", current.get("source") or "manual_import")).strip(),
+        "next_action": str(payload.get("next_action") or payload.get("nextAction") or current.get("next_action") or "").strip(),
+        "due": due,
+        "note": str(payload.get("note", current.get("note") or "")).strip()[:500],
+        "evidence": str(payload.get("evidence", current.get("evidence") or "")).strip()[:500],
+        "updated_at": _now_iso(),
+    }
+    snapshot = payload.get("email_snapshot") or payload.get("emailSnapshot")
+    if snapshot:
+        updated["email_snapshot"] = _normalize_application_email_snapshot(snapshot)
+    return updated
+
+
+def _normalize_application_email_snapshot(value: Any) -> dict[str, Any]:
+    snapshot = value if isinstance(value, dict) else {}
+    attachments = snapshot.get("attachments") if isinstance(snapshot.get("attachments"), list) else []
+    return {
+        "uid": str(snapshot.get("uid") or "").strip(),
+        "mailbox": str(snapshot.get("mailbox") or "").strip(),
+        "account": str(snapshot.get("account") or "").strip(),
+        "from": str(snapshot.get("from") or "").strip(),
+        "subject": str(snapshot.get("subject") or "").strip(),
+        "date": str(snapshot.get("date") or "").strip(),
+        "snippet": str(snapshot.get("snippet") or "").strip()[:4000],
+        "rawText": str(snapshot.get("rawText") or "").strip()[:12000],
+        "attachments": [
+            {
+                "filename": str(item.get("filename") or "").strip(),
+                "contentType": str(item.get("contentType") or "").strip(),
+                "size": int(float(item.get("size") or 0)) if str(item.get("size") or "").replace(".", "", 1).isdigit() else 0,
+                "path": str(item.get("path") or "").strip(),
+            }
+            for item in attachments
+            if isinstance(item, dict) and str(item.get("filename") or "").strip()
+        ],
+    }
+
+
+def _write_application_email_snapshot(path: Path, event: dict[str, Any]) -> None:
+    snapshot = event.get("email_snapshot")
+    if not isinstance(snapshot, dict):
+        return
+    raw_text = snapshot.get("rawText") or ""
+    snippet = snapshot.get("snippet") or ""
+    compact = {key: value for key, value in snapshot.items() if key not in {"rawText", "snippet"}}
+    record = {
+        "snapshot_id": f"mail_{event['event_id']}",
+        "event_id": event["event_id"],
+        "application_id": event["application_id"],
+        "company": event["company"],
+        "role": event["role"],
+        "event": event["event"],
+        "captured_at": event["created_at"],
+        **compact,
+        "snippet": snippet,
+        "rawText": raw_text,
+    }
+    event["email_snapshot"] = {
+        **compact,
+        "snippet": snippet[:500] if snippet else "",
+        "rawText": raw_text or snippet or f"workspace/ops/data/application-email-snapshots.jsonl#mail_{event['event_id']}",
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
+def _find_duplicate_application_event(event: dict[str, Any], existing_events: list[dict[str, Any]]) -> dict[str, Any] | None:
+    company_key = _match_key(str(event.get("company") or ""))
+    role_key = _match_key(str(event.get("role") or ""))
+    evidence_key = _event_evidence_key(str(event.get("evidence") or event.get("note") or event.get("next_action") or ""))
+    for existing in existing_events:
+        if (
+            _normalize_progress_id(existing.get("application_id")) == _normalize_progress_id(event.get("application_id"))
+            and _match_key(str(existing.get("company") or "")) == company_key
+            and _match_key(str(existing.get("role") or "")) == role_key
+            and existing.get("event") == event.get("event")
+            and existing.get("date") == event.get("date")
+            and _event_evidence_key(str(existing.get("evidence") or existing.get("note") or existing.get("next_action") or "")) == evidence_key
+        ):
+            return existing
+    return None
+
+
+def _find_existing_application_id(company: str, role: str, events: list[dict[str, Any]], applications: list[dict[str, Any]]) -> str:
+    company_key = _match_key(company)
+    role_key = _match_key(role)
+    if not company_key or not role_key:
+        return ""
+    for event in reversed(events):
+        if _match_key(str(event.get("company") or "")) == company_key and _match_key(str(event.get("role") or "")) == role_key:
+            return _normalize_progress_id(event.get("application_id"))
+    for app in applications:
+        if _match_key(str(app.get("company") or "")) == company_key and _match_key(str(app.get("role") or "")) == role_key:
+            return str(app.get("id") or "")
+    return ""
+
+
+def _group_events(events: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for event in events:
+        app_id = _normalize_progress_id(event.get("application_id"))
+        if app_id:
+            groups.setdefault(app_id, []).append(event)
+    return groups
+
+
+def _next_progress_id(groups: dict[str, list[dict[str, Any]]], applications: list[dict[str, Any]]) -> str:
+    used = [int(key) for key in groups.keys() if key.isdigit()]
+    used.extend(int(str(app.get("id"))) for app in applications if str(app.get("id") or "").isdigit())
+    return str(max(used) + 1 if used else 1).zfill(3)
+
+
+def _allowed_application_events() -> set[str]:
+    return {
+        "evaluated", "applied", "application_received", "responded", "assessment", "interview",
+        "offer", "rejected", "discarded", "skip", "followup_sent", "note",
+    }
+
+
+def _event_evidence_key(value: str) -> str:
+    return re.sub(r"\s+", "", value.lower())[:180]
+
+
+def _match_key(value: str) -> str:
+    text = re.sub(r"[（）()【】\[\]·,，。.\s_-]+", "", value.lower())
+    return re.sub(r"有限公司|有限责任公司|科技|招聘|hr|recruiting|talent", "", text).strip()
+
+
+def _today_china() -> str:
+    return datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d")
 
 
 def _application_metrics(applications: list[dict[str, Any]]) -> dict[str, int]:

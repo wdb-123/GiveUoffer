@@ -145,6 +145,53 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertEqual(applications["data"]["metrics"]["offer"], 1)
             self.assertEqual(applications["data"]["applications"][0]["status"], "Offer")
 
+            created_event = client.post(
+                "/api/application-events",
+                headers=headers,
+                json={
+                    "company": "Demo Corp",
+                    "role": "Robot Engineer",
+                    "event": "interview",
+                    "date": "2026-07-04",
+                    "note": "Fourth round scheduled",
+                    "email_snapshot": {
+                        "uid": "42",
+                        "subject": "Interview",
+                        "snippet": "Fourth round",
+                        "rawText": "Fourth round full email",
+                        "attachments": [{"filename": "invite.pdf", "contentType": "application/pdf", "size": 12}],
+                    },
+                },
+            ).json()
+            self.assertTrue(created_event["ok"])
+            event_id = created_event["data"]["event"]["event_id"]
+            self.assertEqual(created_event["data"]["event"]["application_id"], "001")
+            self.assertIn("Fourth round full email", (tenant_workspace / "ops" / "data" / "application-email-snapshots.jsonl").read_text(encoding="utf-8"))
+
+            duplicate_event = client.post(
+                "/api/application-events",
+                headers=headers,
+                json={"company": "Demo Corp", "role": "Robot Engineer", "event": "interview", "date": "2026-07-04", "note": "Fourth round scheduled"},
+            ).json()
+            self.assertTrue(duplicate_event["ok"])
+            self.assertEqual(duplicate_event["data"]["event"]["event_id"], event_id)
+
+            updated_event = client.post(
+                "/api/application-events/update",
+                headers=headers,
+                json={"event_id": event_id, "company": "Demo Corp", "role": "Robot Engineer", "event": "offer", "note": "Offer arrived"},
+            ).json()
+            self.assertTrue(updated_event["ok"])
+            self.assertEqual(updated_event["data"]["event"]["event"], "offer")
+
+            deleted_event = client.post(
+                "/api/application-events/delete",
+                headers=headers,
+                json={"event_id": event_id},
+            ).json()
+            self.assertTrue(deleted_event["ok"])
+            self.assertEqual(deleted_event["data"]["deleted"], event_id)
+
             reports = client.get("/api/reports", headers=headers).json()
             self.assertTrue(reports["ok"])
             self.assertEqual(reports["data"]["metrics"]["total"], 1)
