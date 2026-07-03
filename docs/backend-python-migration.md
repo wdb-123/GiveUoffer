@@ -36,8 +36,8 @@ for the React frontend and shared UI types.
 1. Python daemon skeleton: FastAPI app, health check, shared config, DB probe and
    route migration manifest. Done.
 2. Auth and tenants: accounts, sessions, roles and tenant switching. Done.
-3. Billing and token quotas: plans and tenant usage schema. In progress; usage
-   aggregation and execution quota gates still need hard enforcement.
+3. Billing and token quotas: plans, tenant usage schema, real provider usage
+   aggregation and execution quota gates. Done.
 4. Workspace data stores: profile, resumes, reports, applications, experience,
    evidence and market data. Done for the web API surface.
 5. Connectors: QQ/Tencent email, attachment import and job-search providers.
@@ -57,4 +57,5 @@ as the active backend module.
 
 Remaining work is retirement work: move or delete the legacy TypeScript daemon
 checks once the last Node-specific local provider/adapters are replaced by
-Python equivalents.
+Python equivalents. New backend product work should continue landing in
+`apps/py-daemon` first.

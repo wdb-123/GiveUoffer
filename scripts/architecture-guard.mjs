@@ -242,6 +242,20 @@ function assertUcareerNamespace() {
     "CREATE TABLE IF NOT EXISTS sync_events",
   ], "Python daemon owns local SQLite schema");
 
+  assertContains("apps/py-daemon/src/ucareer_py_daemon/agent_store.py", [
+    "UC_USAGE",
+    "_parse_usage_event",
+    "record_token_usage_event",
+  ], "Python daemon parses provider token usage events");
+
+  assertContains("apps/py-daemon/src/ucareer_py_daemon/billing.py", [
+    "record_token_usage_event",
+    "tenant_token_usage_events",
+    "tenant_token_usage_monthly",
+    "assert_tenant_can_run_agent",
+    "Tenant token quota exceeded",
+  ], "Python daemon owns token billing aggregation and quota gates");
+
   assertContains("apps/py-daemon/src/ucareer_py_daemon/route_manifest.py", [
     "legacyNodeModule",
     "pythonStatus",
