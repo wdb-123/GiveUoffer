@@ -286,6 +286,29 @@ class ResumeStore:
             reports = [item for item in reports if item.get("resumeFile") == resume_file or item["file"].startswith(Path(resume_file).stem)]
         return sorted(reports, key=lambda item: item.get("updatedAt", ""), reverse=True)
 
+    def generate_preview(self, payload: dict[str, Any], jobs: list[dict[str, Any]]) -> dict[str, Any]:
+        requested_base = str(payload.get("baseFile") or "").strip()
+        base_file = requested_base if _is_resume_markdown_file(requested_base) else (self.list_resumes()[0]["file"] if self.list_resumes() else "")
+        if not base_file:
+            raise ValueError("No base resume found")
+        base = self.get_resume(base_file)
+        if not base:
+            raise ValueError(f"Base resume not found: {base_file}")
+        target_job_id = str(payload.get("targetJobId") or "").strip()
+        target_job = next((job for job in jobs if str(job.get("id") or "") == target_job_id), None) if target_job_id else None
+        if target_job is None and jobs:
+            target_job = jobs[0]
+        title = _generated_resume_title(str(base.get("title") or ""), target_job)
+        target_job_title = " · ".join([str(target_job.get("company") or ""), str(target_job.get("role") or "")]).strip(" ·") if target_job else ""
+        return {
+            "title": title,
+            "markdown": _build_resume_preview_markdown(title, str(base.get("markdown") or ""), target_job),
+            "baseFile": base_file,
+            "targetJobId": str(target_job.get("id") or "") if target_job else "",
+            "targetJobTitle": target_job_title,
+            "engine": "local-preview",
+        }
+
     def save_generated_resume(self, payload: dict[str, Any]) -> dict[str, Any]:
         title = str(payload.get("title") or "").strip() or _markdown_title(str(payload.get("markdown") or "")) or "generated-resume"
         markdown = _normalize_resume_markdown(title, str(payload.get("markdown") or ""))
@@ -901,6 +924,62 @@ def _parse_diagnosis_report(file: str, markdown: str) -> dict[str, Any]:
         "excerpt": _excerpt(markdown),
         "markdown": markdown,
     }
+
+
+def _generated_resume_title(base_title: str, target_job: dict[str, Any] | None) -> str:
+    role = str((target_job or {}).get("role") or "").strip()
+    if not role:
+        role = (base_title.split("-")[-1] if base_title else "目标岗位").strip()
+    return f"韦东波 - {role or '目标岗位'}"
+
+
+def _build_resume_preview_markdown(title: str, base_markdown: str, target_job: dict[str, Any] | None) -> str:
+    contact_match = re.search(r"^#.+\n([\s\S]*?)(?=\n##\s+)", base_markdown)
+    contact = contact_match.group(1).strip() if contact_match else ""
+    keywords = [str(item) for item in ((target_job or {}).get("keywords") or []) if item]
+    direction = str((target_job or {}).get("direction") or "").strip()
+    if direction:
+        keywords.append(direction)
+    base_sections = re.sub(r"^#.+$", "", base_markdown, count=1, flags=re.M).strip()[:9000]
+    if target_job:
+        job_block = "\n".join([
+            f"- 公司：{target_job.get('company') or '待确认'}",
+            f"- 岗位：{target_job.get('role') or '待确认'}",
+            f"- 地点：{target_job.get('location') or '待确认'}",
+            f"- 匹配分：{_format_match_score(target_job.get('matchScore'))}",
+            f"- 证据缺口：{target_job.get('evidenceGap') or '待补充'}",
+        ])
+        summary_target = f"{target_job.get('company') or '目标公司'} / {target_job.get('role') or '目标岗位'}"
+    else:
+        job_block = "- 暂无目标岗位，使用基础简历生成预览。"
+        summary_target = "目标岗位"
+    return f"""# {title}
+{f"{contact}\n" if contact else ""}
+## 个人摘要
+
+面向{summary_target}生成的本地规则预览版简历。重点对齐岗位信号：{"、".join(keywords[:10]) or "待补充"}。
+
+## 岗位匹配重点
+
+{job_block}
+
+## 原始简历内容
+
+{base_sections}
+
+## 待人工确认
+
+- 核对所有量化指标，避免写入未确认事实。
+- 根据目标 JD 调整项目排序和关键词密度。
+- 保存前建议补充证据请求中的缺口材料。
+""".strip() + "\n"
+
+
+def _format_match_score(value: Any) -> str:
+    try:
+        return f"{float(value):.1f}"
+    except (TypeError, ValueError):
+        return "待评估"
 
 
 def _resume_links(path: Path) -> dict[str, dict[str, Any]]:

@@ -495,6 +495,49 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertTrue(resume["ok"])
             self.assertEqual(resume["data"]["title"], "Robot Resume")
 
+            generated_preview = client.post(
+                "/api/resumes/generate-preview",
+                headers=headers,
+                json={"baseFile": "robot-resume.md", "targetJobId": "MJ-001"},
+            ).json()
+            self.assertTrue(generated_preview["ok"])
+            self.assertEqual(generated_preview["data"]["baseFile"], "robot-resume.md")
+            self.assertEqual(generated_preview["data"]["targetJobId"], "MJ-001")
+            self.assertEqual(generated_preview["data"]["engine"], "local-preview")
+            self.assertIn("岗位匹配重点", generated_preview["data"]["markdown"])
+
+            exported_html = client.post(
+                "/api/resumes/export",
+                headers=headers,
+                json={"file": "robot-resume.md", "format": "html", "style": "bluebar"},
+            ).json()
+            self.assertTrue(exported_html["ok"])
+            self.assertEqual(exported_html["data"]["format"], "html")
+            self.assertEqual(exported_html["data"]["style"], "bluebar")
+            html_file = exported_html["data"]["file"]
+            self.assertTrue((tenant_workspace / "ops" / "exports" / "resumes" / html_file).exists())
+            html_download = client.get(f"/api/resumes/export-file?file={html_file}", headers=headers)
+            self.assertEqual(html_download.status_code, 200)
+            self.assertIn(b"Robot Resume", html_download.content)
+
+            exported_pdf = client.post(
+                "/api/resumes/export",
+                headers=headers,
+                json={"file": "robot-resume.md", "format": "pdf"},
+            ).json()
+            self.assertTrue(exported_pdf["ok"])
+            pdf_bytes = (tenant_workspace / "ops" / "exports" / "resumes" / exported_pdf["data"]["file"]).read_bytes()
+            self.assertTrue(pdf_bytes.startswith(b"%PDF-"))
+
+            exported_docx = client.post(
+                "/api/resumes/export",
+                headers=headers,
+                json={"file": "robot-resume.md", "format": "docx", "style": "ats"},
+            ).json()
+            self.assertTrue(exported_docx["ok"])
+            docx_bytes = (tenant_workspace / "ops" / "exports" / "resumes" / exported_docx["data"]["file"]).read_bytes()
+            self.assertTrue(docx_bytes.startswith(b"PK"))
+
             saved_generated = client.post(
                 "/api/resumes/save-generated",
                 headers=headers,

@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 import uvicorn
 
 from .agent_store import AgentStore
@@ -16,6 +17,7 @@ from .db import probe_database
 from .envelope import error, ok
 from .memory import get_memory_snapshot
 from .providers import check_provider, list_providers
+from .resume_export import export_content_type, export_resume, exported_resume_file
 from .route_manifest import ROUTE_GROUPS
 from .routing import list_skills, list_workflows, preview_agent_route
 from .sync import SyncStore
@@ -414,6 +416,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             lambda root: ResumeStore(root).list_diagnostics(resumeFile),
         )
 
+    @app.post("/api/resumes/generate-preview")
+    async def generate_resume_preview(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: ResumeStore(root).generate_preview(payload, MarketStore(root).get_recruitment_market().get("jobs", [])),
+        )
+
     @app.post("/api/resumes/save-generated")
     async def save_generated_resume(request: Request, payload: dict[str, Any]) -> dict[str, object]:
         return _handle_workspace(
@@ -432,6 +444,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings,
             "workspace.write",
             lambda root: ResumeStore(root).save_resume(payload),
+        )
+
+    @app.post("/api/resumes/export")
+    async def export_resume_route(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: export_resume(root, payload),
+        )
+
+    @app.get("/api/resumes/export-file")
+    async def export_resume_file_route(request: Request, file: str = ""):
+        handled = _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: exported_resume_file(root, file),
+        )
+        if not handled.get("ok"):
+            return handled
+        path = handled.get("data")
+        if not path:
+            return error("export_file_not_found", f"Export file not found: {file}")
+        return FileResponse(
+            path,
+            media_type=export_content_type(file),
+            filename=file,
         )
 
     @app.get("/api/experience-overview")

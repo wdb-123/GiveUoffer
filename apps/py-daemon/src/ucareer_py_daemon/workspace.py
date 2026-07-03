@@ -19,6 +19,7 @@ DATA_PATHS: dict[str, str] = {
     "recruitmentMarket": "workspace/ops/data/recruitment-market.json",
     "reports": "workspace/jobs/reports",
     "resumeDiagnostics": "workspace/resumes/diagnostics",
+    "resumeExports": "workspace/ops/exports/resumes",
     "resumeJobLinks": "workspace/ops/data/resume-job-links.json",
     "resumeLibrary": "workspace/resumes/library",
 }
