@@ -37,7 +37,7 @@ function listFiles(dir) {
       if (name === "node_modules" || name === "dist") continue;
       const full = join(current, name);
       if (statSync(full).isDirectory()) walk(full);
-      else if (/\.(ts|tsx|js|mjs|md)$/.test(name)) out.push(relative(ROOT, full));
+      else if (/\.(ts|tsx|js|mjs|py|md)$/.test(name)) out.push(relative(ROOT, full));
     }
   };
   walk(root);
@@ -198,6 +198,74 @@ function assertUcareerNamespace() {
     "54321",
   ], "Python daemon owns the default frontend API port");
 
+  assertExists([
+    "apps/py-daemon/README.md",
+    "apps/py-daemon/pyproject.toml",
+    "apps/py-daemon/src/ucareer_py_daemon/main.py",
+    "apps/py-daemon/src/ucareer_py_daemon/db.py",
+    "apps/py-daemon/src/ucareer_py_daemon/auth.py",
+    "apps/py-daemon/src/ucareer_py_daemon/billing.py",
+    "apps/py-daemon/src/ucareer_py_daemon/agent_store.py",
+    "apps/py-daemon/src/ucareer_py_daemon/attachments.py",
+    "apps/py-daemon/src/ucareer_py_daemon/connectors.py",
+    "apps/py-daemon/src/ucareer_py_daemon/jobsearch.py",
+    "apps/py-daemon/src/ucareer_py_daemon/resume_export.py",
+    "apps/py-daemon/src/ucareer_py_daemon/routing.py",
+    "apps/py-daemon/src/ucareer_py_daemon/sync.py",
+    "apps/py-daemon/src/ucareer_py_daemon/workspace_stores.py",
+    "apps/py-daemon/tests/test_python_daemon.py",
+  ], "Python daemon architecture modules");
+
+  assertContains("apps/py-daemon/pyproject.toml", [
+    "fastapi",
+    "uvicorn",
+    "cryptography",
+  ], "Python daemon declares backend runtime dependencies");
+
+  assertContains("apps/py-daemon/src/ucareer_py_daemon/main.py", [
+    "FastAPI(title=\"Ucareer Python Daemon\"",
+    "@app.get(\"/api/backend/architecture\")",
+    "@app.post(\"/api/agent-tasks\")",
+    "@app.get(\"/api/workflow-runs\")",
+    "@app.post(\"/api/connectors/qq-email/messages\")",
+    "@app.post(\"/api/resumes/export\")",
+    "allow_methods=[\"GET\", \"POST\", \"PATCH\", \"DELETE\", \"OPTIONS\"]",
+  ], "Python FastAPI daemon owns public backend routes");
+
+  assertContains("apps/py-daemon/src/ucareer_py_daemon/db.py", [
+    "CREATE TABLE IF NOT EXISTS tenants",
+    "CREATE TABLE IF NOT EXISTS tenant_memberships",
+    "CREATE TABLE IF NOT EXISTS tenant_billing",
+    "CREATE TABLE IF NOT EXISTS tenant_token_usage_monthly",
+    "CREATE TABLE IF NOT EXISTS connector_credentials",
+    "CREATE TABLE IF NOT EXISTS sync_events",
+  ], "Python daemon owns local SQLite schema");
+
+  assertContains("apps/py-daemon/src/ucareer_py_daemon/route_manifest.py", [
+    "legacyNodeModule",
+    "pythonStatus",
+  ], "Python route manifest marks Node modules as legacy references");
+
+  assertNotContains("apps/py-daemon/src/ucareer_py_daemon/route_manifest.py", [
+    "\"nodeModule\"",
+  ], "Python route manifest does not expose Node as the active module");
+
+  assertFilesDoNotContain(
+    listFiles("apps/py-daemon/src/ucareer_py_daemon").filter((file) => file !== "apps/py-daemon/src/ucareer_py_daemon/route_manifest.py"),
+    [
+      "apps/daemon/src",
+      "@ucareer/daemon",
+    ],
+    "Python daemon implementation does not depend on legacy Node daemon source",
+  );
+
+  assertContains("apps/daemon/README.md", [
+    "Legacy TypeScript Daemon",
+    "default local backend is now the FastAPI service",
+    "npm run daemon:node",
+    "default `npm run daemon` command starts the Python daemon",
+  ], "legacy TypeScript daemon is documented as non-default");
+
   assertContains("package-lock.json", [
     "\"name\": \"@ucareer/daemon\"",
     "\"name\": \"@ucareer/shared\"",
@@ -206,15 +274,15 @@ function assertUcareerNamespace() {
 
   assertContains("apps/daemon/src/server.ts", [
     "const daemonDbPath = resolve(workspaceRoot, \".ucareer/daemon.sqlite\")",
-  ], "daemon runtime path uses Ucareer namespace");
+  ], "legacy Node daemon runtime path uses Ucareer namespace");
 
   assertContains("apps/daemon/src/policy/agent-execution-policy.ts", [
     "process.env.UCAREER_AGENT_AUTO_START",
-  ], "agent execution env uses Ucareer namespace");
+  ], "legacy Node agent execution env uses Ucareer namespace");
 
   assertContains("apps/daemon/src/routes/sync-routes.ts", [
     "process.env.UCAREER_CLOUD_URL",
-  ], "sync env uses Ucareer namespace");
+  ], "legacy Node sync env uses Ucareer namespace");
 
   assertContains("apps/web/src/App.tsx", [
     "useUcareerData",
@@ -425,13 +493,13 @@ assertContains("apps/daemon/src/services/jobsearch-providers.ts", [
   "createJobSearchProviders",
   "normalizeJobSearchRequest",
   "combineJobSearchResults",
-], "jobsearch sources are provider based");
+], "legacy Node jobsearch sources remain provider based");
 
 assertContains("apps/daemon/src/services/jobsearch-service.ts", [
   "createJobSearchProviders",
   "resolveProviders",
   "combineJobSearchResults",
-], "jobsearch service delegates to provider registry");
+], "legacy Node jobsearch service delegates to provider registry");
 
 assertFilesDoNotContain([
   "apps/daemon/src/services/jobsearch-service.ts",
@@ -440,7 +508,7 @@ assertFilesDoNotContain([
   "boss-agent-radar.mjs",
   "china-job-crawler.mjs",
   "codex-chrome-boss-radar.mjs",
-], "jobsearch service does not own source-specific execution");
+], "legacy Node jobsearch service does not own source-specific execution");
 
 assertExists([
   "apps/daemon/src/routes",
@@ -455,7 +523,7 @@ assertExists([
   "apps/daemon/src/stores",
   "apps/daemon/src/execution",
   "apps/daemon/src/db",
-], "daemon architecture directories");
+], "legacy Node daemon architecture directories");
 
 assertExists([
   "apps/daemon/src/skills/registry.ts",
@@ -482,7 +550,7 @@ assertExists([
   "apps/daemon/src/execution/runner.ts",
   "apps/daemon/src/stores/workflow-run-store.ts",
   "apps/daemon/src/stores/connector-credential-store.ts",
-], "daemon core modules");
+], "legacy Node daemon core modules");
 
 assertAbsent([
   "apps/daemon/src/application-store.ts",
@@ -499,7 +567,7 @@ assertAbsent([
   "apps/daemon/src/runner.ts",
   "apps/daemon/src/agent-execution-policy.ts",
   "apps/daemon/src/paperclip-adapter-provider.ts",
-], "legacy daemon root modules");
+], "legacy Node daemon root modules");
 
 assertNotContains("apps/daemon/src/server.ts", [
   "runApprovedTask",
@@ -507,7 +575,7 @@ assertNotContains("apps/daemon/src/server.ts", [
   "evaluateAgentExecutionPolicy",
   "app.post<{\n  Body: CreateAgentTaskRequest",
   "app.post<{\n  Body: import(\"@ucareer/shared\").SaveGeneratedResumeRequest",
-], "server stays as composition root");
+], "legacy Node server stays as composition root");
 
 const routeFiles = listFiles("apps/daemon/src/routes").filter((file) => file.endsWith(".ts"));
 assertFilesDoNotContain(routeFiles, [
@@ -516,7 +584,7 @@ assertFilesDoNotContain(routeFiles, [
   "../policy/agent-execution-policy",
   "child_process",
   "spawn(",
-], "routes do not execute providers or processes directly");
+], "legacy Node routes do not execute providers or processes directly");
 
 const storeFiles = listFiles("apps/daemon/src/stores").filter((file) => file.endsWith(".ts"));
 assertFilesDoNotContain(storeFiles, [
@@ -528,7 +596,7 @@ assertFilesDoNotContain(storeFiles, [
   "../sync/",
   "child_process",
   "spawn(",
-], "stores stay below routes/services/execution");
+], "legacy Node stores stay below routes/services/execution");
 
 assertContains("apps/daemon/src/routes/workflow-routes.ts", [
   "/api/skills",
@@ -537,11 +605,11 @@ assertContains("apps/daemon/src/routes/workflow-routes.ts", [
   "/api/agent-route/preview",
   "/api/workflow-runs",
   "services.routePreviewService.preview",
-], "workflow routes expose backend routing");
+], "legacy Node workflow routes expose backend routing");
 
 assertContains("apps/daemon/src/server.ts", [
   "registerConnectorRoutes",
-], "server wires connector routes");
+], "legacy Node server wires connector routes");
 
 assertContains("apps/daemon/src/connectors/connector-registry.ts", [
   "qq-email",
@@ -551,7 +619,7 @@ assertContains("apps/daemon/src/connectors/connector-registry.ts", [
   "search_messages",
   "requiresAuth",
   "authorizationCode",
-], "connector registry owns data-source boundaries");
+], "legacy Node connector registry owns data-source boundaries");
 
 assertNotContains("apps/daemon/src/connectors/connector-registry.ts", [
   "local-workspace",
@@ -561,7 +629,7 @@ assertNotContains("apps/daemon/src/connectors/connector-registry.ts", [
   "gmail",
   "google-drive",
   "job-board-import",
-], "connector registry currently exposes only email");
+], "legacy Node connector registry currently exposes only email");
 
 assertContains("apps/daemon/src/routes/connector-routes.ts", [
   "/api/connectors",
@@ -569,14 +637,14 @@ assertContains("apps/daemon/src/routes/connector-routes.ts", [
   "/api/connectors/qq-email/credential",
   "qq_email_imap_test_failed",
   "connector_not_found",
-], "connector routes expose connector registry");
+], "legacy Node connector routes expose connector registry");
 
 assertContains("apps/daemon/src/connectors/imap-connector.ts", [
   "openImapSession",
   "LOGIN",
   "LOGOUT",
   "authorizationCode",
-], "QQ email connector uses IMAP only");
+], "legacy Node QQ email connector uses IMAP only");
 
 assertContains("apps/daemon/src/stores/connector-credential-store.ts", [
   "connectorCredentials",
@@ -584,19 +652,19 @@ assertContains("apps/daemon/src/stores/connector-credential-store.ts", [
   "connector.key",
   "saveQqEmail",
   "secretStored",
-], "QQ email credential store encrypts local SQLite secrets");
+], "legacy Node QQ email credential store encrypts local SQLite secrets");
 
 assertContains("apps/daemon/src/db/sqlite.ts", [
   "CREATE TABLE IF NOT EXISTS connector_credentials",
   "secret_ciphertext",
   "secret_auth_tag",
-], "SQLite schema stores connector credentials");
+], "legacy Node SQLite schema stores connector credentials");
 
 assertContains("apps/daemon/src/skills/definitions.ts", [
   "jobEvaluateSkill",
   "resumeGenerateSkill",
   "skillDefinitions",
-], "skill definitions aggregate built-in skills");
+], "legacy Node skill definitions aggregate built-in skills");
 
 assertContains("apps/daemon/src/skills/job-evaluate/skill.ts", [
   "fileManagement",
@@ -606,7 +674,7 @@ assertContains("apps/daemon/src/skills/job-evaluate/skill.ts", [
   "readPaths",
   "writePaths",
   "outputArtifacts",
-], "job evaluate skill owns file-management contract");
+], "legacy Node job evaluate skill owns file-management contract");
 
 assertContains("apps/daemon/src/skills/resume-generate/skill.ts", [
   "fileManagement",
@@ -616,7 +684,7 @@ assertContains("apps/daemon/src/skills/resume-generate/skill.ts", [
   "readPaths",
   "writePaths",
   "outputArtifacts",
-], "resume generate skill owns file-management contract");
+], "legacy Node resume generate skill owns file-management contract");
 
 assertContains("apps/daemon/src/skills/registry.ts", [
   "skillDefinitions",
@@ -625,7 +693,7 @@ assertContains("apps/daemon/src/skills/registry.ts", [
   "getSkillFileManagement",
   "getSkillsForPage",
   "getSkillUiContracts",
-], "skill registry exposes lookup API");
+], "legacy Node skill registry exposes lookup API");
 
 assertContains("apps/daemon/src/routes/workflow-routes.ts", [
   "/api/skills/ui-contracts",
@@ -639,21 +707,21 @@ assertContains("apps/daemon/src/skills/workspace-help/skill.ts", [
   "help.connect_mailbox",
   "help.connect_job_sources",
   "workspace/profile/portals.yml",
-], "workspace help skill explains connectors and portals");
+], "legacy Node workspace help skill explains connectors and portals");
 
 assertContains("apps/daemon/src/skills/job-evaluate/skill.ts", [
   "ui:",
   "primaryPage",
   "entryActions",
   "market.import_or_evaluate_job",
-], "job evaluate skill exposes UI actions");
+], "legacy Node job evaluate skill exposes UI actions");
 
 assertContains("apps/daemon/src/skills/resume-generate/skill.ts", [
   "ui:",
   "primaryPage",
   "entryActions",
   "resumes.diagnose_selected_resume",
-], "resume generate skill exposes UI actions");
+], "legacy Node resume generate skill exposes UI actions");
 
 assertContains("apps/daemon/src/workflow/classify-intake.ts", [
   "RouteDecision",
@@ -661,13 +729,13 @@ assertContains("apps/daemon/src/workflow/classify-intake.ts", [
   "workflowId",
   "buildAgentPrompt",
   "agentPrompt",
-], "backend route decision builds agent prompt");
+], "legacy Node route decision builds agent prompt");
 
 assertContains("apps/daemon/src/workflow/workflow-registry.ts", [
   "workflowRegistry",
   "WorkflowDefinition",
   "findWorkflowForRoute",
-], "workflow registry is centralized");
+], "legacy Node workflow registry is centralized");
 
 assertContains("apps/daemon/src/policy/agent-execution-policy.ts", [
   "evaluateActionPolicy",
@@ -676,7 +744,7 @@ assertContains("apps/daemon/src/policy/agent-execution-policy.ts", [
   "send_application",
   "sync_cloud",
   "evaluateAgentExecutionPolicy",
-], "policy layer evaluates generic actions");
+], "legacy Node policy layer evaluates generic actions");
 
 assertContains("apps/daemon/src/services/workflow-run-service.ts", [
   "createRunMetadata",
@@ -684,31 +752,31 @@ assertContains("apps/daemon/src/services/workflow-run-service.ts", [
   "attachApproval",
   "syncTaskStatus",
   "evaluateWorkflowStepPolicy",
-], "workflow run service binds tasks and approvals");
+], "legacy Node workflow run service binds tasks and approvals");
 
 assertContains("apps/daemon/src/services/agent-task-service.ts", [
   "continueTask",
   "workflowRunService?.attachApproval",
   "workflowRunService?.syncTaskStatus",
   "onTaskStatusChange",
-], "agent task service keeps continuation workflow state in sync");
+], "legacy Node agent task service keeps continuation workflow state in sync");
 
 assertExists([
   "apps/daemon/src/routes/attachment-routes.ts",
   "apps/daemon/src/services/attachment-parser-service.ts",
-], "daemon attachment entry modules");
+], "legacy Node daemon attachment entry modules");
 
 assertContains("apps/daemon/src/server.ts", [
   "createAttachmentParserService",
   "registerAttachmentRoutes",
   "attachmentParserService",
-], "server wires attachment entry layer");
+], "legacy Node server wires attachment entry layer");
 
 assertContains("apps/daemon/src/routes/attachment-routes.ts", [
   "/api/agent-attachments",
   "requirePermission(ctx, request, \"workspace.write\")",
   "services.attachmentParserService.upload",
-], "attachment route delegates parsing to service");
+], "legacy Node attachment route delegates parsing to service");
 
 assertContains("apps/daemon/src/services/attachment-parser-service.ts", [
   "workspaceDataPath(workspaceRoot, \"agentAttachments\")",
@@ -720,7 +788,7 @@ assertContains("apps/daemon/src/services/attachment-parser-service.ts", [
   "mammoth.extractRawText",
   "maxUploadBytes",
   "maxParsedTextChars",
-], "attachment parser owns storage and extraction");
+], "legacy Node attachment parser owns storage and extraction");
 
 assertContains("packages/shared/src/index.ts", [
   "export interface SkillFileManagement",
@@ -736,14 +804,14 @@ assertContains("apps/daemon/src/services/route-preview-service.ts", [
   "attachments",
   "classifyIntake",
   "executeRouterPrompt",
-], "route preview service consumes attachment summaries");
+], "legacy Node route preview service consumes attachment summaries");
 
 assertContains("apps/daemon/src/services/agent-task-service.ts", [
   "composeDisplaySourceText",
   "composePromptWithAttachments",
   "User uploaded attachments",
   "attachment.parsed.text",
-], "agent task service injects parsed attachments");
+], "legacy Node agent task service injects parsed attachments");
 
 assertContains("apps/web/src/api.ts", [
   "uploadAgentAttachment",
@@ -775,13 +843,13 @@ assertContains("apps/daemon/src/stores/workflow-run-store.ts", [
   "workflowRuns",
   "workflowStepRuns",
   "writeSyncEvent",
-], "workflow run store persists syncable runs");
+], "legacy Node workflow run store persists syncable runs");
 
 assertContains("apps/daemon/src/db/schema.ts", [
   "workflowRuns",
   "workflowStepRuns",
   "workflowRunId",
-], "workflow run schema exists");
+], "legacy Node workflow run schema exists");
 
 assertContains("packages/shared/src/index.ts", [
   "export interface SkillDefinition",
@@ -882,7 +950,7 @@ assertContains("apps/daemon/src/ARCHITECTURE.md", [
   "stores/*",
   "execution/*",
   "cloud and mobile must not directly execute local shell commands",
-], "daemon architecture documents local/cloud boundary");
+], "legacy Node architecture documents local/cloud boundary");
 
 assertContains("workspace/README.md", [
   "local user asset boundary",
@@ -899,7 +967,7 @@ assertContains("apps/daemon/src/workspace-paths.ts", [
   "workspace/ops/imports/agent-attachments",
   "workspace/ops/exports/resumes",
   "isInsideOrSameDir",
-], "daemon centralizes workspace data paths");
+], "legacy Node centralizes workspace data paths");
 
 assertContains("apps/daemon/src/stores/application-store.ts", [
   "workspaceDataPath(workspaceRoot, \"applications\")",
@@ -942,7 +1010,7 @@ assertFilesDoNotContain([
 ], [
   "join(workspaceRoot, \"workspace/",
   "resolve(workspaceRoot, \"workspace/",
-], "daemon data writers do not hand-roll workspace paths");
+], "legacy Node data writers do not hand-roll workspace paths");
 
 assertExists([
   "workspace/resumes/tools/README.md",

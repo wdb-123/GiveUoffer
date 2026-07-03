@@ -1,6 +1,8 @@
-# Ucareer Daemon
+# Ucareer Legacy TypeScript Daemon
 
-The daemon is the new local execution boundary for Ucareer.
+The default local backend is now the FastAPI service in `apps/py-daemon`.
+This TypeScript Fastify daemon is kept as a legacy reference and adapter
+boundary while remaining Node-specific runtime code is retired.
 
 Current state:
 
@@ -13,7 +15,7 @@ Current state:
 Run:
 
 ```bash
-npm run daemon
+npm run daemon:node
 ```
 
-The daemon API starts on `http://127.0.0.1:54321` by default.
+The default `npm run daemon` command starts the Python daemon.
