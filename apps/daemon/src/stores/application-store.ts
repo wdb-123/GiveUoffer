@@ -1,5 +1,5 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname } from "node:path";
 import type {
   ApplicationEvent,
   ApplicationSummary,
@@ -8,6 +8,7 @@ import type {
   DeleteApplicationEventRequest,
   UpdateApplicationEventRequest,
 } from "@ucareer/shared";
+import { workspaceDataPath } from "../workspace-paths";
 
 export interface ApplicationStore {
   listApplications(): Promise<ApplicationsOverview>;
@@ -17,9 +18,9 @@ export interface ApplicationStore {
 }
 
 export function createApplicationStore(workspaceRoot: string): ApplicationStore {
-  const trackerPath = join(workspaceRoot, "workspace/ops/data/applications.md");
-  const applicationEventsPath = join(workspaceRoot, "workspace/ops/data/application-events.jsonl");
-  const dataDir = join(workspaceRoot, "workspace/ops/data");
+  const trackerPath = workspaceDataPath(workspaceRoot, "applications");
+  const applicationEventsPath = workspaceDataPath(workspaceRoot, "applicationEvents");
+  const applicationEmailSnapshotsPath = workspaceDataPath(workspaceRoot, "applicationEmailSnapshots");
 
   return {
     async listApplications() {
@@ -34,8 +35,13 @@ export function createApplicationStore(workspaceRoot: string): ApplicationStore 
     },
 
     async createApplicationEvent(input) {
-      const event = normalizeApplicationEvent(input, await readApplicationEvents(applicationEventsPath));
-      await mkdir(dataDir, { recursive: true });
+      const applications = parseApplicationsMarkdown(await readTextFile(trackerPath));
+      const existingEvents = await readApplicationEvents(applicationEventsPath);
+      const event = normalizeApplicationEvent(input, existingEvents, applications);
+      const duplicate = findDuplicateApplicationEvent(event, existingEvents);
+      if (duplicate) return duplicate;
+      await writeApplicationEmailSnapshot(applicationEmailSnapshotsPath, event);
+      await mkdir(dirname(applicationEventsPath), { recursive: true });
       await appendFile(applicationEventsPath, `${JSON.stringify(event)}\n`, "utf8");
       return event;
     },
@@ -49,6 +55,7 @@ export function createApplicationStore(workspaceRoot: string): ApplicationStore 
       const current = events[index];
       if (!current) throw new Error("Application event not found");
       const updated = normalizeUpdatedApplicationEvent(current, input);
+      if (input.email_snapshot || input.emailSnapshot) await writeApplicationEmailSnapshot(applicationEmailSnapshotsPath, updated);
       events[index] = updated;
       await writeApplicationEvents(applicationEventsPath, events);
       return updated;
@@ -124,8 +131,10 @@ function extractMarkdownLinkHref(value: string): string {
 function buildMetrics(applications: ApplicationSummary[]): ApplicationsOverview["metrics"] {
   return {
     total: applications.length,
+    active: applications.filter(isActiveApplicationProgress).length,
     evaluated: countStatus(applications, "evaluated"),
     applied: countStatus(applications, "applied"),
+    responded: countStatus(applications, "responded"),
     interview: countStatus(applications, "interview"),
     offer: countStatus(applications, "offer"),
     rejected: countStatus(applications, "rejected"),
@@ -174,6 +183,7 @@ function mergeApplicationEvents(applications: ApplicationSummary[], events: Appl
       notes: latestEvent.next_action || latestEvent.note || existing?.notes || "",
       eventCount: appEvents.length,
       latestEvent,
+      events: appEvents,
     });
   }
 
@@ -191,7 +201,7 @@ function groupEvents(events: ApplicationEvent[]): Map<string, ApplicationEvent[]
   return groups;
 }
 
-function normalizeApplicationEvent(input: CreateApplicationEventRequest, existingEvents: ApplicationEvent[]): ApplicationEvent {
+function normalizeApplicationEvent(input: CreateApplicationEventRequest, existingEvents: ApplicationEvent[], existingApplications: ApplicationSummary[] = []): ApplicationEvent {
   const event = String(input.event || "").trim().toLowerCase();
   if (!allowedApplicationEvents().has(event)) throw new Error("Invalid application event");
 
@@ -200,10 +210,13 @@ function normalizeApplicationEvent(input: CreateApplicationEventRequest, existin
 
   const now = new Date().toISOString();
   const groups = groupEvents(existingEvents);
-  const applicationId = normalizeProgressId(input.application_id || input.applicationId || "") || nextProgressId(groups);
+  const companyInput = String(input.company || input.companyHint || "").trim();
+  const roleInput = String(input.role || input.roleHint || "").trim();
+  const matchedApplicationId = findExistingApplicationId(companyInput, roleInput, existingEvents, existingApplications);
+  const applicationId = matchedApplicationId || normalizeProgressId(input.application_id || input.applicationId || "") || nextProgressId(groups, existingApplications);
   const latestExisting = groups.get(applicationId)?.at(-1);
-  const company = String(input.company || input.companyHint || latestExisting?.company || "").trim();
-  const role = String(input.role || input.roleHint || latestExisting?.role || "").trim();
+  const company = String(companyInput || latestExisting?.company || "").trim();
+  const role = String(roleInput || latestExisting?.role || "").trim();
   if (!company || !role) throw new Error("Missing company or role");
 
   return {
@@ -218,8 +231,99 @@ function normalizeApplicationEvent(input: CreateApplicationEventRequest, existin
     due,
     note: String(input.note || "").trim().slice(0, 500),
     evidence: String(input.evidence || "").trim().slice(0, 500),
+    ...(input.email_snapshot || input.emailSnapshot ? { email_snapshot: normalizeApplicationEmailSnapshot(input.email_snapshot || input.emailSnapshot) } : {}),
     created_at: now,
   };
+}
+
+function findDuplicateApplicationEvent(event: ApplicationEvent, existingEvents: ApplicationEvent[]): ApplicationEvent | undefined {
+  const companyKey = normalizeMatchKey(event.company);
+  const roleKey = normalizeMatchKey(event.role);
+  const evidenceKey = normalizeEventEvidenceKey(event.evidence || event.note || event.next_action);
+  return existingEvents.find((existing) => (
+    normalizeProgressId(existing.application_id) === normalizeProgressId(event.application_id)
+    && normalizeMatchKey(existing.company) === companyKey
+    && normalizeMatchKey(existing.role) === roleKey
+    && existing.event === event.event
+    && existing.date === event.date
+    && normalizeEventEvidenceKey(existing.evidence || existing.note || existing.next_action) === evidenceKey
+  ));
+}
+
+function normalizeEventEvidenceKey(value: string): string {
+  return String(value || "").toLowerCase().replace(/\s+/g, "").slice(0, 180);
+}
+
+function normalizeApplicationEmailSnapshot(value: CreateApplicationEventRequest["email_snapshot"]): NonNullable<ApplicationEvent["email_snapshot"]> {
+  const snapshot = value || {};
+  return {
+    uid: String(snapshot.uid || "").trim(),
+    mailbox: String(snapshot.mailbox || "").trim(),
+    account: String(snapshot.account || "").trim(),
+    from: String(snapshot.from || "").trim(),
+    subject: String(snapshot.subject || "").trim(),
+    date: String(snapshot.date || "").trim(),
+    snippet: String(snapshot.snippet || "").trim().slice(0, 4000),
+    rawText: String(snapshot.rawText || "").trim().slice(0, 12_000),
+    attachments: Array.isArray(snapshot.attachments)
+      ? snapshot.attachments
+        .map((attachment) => ({
+          filename: String(attachment.filename || "").trim(),
+          contentType: String(attachment.contentType || "").trim(),
+          size: Number.isFinite(Number(attachment.size)) ? Number(attachment.size) : 0,
+          path: String(attachment.path || "").trim(),
+        }))
+        .filter((attachment) => attachment.filename)
+      : [],
+  };
+}
+
+async function writeApplicationEmailSnapshot(path: string, event: ApplicationEvent): Promise<void> {
+  if (!event.email_snapshot) return;
+  const { rawText, snippet, ...compactSnapshot } = event.email_snapshot;
+  const record = {
+    snapshot_id: `mail_${event.event_id}`,
+    event_id: event.event_id,
+    application_id: event.application_id,
+    company: event.company,
+    role: event.role,
+    event: event.event,
+    captured_at: event.created_at,
+    ...compactSnapshot,
+    snippet,
+    rawText,
+  };
+  event.email_snapshot = {
+    ...compactSnapshot,
+    snippet: snippet ? snippet.slice(0, 500) : "",
+    rawText: rawText || snippet || `workspace/ops/data/application-email-snapshots.jsonl#mail_${event.event_id}`,
+  };
+  await mkdir(dirname(path), { recursive: true });
+  await appendFile(path, `${JSON.stringify(record)}\n`, "utf8");
+}
+
+function findExistingApplicationId(company: string, role: string, events: ApplicationEvent[], applications: ApplicationSummary[]): string {
+  const companyKey = normalizeMatchKey(company);
+  const roleKey = normalizeMatchKey(role);
+  if (!companyKey || !roleKey) return "";
+
+  const matchedEvent = [...events]
+    .reverse()
+    .find((event) => normalizeMatchKey(event.company) === companyKey && normalizeMatchKey(event.role) === roleKey);
+  if (matchedEvent?.application_id) return normalizeProgressId(matchedEvent.application_id);
+
+  const matchedApplication = applications.find((application) => (
+    normalizeMatchKey(application.company) === companyKey && normalizeMatchKey(application.role) === roleKey
+  ));
+  return matchedApplication?.id || "";
+}
+
+function normalizeMatchKey(value: string): string {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[（）()【】\[\]·,，。.\s_-]+/g, "")
+    .replace(/有限公司|有限责任公司|科技|招聘|hr|recruiting|talent/g, "")
+    .trim();
 }
 
 function normalizeUpdatedApplicationEvent(current: ApplicationEvent, input: UpdateApplicationEventRequest): ApplicationEvent {
@@ -243,6 +347,9 @@ function normalizeUpdatedApplicationEvent(current: ApplicationEvent, input: Upda
     due,
     note: String(input.note ?? current.note ?? "").trim().slice(0, 500),
     evidence: String(input.evidence ?? current.evidence ?? "").trim().slice(0, 500),
+    ...(input.email_snapshot || input.emailSnapshot
+      ? { email_snapshot: normalizeApplicationEmailSnapshot(input.email_snapshot || input.emailSnapshot) }
+      : {}),
     updated_at: new Date().toISOString(),
   };
 }
@@ -262,6 +369,7 @@ function normalizePersistedEvent(value: Record<string, unknown>, index: number):
     due: String(value.due || "").trim(),
     note: String(value.note || "").trim(),
     evidence: String(value.evidence || "").trim(),
+    ...(value.email_snapshot && typeof value.email_snapshot === "object" ? { email_snapshot: normalizeApplicationEmailSnapshot(value.email_snapshot as CreateApplicationEventRequest["email_snapshot"]) } : {}),
     created_at: createdAt,
     ...(value.updated_at ? { updated_at: String(value.updated_at) } : {}),
   };
@@ -318,11 +426,15 @@ function allowedApplicationEvents(): Set<string> {
 }
 
 function normalizeProgressId(value: string): string {
-  return String(value || "").replace(/^#/, "").padStart(3, "0");
+  const normalized = String(value || "").replace(/^#/, "").padStart(3, "0");
+  return Number(normalized) > 0 ? normalized : "";
 }
 
-function nextProgressId(groups: Map<string, unknown>): string {
-  const used = [...groups.keys()].map((id) => Number(id)).filter(Number.isFinite);
+function nextProgressId(groups: Map<string, unknown>, applications: ApplicationSummary[] = []): string {
+  const used = [
+    ...groups.keys(),
+    ...applications.map((application) => application.id),
+  ].map((id) => Number(id)).filter(Number.isFinite);
   const next = used.length ? Math.max(...used) + 1 : 1;
   return String(next).padStart(3, "0");
 }
@@ -333,6 +445,10 @@ function todayChina(): string {
 
 function countStatus(applications: ApplicationSummary[], statusKey: string): number {
   return applications.filter((application) => application.statusKey === statusKey).length;
+}
+
+function isActiveApplicationProgress(application: ApplicationSummary): boolean {
+  return new Set(["applied", "responded", "interview", "offer", "rejected"]).has(application.statusKey);
 }
 
 async function readTextFile(path: string): Promise<string> {
@@ -346,6 +462,7 @@ async function readTextFile(path: string): Promise<string> {
 
 async function writeApplicationEvents(path: string, events: ApplicationEvent[]): Promise<void> {
   const content = events.map((event) => JSON.stringify(stripInternalEventFields(event))).join("\n");
+  await mkdir(dirname(path), { recursive: true });
   await writeFile(path, content ? `${content}\n` : "", "utf8");
 }
 

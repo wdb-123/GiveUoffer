@@ -1,7 +1,8 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const agentTasks = sqliteTable("agent_tasks", {
   id: text("id").primaryKey(),
+  tenantId: text("tenant_id"),
   providerId: text("provider_id").notNull(),
   workspacePath: text("workspace_path").notNull(),
   prompt: text("prompt").notNull(),
@@ -19,6 +20,7 @@ export const agentTasks = sqliteTable("agent_tasks", {
 
 export const workflowRuns = sqliteTable("workflow_runs", {
   id: text("id").primaryKey(),
+  tenantId: text("tenant_id"),
   workflowId: text("workflow_id").notNull(),
   skillId: text("skill_id"),
   taskId: text("task_id"),
@@ -32,6 +34,7 @@ export const workflowRuns = sqliteTable("workflow_runs", {
 
 export const workflowStepRuns = sqliteTable("workflow_step_runs", {
   id: text("id").primaryKey(),
+  tenantId: text("tenant_id"),
   workflowRunId: text("workflow_run_id").notNull(),
   stepId: text("step_id").notNull(),
   status: text("status").notNull(),
@@ -43,6 +46,7 @@ export const workflowStepRuns = sqliteTable("workflow_step_runs", {
 
 export const agentEvents = sqliteTable("agent_events", {
   id: text("id").primaryKey(),
+  tenantId: text("tenant_id"),
   taskId: text("task_id").notNull(),
   eventType: text("event_type").notNull(),
   payload: text("payload").notNull(),
@@ -51,6 +55,7 @@ export const agentEvents = sqliteTable("agent_events", {
 
 export const approvalRequests = sqliteTable("approval_requests", {
   id: text("id").primaryKey(),
+  tenantId: text("tenant_id"),
   taskId: text("task_id").notNull(),
   action: text("action").notNull(),
   risk: text("risk").notNull(),
@@ -63,6 +68,7 @@ export const approvalRequests = sqliteTable("approval_requests", {
 
 export const approvalDecisions = sqliteTable("approval_decisions", {
   approvalId: text("approval_id").primaryKey(),
+  tenantId: text("tenant_id"),
   taskId: text("task_id").notNull(),
   decision: text("decision").notNull(),
   note: text("note"),
@@ -71,15 +77,24 @@ export const approvalDecisions = sqliteTable("approval_decisions", {
 
 export const approvalGrants = sqliteTable("approval_grants", {
   id: text("id").primaryKey(),
+  tenantId: text("tenant_id"),
   action: text("action").notNull(),
   providerId: text("provider_id").notNull(),
   workspacePath: text("workspace_path").notNull(),
   sourceApprovalId: text("source_approval_id"),
   createdAt: text("created_at").notNull(),
-});
+}, (table) => [
+  uniqueIndex("idx_approval_grants_tenant_action_provider_workspace").on(
+    table.tenantId,
+    table.action,
+    table.providerId,
+    table.workspacePath,
+  ),
+]);
 
 export const syncEvents = sqliteTable("sync_events", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  tenantId: text("tenant_id"),
   entityType: text("entity_type").notNull(),
   entityId: text("entity_id").notNull(),
   eventType: text("event_type").notNull(),
@@ -109,7 +124,9 @@ export const tenantMemberships = sqliteTable("tenant_memberships", {
   accountId: text("account_id").notNull(),
   role: text("role").notNull(),
   createdAt: text("created_at").notNull(),
-});
+}, (table) => [
+  primaryKey({ columns: [table.tenantId, table.accountId] }),
+]);
 
 export const authSessions = sqliteTable("auth_sessions", {
   token: text("token").primaryKey(),
@@ -120,7 +137,8 @@ export const authSessions = sqliteTable("auth_sessions", {
 });
 
 export const connectorCredentials = sqliteTable("connector_credentials", {
-  connectorId: text("connector_id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  connectorId: text("connector_id").notNull(),
   account: text("account").notNull(),
   secretCiphertext: text("secret_ciphertext").notNull(),
   secretIv: text("secret_iv").notNull(),
@@ -128,4 +146,6 @@ export const connectorCredentials = sqliteTable("connector_credentials", {
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
   verifiedAt: text("verified_at"),
-});
+}, (table) => [
+  primaryKey({ columns: [table.tenantId, table.connectorId] }),
+]);

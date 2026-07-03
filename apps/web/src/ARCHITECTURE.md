@@ -7,8 +7,15 @@
 - `App.tsx`: composition only. It wires `useUcareerData`, `AppLayout` and `ViewRenderer`.
 - `api.ts`: typed daemon API client. No React code.
 - `hooks/`: stateful app and feature hooks. Hooks may import `api.ts`.
+- `hooks/useUcareerData.ts`: facade that composes domain data hooks; domain-specific server state belongs in `useResumeData`, `useMarketData`, `useApplicationsData`, `useExperienceData`, `useEvidenceData` and `useReportsData`.
 - `layout/`: app shell, sidebar and view switching. Layout components do not import `api.ts`.
+- `layout/pageAgentPrompts.ts`: page-triggered Agent prompts and page contexts. `ViewRenderer` should call these helpers instead of embedding long prompt strings.
 - `sections/`: page-level feature components. Sections receive props and callbacks; they do not fetch.
+- `sections/agent/AgentComposer.tsx`: Agent input, attachments, provider and permission controls. `AgentSection` owns task state and upload handlers; the composer owns the form UI.
+- `sections/agent/AgentThreadStage.tsx`: Agent dialogue, turn jump markers and auto-scroll behavior.
+- `sections/agent/AgentApprovalBar.tsx`: Agent approval cards and approval decision controls.
+- `sections/agent/useAgentConversationState.ts`: Agent transcript, pending draft, turn grouping and running process derivation.
+- `sections/agent/useAgentFilePreview.ts`: Agent file preview open/close/resize state.
 - `ui/`: reusable visual primitives shared by two or more sections.
 - `views.ts`: stable view registry.
 
@@ -18,7 +25,9 @@
 - `sections/*` must not import `api.ts`.
 - `layout/*` must not import feature sections except `ViewRenderer`.
 - `hooks/*` may import `api.ts` and own side effects.
+- `useUcareerData.ts` should compose domain hooks instead of owning all feature state directly.
 - `App.tsx` must not contain business logic or direct API calls.
+- `ViewRenderer.tsx` must not embed long Agent prompts; put page-triggered prompt/context builders in `layout/pageAgentPrompts.ts`.
 
 ## Component Rules
 

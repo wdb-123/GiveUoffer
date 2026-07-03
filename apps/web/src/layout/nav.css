@@ -1,0 +1,39 @@
+.nav-collapsed .app-nav {
+  align-items: center;
+}
+
+.nav-collapsed.codex-layout .app-nav,
+.nav-collapsed.layout-agent .app-nav {
+  padding-left: calc((var(--sidebar-collapsed-width) - var(--sidebar-collapsed-control)) / 2);
+  padding-right: calc((var(--sidebar-collapsed-width) - var(--sidebar-collapsed-control)) / 2);
+}
+
+.nav-collapsed .brand,
+.nav-collapsed .app-nav nav,
+.nav-collapsed .nav-agent-conversation,
+.nav-collapsed .tenant-switcher {
+  width: var(--sidebar-collapsed-control);
+}
+
+.nav-collapsed .brand-main,
+.nav-collapsed .nav-collapse-button,
+.nav-collapsed .nav-item,
+.nav-collapsed .nav-item-main,
+.nav-collapsed .nav-agent-header,
+.nav-collapsed .nav-agent-add,
+.nav-collapsed .tenant-settings-button {
+  align-items: center;
+  display: grid;
+  height: var(--sidebar-collapsed-control);
+  justify-content: center;
+  min-height: var(--sidebar-collapsed-control);
+  padding: 0;
+  place-items: center;
+  width: var(--sidebar-collapsed-control);
+}
+
+.nav-collapsed .brand-mark,
+.nav-collapsed .nav-item-icon {
+  height: var(--sidebar-collapsed-icon);
+  width: var(--sidebar-collapsed-icon);
+}

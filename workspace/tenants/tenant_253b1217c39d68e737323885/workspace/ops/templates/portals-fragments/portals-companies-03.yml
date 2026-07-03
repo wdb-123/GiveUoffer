@@ -1,0 +1,233 @@
+tracked_companies:
+  - name: Legora
+    careers_url: https://jobs.ashbyhq.com/legora
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/legora
+    notes: Stockholm SE / NYC / London. AI-native legal workspace.
+    enabled: true
+  - name: Spotify
+    careers_url: https://jobs.lever.co/spotify
+    notes: Stockholm SE / NYC / London. Audio platform, large ML/personalization org.
+    enabled: true
+  - name: Vinted
+    careers_url: https://jobs.lever.co/vinted
+    notes: Vilnius LT / Berlin. C2C marketplace unicorn, data science & ML roles.
+    enabled: true
+  - name: Amplemarket
+    careers_url: https://job-boards.greenhouse.io/amplemarket
+    api: https://boards-api.greenhouse.io/v1/boards/amplemarket/jobs
+    notes: Lisbon PT / Remote. AI-native sales platform.
+    enabled: true
+  - name: Perplexity
+    careers_url: https://jobs.ashbyhq.com/perplexity
+    scan_method: websearch
+    scan_query: >-
+      ‘site:jobs.ashbyhq.com/perplexity "AI" OR "Applied AI" OR "Forward
+      Deployed" OR "Engineer"’
+    notes: AI-native search and enterprise AI platform.
+    enabled: true
+  - name: Clay Labs
+    careers_url: https://jobs.ashbyhq.com/claylabs
+    scan_method: websearch
+    scan_query: >-
+      site:jobs.ashbyhq.com/claylabs "AI" OR "Developer Experience" OR "Growth"
+      OR "Engineer"
+    notes: AI-native GTM and workflow automation platform.
+    enabled: true
+  - name: Runway
+    careers_url: https://job-boards.greenhouse.io/runwayml
+    api: https://boards-api.greenhouse.io/v1/boards/runwayml/jobs
+    notes: Generative AI video and creative tooling platform.
+    enabled: true
+  - name: Hightouch
+    careers_url: https://job-boards.greenhouse.io/hightouch
+    api: https://boards-api.greenhouse.io/v1/boards/hightouch/jobs
+    notes: Data activation platform with AI agents and solutions engineering roles.
+    enabled: true
+  - name: WorkOS
+    careers_url: https://jobs.ashbyhq.com/workos
+    scan_method: websearch
+    scan_query: >-
+      site:jobs.ashbyhq.com/workos "Solutions Engineer" OR "Developer Success"
+      OR "Engineer"
+    notes: Developer tools and enterprise-ready auth/platform APIs.
+    enabled: true
+  - name: Supabase
+    careers_url: https://jobs.ashbyhq.com/supabase
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/supabase
+    notes: >-
+      Open-source Firebase alternative. Remote-first. Postgres + Auth + Storage.
+      Strong DevRel/DX hiring.
+    enabled: true
+  - name: Resend
+    careers_url: https://jobs.ashbyhq.com/resend
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/resend
+    notes: Email API for developers. Remote-first. DX/DevRel focused.
+    enabled: true
+  - name: Clerk
+    careers_url: https://jobs.ashbyhq.com/clerk
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/clerk
+    notes: Auth & user management for developers. SE / TAM / PM roles.
+    enabled: true
+  - name: Inngest
+    careers_url: https://jobs.ashbyhq.com/inngest
+    scan_method: websearch
+    scan_query: site:jobs.ashbyhq.com/inngest
+    notes: Durable workflow engine for serverless. DX/DevRel/Engineering hiring.
+    enabled: true
+  - name: PlanetScale
+    careers_url: https://job-boards.greenhouse.io/planetscale
+    api: https://boards-api.greenhouse.io/v1/boards/planetscale/jobs
+    notes: Serverless MySQL platform. Customer Engineering, Engineering, Sales.
+    enabled: true
+  - name: Zep AI
+    careers_url: https://www.getzep.com/careers
+    scan_method: websearch
+    scan_query: >-
+      "Zep" "Forward Deployed" OR "Developer Relations" OR "Founding"
+      site:workatastartup.com OR site:getzep.com
+    notes: >-
+      Context engineering platform for AI agents. YC W24. Lead FDE + DevRel Lead
+      roles. US-only currently.
+    enabled: true
+  - name: Maxim AI
+    careers_url: https://www.getmaxim.ai/careers
+    scan_method: websearch
+    scan_query: '"Maxim AI" OR "getmaxim" careers "engineer" OR "product"'
+    notes: AI evaluation and observability platform. Bangalore-based, mostly on-site.
+    enabled: true
+  - name: Trendyol
+    careers_url: https://www.trendyol.com/kariyerimiz
+    scan_method: websearch
+    scan_query: >-
+      site:trendyol.com/kariyerimiz OR "trendyol" "Software Engineer" OR
+      "Backend" OR "Frontend" careers
+    notes: >-
+      Istanbul (Maslak tech HQ). Turkey's largest e-commerce platform
+      (Alibaba-owned). Large tech org, competitive salaries.
+    enabled: false
+  - name: Hepsiburada
+    careers_url: https://www.hepsiburada.com/kariyer
+    scan_method: websearch
+    scan_query: >-
+      "hepsiburada" careers "Software Engineer" OR "Backend" OR "Frontend" OR
+      "Yazılım"
+    notes: Istanbul. Major Turkish e-commerce platform. Listed on NASDAQ.
+    enabled: false
+  - name: Getir
+    careers_url: https://jobs.lever.co/getir
+    scan_method: websearch
+    scan_query: >-
+      site:jobs.lever.co/getir OR "getir" careers "Software Engineer" OR
+      "Backend" OR "Frontend"
+    notes: >-
+      Istanbul. Ultra-fast delivery unicorn. Exited international markets in
+      April 2024; now Turkey-only.
+    enabled: false
+  - name: Insider
+    careers_url: https://useinsider.com/careers
+    scan_method: websearch
+    scan_query: >-
+      "useinsider" OR "insider" careers "Software Engineer" OR "Backend" OR
+      "Frontend" site:jobs.lever.co OR site:jobs.ashbyhq.com
+    notes: >-
+      Istanbul. B2B SaaS marketing platform. Unicorn. Strong remote-friendly
+      culture.
+    enabled: false
+  - name: Dream Games
+    careers_url: https://www.dreamgames.com/careers
+    scan_method: websearch
+    scan_query: >-
+      "dreamgames" OR "dream games" careers "Software Engineer" OR "Backend" OR
+      "Frontend"
+    notes: >-
+      Istanbul. Mobile gaming company (Royal Match). Strong engineering culture,
+      competitive pay.
+    enabled: false
+  - name: Peak Games (Zynga)
+    careers_url: https://www.peakgames.net/en/career
+    scan_method: websearch
+    scan_query: '"peak games" careers "Software Engineer" OR "Backend" OR "Frontend"'
+    notes: Istanbul. Mobile gaming studio acquired by Zynga. Strong tech team.
+    enabled: false
+  - name: Yemeksepeti (Delivery Hero)
+    careers_url: https://www.yemeksepeti.com/kariyer
+    scan_method: websearch
+    scan_query: >-
+      "yemeksepeti" careers "Software Engineer" OR "Backend" OR "Frontend" OR
+      "Yazılım"
+    notes: >-
+      Istanbul. Food delivery platform (Delivery Hero subsidiary). Large tech
+      team.
+    enabled: false
+  - name: Sahibinden.com
+    careers_url: https://www.sahibinden.com/kariyer
+    scan_method: websearch
+    scan_query: >-
+      "sahibinden" careers "Software Engineer" OR "Backend" OR "Frontend" OR
+      "Yazılım Geliştirici"
+    notes: Istanbul. Turkey's largest classifieds platform. Established tech org.
+    enabled: false
+  - name: Garanti BBVA Technology
+    careers_url: https://www.garantibbvateknoloji.com.tr/kariyer
+    scan_method: websearch
+    scan_query: >-
+      "garanti bbva teknoloji" OR "garantibbvateknoloji" careers "Software
+      Engineer" OR "Backend" OR "Frontend"
+    notes: >-
+      Istanbul. Fintech/banking tech arm of Garanti BBVA. Large engineering org,
+      competitive benefits.
+    enabled: false
+  - name: Akbank Tech
+    careers_url: https://www.akbank.com/tr-tr/sayfalar/kariyer.aspx
+    scan_method: websearch
+    scan_query: >-
+      "akbank" careers "Software Engineer" OR "Yazılım Mühendisi" OR "Backend"
+      OR "Frontend"
+    notes: Istanbul. Turkish bank with large in-house tech team.
+    enabled: false
+  - name: Turkcell
+    careers_url: https://kariyer.turkcell.com.tr
+    scan_method: websearch
+    scan_query: >-
+      site:kariyer.turkcell.com.tr OR "turkcell" careers "Software Engineer" OR
+      "Backend" OR "Frontend"
+    notes: >-
+      Istanbul. Turkey's largest telecom. Large digital and tech transformation
+      team.
+    enabled: false
+  - name: Iyzico (PayU)
+    careers_url: https://iyzico.com/kariyer
+    scan_method: websearch
+    scan_query: >-
+      "iyzico" careers "Software Engineer" OR "Backend" OR "Frontend" OR
+      "Yazılım"
+    notes: >-
+      Istanbul. Fintech / payment infrastructure (PayU subsidiary). Good
+      engineering culture.
+    enabled: false
+  - name: Papara
+    careers_url: https://papara.com/kariyer
+    scan_method: websearch
+    scan_query: '"papara" careers "Software Engineer" OR "Backend" OR "Frontend"'
+    notes: >-
+      Istanbul. Turkish fintech / digital wallet. Fast-growing, unicorn
+      valuation.
+    enabled: false
+  - name: Craftgate
+    careers_url: https://craftgate.io/career
+    scan_method: websearch
+    scan_query: '"craftgate" careers "Software Engineer" OR "Backend" OR "Frontend"'
+    notes: >-
+      Istanbul. Payment orchestration platform. Strong engineering-first
+      culture.
+    enabled: false
+  - name: n11.com (Doğuş)
+    careers_url: https://www.n11.com/kurumsal/kariyer
+    scan_method: websearch
+    scan_query: '"n11" careers "Software Engineer" OR "Backend" OR "Frontend" OR "Yazılım"'
+    notes: Istanbul. E-commerce marketplace (Doğuş Group).
+    enabled: false

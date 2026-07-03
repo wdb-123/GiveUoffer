@@ -210,9 +210,31 @@ function assertUcareerNamespace() {
     "ucareer.session",
   ], "web app uses Ucareer session/data hook");
 
+  assertContains("apps/web/src/hooks/useUcareerData.ts", [
+    "useResumeData",
+    "useMarketData",
+    "useApplicationsData",
+    "useExperienceData",
+    "useEvidenceData",
+    "useReportsData",
+  ], "web Ucareer data hook composes domain hooks");
+
+  [
+    ["apps/web/src/hooks/useResumeData.ts", "getResumes"],
+    ["apps/web/src/hooks/useMarketData.ts", "getRecruitmentMarket"],
+    ["apps/web/src/hooks/useApplicationsData.ts", "getApplications"],
+    ["apps/web/src/hooks/useExperienceData.ts", "getExperienceOverview"],
+    ["apps/web/src/hooks/useEvidenceData.ts", "getEvidenceRequests"],
+    ["apps/web/src/hooks/useReportsData.ts", "getReports"],
+  ].forEach(([file, marker]) => {
+    assertContains(file, [marker], `web domain data hook owns ${marker}`);
+  });
+
   assertContains("apps/web/src/sections/EvidenceSection.tsx", [
-    "ucareer.reviewTemplates",
-  ], "web review templates use Ucareer storage key");
+    "onSaveEvidenceNote",
+    "evidence-note-editor",
+    "evidence-record-list",
+  ], "web evidence center uses notebook workflow");
 
   assertAbsent([
     `docs/${legacyProductUpperName}_ARCHITECTURE_TASKS.md`,
@@ -387,9 +409,33 @@ assertContains("scripts/cli/scan.mjs", [
   "scripts/cli/providers/local-parser.mjs",
 ], "scan script owns scanner provider loading");
 
+assertContains("apps/daemon/src/services/jobsearch-providers.ts", [
+  "export interface JobSearchProvider",
+  "createJobSearchProviders",
+  "normalizeJobSearchRequest",
+  "combineJobSearchResults",
+], "jobsearch sources are provider based");
+
+assertContains("apps/daemon/src/services/jobsearch-service.ts", [
+  "createJobSearchProviders",
+  "resolveProviders",
+  "combineJobSearchResults",
+], "jobsearch service delegates to provider registry");
+
+assertFilesDoNotContain([
+  "apps/daemon/src/services/jobsearch-service.ts",
+], [
+  "spawn(",
+  "boss-agent-radar.mjs",
+  "china-job-crawler.mjs",
+  "codex-chrome-boss-radar.mjs",
+], "jobsearch service does not own source-specific execution");
+
 assertExists([
   "apps/daemon/src/routes",
   "apps/daemon/src/services",
+  "apps/daemon/src/skills",
+  "apps/daemon/src/memory",
   "apps/daemon/src/workflow",
   "apps/daemon/src/connectors",
   "apps/daemon/src/policy",
@@ -401,6 +447,16 @@ assertExists([
 ], "daemon architecture directories");
 
 assertExists([
+  "apps/daemon/src/skills/registry.ts",
+  "apps/daemon/src/skills/definitions.ts",
+  "apps/daemon/src/skills/README.md",
+  "apps/daemon/src/skills/tools.ts",
+  "apps/daemon/src/skills/job-evaluate/skill.ts",
+  "apps/daemon/src/skills/job-evaluate/SKILL.md",
+  "apps/daemon/src/skills/resume-generate/skill.ts",
+  "apps/daemon/src/skills/resume-generate/SKILL.md",
+  "apps/daemon/src/skills/workspace-help/skill.ts",
+  "apps/daemon/src/skills/workspace-help/SKILL.md",
   "apps/daemon/src/workflow/skill-registry.ts",
   "apps/daemon/src/workflow/workflow-registry.ts",
   "apps/daemon/src/workflow/classify-intake.ts",
@@ -469,7 +525,7 @@ assertContains("apps/daemon/src/routes/workflow-routes.ts", [
   "workflowRegistry",
   "/api/agent-route/preview",
   "/api/workflow-runs",
-  "classifyIntake",
+  "services.routePreviewService.preview",
 ], "workflow routes expose backend routing");
 
 assertContains("apps/daemon/src/server.ts", [
@@ -525,7 +581,13 @@ assertContains("apps/daemon/src/db/sqlite.ts", [
   "secret_auth_tag",
 ], "SQLite schema stores connector credentials");
 
-assertContains("apps/daemon/src/workflow/skill-registry.ts", [
+assertContains("apps/daemon/src/skills/definitions.ts", [
+  "jobEvaluateSkill",
+  "resumeGenerateSkill",
+  "skillDefinitions",
+], "skill definitions aggregate built-in skills");
+
+assertContains("apps/daemon/src/skills/job-evaluate/skill.ts", [
   "fileManagement",
   "intakeFolder",
   "acceptedAttachmentKinds",
@@ -533,8 +595,54 @@ assertContains("apps/daemon/src/workflow/skill-registry.ts", [
   "readPaths",
   "writePaths",
   "outputArtifacts",
+], "job evaluate skill owns file-management contract");
+
+assertContains("apps/daemon/src/skills/resume-generate/skill.ts", [
+  "fileManagement",
+  "intakeFolder",
+  "acceptedAttachmentKinds",
+  "acceptedExtensions",
+  "readPaths",
+  "writePaths",
+  "outputArtifacts",
+], "resume generate skill owns file-management contract");
+
+assertContains("apps/daemon/src/skills/registry.ts", [
+  "skillDefinitions",
+  "skillRegistry",
+  "getSkill",
   "getSkillFileManagement",
-], "skill registry owns file-management contracts");
+  "getSkillsForPage",
+  "getSkillUiContracts",
+], "skill registry exposes lookup API");
+
+assertContains("apps/daemon/src/routes/workflow-routes.ts", [
+  "/api/skills/ui-contracts",
+  "/api/skills/pages/:pageId",
+  "getSkillUiContracts",
+  "getSkillsForPage",
+], "workflow routes expose skill UI contracts");
+
+assertContains("apps/daemon/src/skills/workspace-help/skill.ts", [
+  "workspace.help",
+  "help.connect_mailbox",
+  "help.connect_job_sources",
+  "workspace/profile/portals.yml",
+], "workspace help skill explains connectors and portals");
+
+assertContains("apps/daemon/src/skills/job-evaluate/skill.ts", [
+  "ui:",
+  "primaryPage",
+  "entryActions",
+  "market.import_or_evaluate_job",
+], "job evaluate skill exposes UI actions");
+
+assertContains("apps/daemon/src/skills/resume-generate/skill.ts", [
+  "ui:",
+  "primaryPage",
+  "entryActions",
+  "resumes.diagnose_selected_resume",
+], "resume generate skill exposes UI actions");
 
 assertContains("apps/daemon/src/workflow/classify-intake.ts", [
   "RouteDecision",
@@ -592,13 +700,10 @@ assertContains("apps/daemon/src/routes/attachment-routes.ts", [
 ], "attachment route delegates parsing to service");
 
 assertContains("apps/daemon/src/services/attachment-parser-service.ts", [
-  "workspace/ops/imports/agent-attachments",
+  "workspaceDataPath(workspaceRoot, \"agentAttachments\")",
   "isInsideDir",
   "formatDate",
   "uniqueStoredName",
-  "routeAttachmentStorage",
-  "classifyIntake",
-  "getSkillFileManagement",
   "storageFolder",
   "PDFParse",
   "mammoth.extractRawText",
@@ -614,15 +719,16 @@ assertContains("packages/shared/src/index.ts", [
   "attachments?: AgentAttachment[]",
 ], "shared attachment contracts");
 
-assertContains("apps/daemon/src/routes/workflow-routes.ts", [
+assertContains("apps/daemon/src/services/route-preview-service.ts", [
   "RoutePreviewRequest",
   "composePreviewText",
   "attachments",
   "classifyIntake",
-], "route preview consumes attachment summaries");
+  "executeRouterPrompt",
+], "route preview service consumes attachment summaries");
 
 assertContains("apps/daemon/src/services/agent-task-service.ts", [
-  "composeSourceText",
+  "composeDisplaySourceText",
   "composePromptWithAttachments",
   "User uploaded attachments",
   "attachment.parsed.text",
@@ -636,10 +742,21 @@ assertContains("apps/web/src/api.ts", [
 
 assertContains("apps/web/src/sections/AgentSection.tsx", [
   "uploadAgentAttachment",
+  "fileToBase64",
+  "onUploadFiles={uploadFiles}",
+], "agent section owns attachment upload flow");
+
+assertContains("apps/web/src/sections/agent/AgentComposer.tsx", [
   "agent-file-input",
   "agent-attachment-strip",
-  "fileToBase64",
-], "agent composer supports attachments");
+  "onUploadFiles",
+], "agent composer renders attachment controls");
+
+assertContains("apps/web/src/sections/agent/AgentApprovalBar.tsx", [
+  "agent-approval-bar",
+  "onDecideApproval",
+  "allow_workspace",
+], "agent approval bar owns approval controls");
 
 assertContains("apps/daemon/src/stores/workflow-run-store.ts", [
   "WorkflowRunStore",
@@ -674,6 +791,7 @@ assertContains("packages/shared/src/index.ts", [
 assertFilesDoNotContain([
   "apps/web/src/sections/AgentSection.tsx",
   "apps/web/src/sections/agent/agentConversation.ts",
+  "apps/web/src/sections/agent/useAgentConversationState.ts",
 ], [
   "classifyIntake",
   "buildIntakePrompt",
@@ -700,11 +818,28 @@ assertContains("apps/web/src/hooks/useAgentData.ts", [
 assertContains("apps/web/src/sections/AgentSection.tsx", [
   "workflowRunDetail",
   "WorkflowRunDetail",
+  "AgentThreadStage",
+], "agent section carries daemon workflow state");
+
+assertContains("apps/web/src/sections/agent/AgentThreadStage.tsx", [
   "AgentTurnView",
-  "disabled={agentBusy}",
-  "等待当前步骤完成后可追问",
+  "runningProcessMessages",
+  "agent-dialogue",
+], "agent thread stage displays daemon workflow turns");
+
+assertContains("apps/web/src/sections/agent/useAgentConversationState.ts", [
+  "useAgentConversationState",
+  "buildTaskTranscript",
+  "groupConversationTurns",
+  "getCurrentProcessMessages",
+], "agent conversation hook derives transcript state");
+
+assertContains("apps/web/src/sections/agent/AgentComposer.tsx", [
+  "可以先输入，当前步骤完成后再发送",
+  "if (props.agentBusy) return;",
+  "停止当前 Agent 执行",
   "继续追问当前 Agent 对话",
-], "agent UI displays daemon workflow and follow-up state");
+], "agent composer displays busy and follow-up state");
 
 assertFilesDoNotContain([
   "apps/web/src/sections/AgentSection.tsx",
@@ -743,6 +878,60 @@ assertContains("workspace/README.md", [
   "resumes/source/",
   "Runtime state belongs in `.ucareer/`",
 ], "workspace boundary is documented");
+
+assertContains("apps/daemon/src/workspace-paths.ts", [
+  "export type WorkspaceDataPath",
+  "workspaceDataPath",
+  "workspace/ops/data/applications.md",
+  "workspace/jobs/jds",
+  "workspace/resumes/library",
+  "workspace/ops/imports/agent-attachments",
+  "workspace/ops/exports/resumes",
+  "isInsideOrSameDir",
+], "daemon centralizes workspace data paths");
+
+assertContains("apps/daemon/src/stores/application-store.ts", [
+  "workspaceDataPath(workspaceRoot, \"applications\")",
+  "workspaceDataPath(workspaceRoot, \"applicationEvents\")",
+], "application store writes through workspace path contract");
+
+assertContains("apps/daemon/src/stores/market-store.ts", [
+  "workspaceDataPath(workspaceRoot, \"recruitmentMarket\")",
+  "workspaceDataPath(workspaceRoot, \"jobDescriptions\")",
+  "joinWorkspaceDataPath(workspaceRoot, \"jobDescriptions\"",
+], "market store writes through workspace path contract");
+
+assertContains("apps/daemon/src/stores/resume-store.ts", [
+  "workspaceDataPath(workspaceRoot, \"resumeLibrary\")",
+  "workspaceDataPath(workspaceRoot, \"resumeJobLinks\")",
+], "resume store writes through workspace path contract");
+
+assertContains("apps/daemon/src/services/attachment-parser-service.ts", [
+  "workspaceDataPath(workspaceRoot, \"agentAttachments\")",
+], "attachment parser writes through workspace path contract");
+
+assertContains("apps/daemon/src/services/resume-export-service.ts", [
+  "workspaceDataPath(workspaceRoot, \"resumeLibrary\")",
+  "workspaceDataPath(workspaceRoot, \"resumeExports\")",
+], "resume export writes through workspace path contract");
+
+assertContains("apps/daemon/src/tools/tool-executor.ts", [
+  "workspaceRelativeDataPath(\"projectNotes\")",
+], "agent tools derive default target files from workspace path contract");
+
+assertFilesDoNotContain([
+  "apps/daemon/src/stores/application-store.ts",
+  "apps/daemon/src/stores/evidence-store.ts",
+  "apps/daemon/src/stores/experience-store.ts",
+  "apps/daemon/src/stores/market-store.ts",
+  "apps/daemon/src/stores/resume-store.ts",
+  "apps/daemon/src/services/attachment-parser-service.ts",
+  "apps/daemon/src/services/resume-export-service.ts",
+  "apps/daemon/src/tools/tool-executor.ts",
+], [
+  "join(workspaceRoot, \"workspace/",
+  "resolve(workspaceRoot, \"workspace/",
+], "daemon data writers do not hand-roll workspace paths");
 
 assertExists([
   "workspace/resumes/tools/README.md",

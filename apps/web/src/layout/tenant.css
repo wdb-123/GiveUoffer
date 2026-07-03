@@ -1,0 +1,213 @@
+.tenant-switcher {
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 10px;
+  position: relative;
+}
+
+.tenant-settings-button {
+  align-items: center;
+  background: rgba(248, 250, 252, 0.94);
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 14px;
+  color: #0f172a;
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  min-height: 56px;
+  margin: 0 0 -8px;
+  padding: 7px 9px;
+  text-align: left;
+  width: 100%;
+}
+
+.tenant-settings-button:hover,
+.tenant-settings-button[aria-expanded="true"] {
+  background: #ffffff;
+  border-color: rgba(203, 213, 225, 0.96);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.09);
+}
+
+.tenant-settings-avatar {
+  align-items: center;
+  background: #79856f;
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-weight: 850;
+  justify-content: center;
+}
+
+.tenant-settings-avatar {
+  font-size: 13px;
+  height: 34px;
+  width: 34px;
+}
+
+.tenant-settings-copy,
+.tenant-row-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tenant-settings-copy {
+  gap: 1px;
+}
+
+.tenant-settings-copy strong,
+.tenant-row-main strong,
+.tenant-logout-row span:not(.tenant-row-icon) {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 760;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tenant-settings-copy strong {
+  font-size: 13px;
+  line-height: 1.12;
+}
+
+.tenant-settings-copy small {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.12;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tenant-settings-chip {
+  align-items: center;
+  background: #38a8ff;
+  border: 0;
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 850;
+  justify-content: center;
+  min-height: 26px;
+  padding: 0 10px;
+}
+
+.tenant-menu {
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 16px;
+  bottom: calc(100% - 25px);
+  box-shadow: 0 22px 54px rgba(15, 23, 42, 0.16);
+  color: #0f172a;
+  display: grid;
+  gap: 0;
+  left: 0;
+  max-height: min(520px, calc(100vh - 120px));
+  overflow: auto;
+  padding: 8px;
+  position: absolute;
+  right: auto;
+  width: 100%;
+  z-index: 90;
+}
+
+.tenant-menu-group {
+  display: grid;
+  gap: 0;
+}
+
+.tenant-menu-divider {
+  background: rgba(203, 213, 225, 0.72);
+  height: 1px;
+  margin: 5px 6px;
+}
+
+.tenant-menu .tenant-action-row {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  color: #0f172a;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  min-height: 34px;
+  min-width: 0;
+  margin: 0;
+  padding: 3px 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.tenant-menu .tenant-action-row:hover,
+.tenant-menu .tenant-action-row:focus-visible,
+.tenant-menu .tenant-action-row.is-active {
+  background: #f6f8fc;
+  outline: none;
+}
+
+.tenant-row-icon {
+  align-items: center;
+  color: #64748b;
+  display: inline-flex;
+  font-size: 15px;
+  height: 20px;
+  justify-content: center;
+  line-height: 1;
+  width: 20px;
+}
+
+.tenant-row-chevron {
+  color: #94a3b8;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.tenant-menu .tenant-logout-row {
+  grid-template-columns: 20px minmax(0, 1fr);
+}
+
+.tenant-menu .tenant-action-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.nav-collapsed .tenant-switcher {
+  justify-items: center;
+  padding-top: 10px;
+}
+
+.nav-collapsed .tenant-settings-button {
+  grid-template-columns: 1fr;
+  height: var(--sidebar-collapsed-control);
+  justify-content: center;
+  min-height: var(--sidebar-collapsed-control);
+  padding: 0;
+  place-items: center;
+  width: var(--sidebar-collapsed-control);
+}
+
+.nav-collapsed .tenant-settings-copy,
+.nav-collapsed .tenant-settings-chip {
+  display: none;
+}
+
+.nav-collapsed .tenant-settings-avatar {
+  height: var(--sidebar-collapsed-icon);
+  width: var(--sidebar-collapsed-icon);
+}
+
+@media (max-width: 760px) {
+  .tenant-menu {
+    max-height: min(520px, calc(100vh - 96px));
+    width: 100%;
+  }
+
+}

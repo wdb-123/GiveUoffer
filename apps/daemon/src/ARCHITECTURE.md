@@ -7,7 +7,9 @@ The daemon is the local execution boundary. It owns filesystem compatibility, lo
 - `server.ts`: Fastify setup, shared hooks, runtime/store construction and route registration only.
 - `routes/*`: HTTP route groups by domain. Routes validate request shape, check permissions, call services/stores and return API envelopes.
 - `services/*`: use-case orchestration that is not tied to HTTP. Agent task creation, workflow run binding, continuation, approval execution and artifact export orchestration live here.
-- `workflow/*`: local skill/workflow registry and intake classification. This is the canonical backend entrypoint for future agent routing.
+- `skills/*`: local skill registry and skill capability contracts.
+- `workflow/*`: workflow registry, intake classification and prompt routing. This is the canonical backend entrypoint for future agent routing.
+- `memory/*`: memory source registry and retrieval boundary for long-term workspace memory and working task memory.
 - `connectors/*`: external and local data-source connector registry. Connectors describe where data comes from or syncs to; they do not execute agent providers.
 - `policy/*`: permission, risk and approval policy evaluation. Policy is a generic action layer, not only an agent-start gate.
 - `sync/*`: local sync boundary for outbox reads, push-to-cloud and future mobile/cloud relay.
@@ -24,7 +26,7 @@ The daemon is the local execution boundary. It owns filesystem compatibility, lo
 - Uploaded files are stored under `workspace/ops/imports/agent-attachments/YYYY-MM-DD/{routed-folder}/YYYY-MM-DD-{source-file-name}`, behind path-boundary checks. If a same-day filename already exists, the parser uses a readable `-2`, `-3` suffix instead of a UUID.
 - Attachment storage folders are derived by the backend route classifier after parsing: `jobs`, `resumes`, `applications`, `experience`, `images`, `documents` or `general`.
 - Text, Markdown, CSV, JSON, PDF and DOCX attachments produce normalized `AgentAttachment` DTOs with extracted text, summary and metadata.
-- Image attachments are safely stored and passed through with metadata today. OCR and visual understanding should be added as a parser behind the same service contract, not as route-local logic.
+- Image attachments are safely stored and parsed through the same attachment service. Local Tesseract OCR runs during upload when available; the extracted text is stored in `parsed.text` and routed to `image.ocr` for screenshot/text extraction requests. Missing OCR language packs are surfaced in attachment metadata instead of being hidden in route-local logic.
 - `RoutePreviewRequest.attachments` and `CreateAgentTaskRequest.attachments` are the portable entry contract for cloud/mobile later. Clients send intent plus parsed attachment references; the daemon owns how those attachments affect routing and agent prompts.
 - `services/agent-task-service.ts` must compose uploaded attachment summaries/text into the canonical source text and provider prompt before workflow classification or execution approval.
 
@@ -51,7 +53,7 @@ The daemon is the local execution plane. It can be driven by the local web app t
 
 ## Workflow and Skill Routing
 
-- `workflow/skill-registry.ts` defines the first backend-owned list of product skills.
+- `skills/*/skill.ts` defines the backend-owned product skill library, with companion `SKILL.md` files for agent-readable instructions. `skills/definitions.ts` aggregates built-ins, and `skills/registry.ts` is the stable lookup API. `workflow/skill-registry.ts` is a compatibility re-export.
 - Each skill owns a `fileManagement` contract: intake folder, accepted attachment kinds/extensions, readable workspace paths, writable artifact paths and output artifact types.
 - `workflow/workflow-registry.ts` defines the workflow registry for multi-step career operations. Workflow definitions are shared contracts and can be executed locally now or mirrored through sync later.
 - `workflow/classify-intake.ts` returns a `RouteDecision` for user input.

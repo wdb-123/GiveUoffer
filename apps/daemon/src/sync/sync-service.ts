@@ -9,28 +9,29 @@ export interface SyncService {
 
 export function createSyncService(input: {
   daemonDbPath: string;
+  tenantId?: string;
   defaultCloudUrl?: string;
 }): SyncService {
-  const { daemonDbPath } = input;
+  const { daemonDbPath, tenantId } = input;
   const defaultCloudUrl = input.defaultCloudUrl || "http://127.0.0.1:4191";
 
   return {
     listOutbox(limit = 100) {
       return {
-        events: listSyncOutbox(daemonDbPath, Number.isFinite(limit) ? limit : 100),
+        events: listSyncOutbox(daemonDbPath, Number.isFinite(limit) ? limit : 100, tenantId),
       };
     },
 
     markPushed(ids) {
       return {
-        marked: markSyncEventsPushed(daemonDbPath, Array.isArray(ids) ? ids : []),
+        marked: markSyncEventsPushed(daemonDbPath, Array.isArray(ids) ? ids : [], tenantId),
       };
     },
 
     async pushToCloud(body) {
       const cloudUrl = String(body?.cloudUrl || defaultCloudUrl).replace(/\/+$/, "");
       const limit = Number(body?.limit || 100);
-      const events = listSyncOutbox(daemonDbPath, Number.isFinite(limit) ? limit : 100);
+      const events = listSyncOutbox(daemonDbPath, Number.isFinite(limit) ? limit : 100, tenantId);
       const response = await fetch(`${cloudUrl}/sync/push`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -41,7 +42,7 @@ export function createSyncService(input: {
         throw new Error(envelope.error?.message || "Cloud sync push failed");
       }
       const acceptedIds = Array.isArray(envelope.data?.acceptedIds) ? envelope.data.acceptedIds : [];
-      const marked = markSyncEventsPushed(daemonDbPath, acceptedIds);
+      const marked = markSyncEventsPushed(daemonDbPath, acceptedIds, tenantId);
       return {
         cloudUrl,
         sent: events.length,

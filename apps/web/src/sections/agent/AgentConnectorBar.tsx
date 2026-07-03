@@ -6,6 +6,7 @@ export function AgentConnectorBar({
   connectionState,
   jobSearch,
   onImportMessages,
+  onRunJobSearch,
 }: {
   connectionState: "connected" | "disconnected" | "unknown";
   jobSearch: {
@@ -58,6 +59,7 @@ export function AgentConnectorBar({
         {open ? (
           <JobSearchPanel
             jobSearch={jobSearch}
+            onRunJobSearch={onRunJobSearch}
             sites={sites}
           />
         ) : null}
@@ -65,6 +67,7 @@ export function AgentConnectorBar({
           <JobSearchPanel
             hoverOnly
             jobSearch={jobSearch}
+            onRunJobSearch={onRunJobSearch}
             sites={sites}
           />
         ) : null}
@@ -76,6 +79,7 @@ export function AgentConnectorBar({
 function JobSearchPanel({
   hoverOnly,
   jobSearch,
+  onRunJobSearch,
   sites,
 }: {
   hoverOnly?: boolean;
@@ -85,8 +89,10 @@ function JobSearchPanel({
     lastResult: JobSearchResult | null;
     error: string;
   };
+  onRunJobSearch(input?: Partial<JobSearchRequest>): void | Promise<void>;
   sites: ReturnType<typeof buildJobSearchSites>;
 }) {
+  const running = jobSearch.status === "running";
   return (
     <div className={hoverOnly ? "agent-jobsearch-panel is-hover-panel" : "agent-jobsearch-panel"} role="dialog" aria-label="jobsearch 已接入招聘网站">
       <div className="agent-jobsearch-sites">
@@ -94,15 +100,25 @@ function JobSearchPanel({
           <button
             aria-label={`${site.label}，${site.connected ? "已接入" : "待接入"}`}
             className={site.connected ? "agent-jobsearch-site is-connected" : "agent-jobsearch-site"}
+            disabled={!site.connected || running}
             key={site.id}
+            onClick={() => {
+              if (!site.connected || running) return;
+              void onRunJobSearch({
+                source: site.source,
+                city: "深圳",
+                max: 25,
+                queries: site.queries,
+              });
+            }}
             type="button"
-            title={`${site.label} - ${site.connected ? "已接入" : "待接入"}`}
+            title={`${site.label} - ${site.connected ? "点击搜索岗位" : "待接入"}`}
           >
             <JobSearchLogo site={site} />
-            <em>{site.connected ? "已接入" : "待接入"}</em>
+            <em>{running ? "搜索中" : site.connected ? "搜索" : "待接入"}</em>
             <span className="agent-jobsearch-tooltip" role="tooltip">
               <strong>{site.label}</strong>
-              <small>{site.connected ? "已接入" : "待接入"}</small>
+              <small>{site.connected ? "点击后搜索岗位" : "待接入"}</small>
               <span>{site.note}</span>
             </span>
           </button>
@@ -158,6 +174,8 @@ function buildJobSearchSites(sources: JobSearchSource[]) {
       label: "Boss 直聘",
       shortLabel: "B",
       logoUrl: "https://www.zhipin.com/favicon.ico",
+      source: codexChrome?.available ? "codex-chrome" as const : bossAgent?.available ? "boss-agent" as const : "china-crawler" as const,
+      queries: ["机器人系统工程师", "机器人软件工程师", "ROS2 机器人"],
       connected: Boolean(codexChrome?.available || bossAgent?.available || chinaCrawler?.available),
       note: codexChrome?.available
         ? "Codex Chrome 已接入，可读已登录 Boss 标签页"
@@ -168,6 +186,8 @@ function buildJobSearchSites(sources: JobSearchSource[]) {
       label: "智联招聘",
       shortLabel: "智",
       logoUrl: "",
+      source: bossAgent?.available ? "boss-agent" as const : "china-crawler" as const,
+      queries: ["机器人系统工程师", "机器人软件工程师"],
       connected: Boolean(bossAgent?.available || chinaCrawler?.available),
       note: bossAgent?.available ? "Boss Agent / 智联通道可用" : "平台爬虫待验证",
     },
@@ -176,6 +196,8 @@ function buildJobSearchSites(sources: JobSearchSource[]) {
       label: "猎聘",
       shortLabel: "猎",
       logoUrl: "",
+      source: "china-crawler" as const,
+      queries: ["机器人系统工程师", "机器人软件工程师"],
       connected: Boolean(chinaCrawler?.available),
       note: chinaCrawler?.available ? "中国平台爬虫已接入" : "待接入",
     },
@@ -184,6 +206,8 @@ function buildJobSearchSites(sources: JobSearchSource[]) {
       label: "前程无忧 51Job",
       shortLabel: "51",
       logoUrl: "https://www.51job.com/favicon.ico",
+      source: "china-crawler" as const,
+      queries: ["机器人系统工程师", "机器人软件工程师"],
       connected: Boolean(chinaCrawler?.available),
       note: chinaCrawler?.available ? "中国平台爬虫已接入" : "待接入",
     },
@@ -192,6 +216,8 @@ function buildJobSearchSites(sources: JobSearchSource[]) {
       label: "拉勾招聘",
       shortLabel: "拉",
       logoUrl: "https://www.lagou.com/favicon.ico",
+      source: "china-crawler" as const,
+      queries: ["机器人系统工程师", "机器人软件工程师"],
       connected: Boolean(chinaCrawler?.available),
       note: chinaCrawler?.available ? "中国平台爬虫已接入" : "待接入",
     },
@@ -200,6 +226,8 @@ function buildJobSearchSites(sources: JobSearchSource[]) {
       label: "国聘",
       shortLabel: "国",
       logoUrl: "https://www.iguopin.com/favicon.ico",
+      source: "china-crawler" as const,
+      queries: ["机器人系统工程师", "机器人软件工程师"],
       connected: Boolean(chinaCrawler?.available),
       note: chinaCrawler?.available ? "中国平台爬虫已接入" : "待接入",
     },
@@ -208,6 +236,8 @@ function buildJobSearchSites(sources: JobSearchSource[]) {
       label: "公司官网 / ATS",
       shortLabel: "ATS",
       logoUrl: "",
+      source: "portals" as const,
+      queries: ["机器人系统工程师", "机器人软件工程师"],
       connected: Boolean(portals?.available),
       note: portals?.available ? "portals.yml 扫描已接入" : "下一阶段接入",
     },

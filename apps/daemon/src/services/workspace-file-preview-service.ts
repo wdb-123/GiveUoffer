@@ -11,6 +11,14 @@ import { isInsideOrSameDir } from "../path-guards";
 const execFileAsync = promisify(execFile);
 const MAX_PREVIEW_BYTES = 128 * 1024;
 const MAX_PDF_PREVIEW_BYTES = 12 * 1024 * 1024;
+const MAX_IMAGE_PREVIEW_BYTES = 12 * 1024 * 1024;
+const IMAGE_MIME_TYPES = new Map([
+  [".png", "image/png"],
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".webp", "image/webp"],
+  [".gif", "image/gif"],
+]);
 const TEXT_EXTENSIONS = new Set([
   ".md",
   ".txt",
@@ -40,7 +48,7 @@ const TEXT_EXTENSIONS = new Set([
   ".sql",
 ]);
 
-export function createWorkspaceFileStore(workspaceRoot: string) {
+export function createWorkspaceFilePreviewService(workspaceRoot: string) {
   return {
     async getFilePreview(inputPath: string): Promise<WorkspaceFilePreview | null> {
       const resolvedPath = resolveWorkspacePath(workspaceRoot, inputPath);
@@ -55,6 +63,38 @@ export function createWorkspaceFileStore(workspaceRoot: string) {
       const sizeBytes = stats.size;
       const updatedAt = stats.mtime.toISOString();
       const languageHint = extension.replace(/^\./u, "") || "text";
+
+      const imageMimeType = IMAGE_MIME_TYPES.get(extension);
+      if (imageMimeType) {
+        if (sizeBytes > MAX_IMAGE_PREVIEW_BYTES) {
+          return {
+            path: resolvedPath,
+            relativePath,
+            fileName,
+            sizeBytes,
+            updatedAt,
+            content: "图片文件过大，暂不在侧栏内嵌预览。",
+            previewType: "unsupported",
+            languageHint,
+            truncated: false,
+            encoding: "binary",
+          };
+        }
+        const contentBuffer = readFileSync(resolvedPath);
+        return {
+          path: resolvedPath,
+          relativePath,
+          fileName,
+          sizeBytes,
+          updatedAt,
+          content: "",
+          previewType: "image",
+          languageHint,
+          truncated: false,
+          encoding: "binary",
+          dataUrl: `data:${imageMimeType};base64,${contentBuffer.toString("base64")}`,
+        };
+      }
 
       if (extension === ".pdf") {
         if (sizeBytes > MAX_PDF_PREVIEW_BYTES) {

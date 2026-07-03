@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentTask, ProviderSummary } from "@ucareer/shared";
+import type { AgentAttachment, AgentEvent, AgentTask, ProviderSummary } from "@ucareer/shared";
 
 export interface AgentChatMessage {
   id: string;
@@ -6,6 +6,7 @@ export interface AgentChatMessage {
   text: string;
   createdAt: string;
   durationLabel?: string;
+  attachments?: AgentAttachment[];
 }
 
 export interface AgentConversationTurn {
@@ -15,10 +16,15 @@ export interface AgentConversationTurn {
 
 export interface ContextUsage {
   limit: number;
+  used: number;
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
   percent: number;
   level: "low" | "medium" | "high";
   model?: string;
   source: "model_default" | "configured" | "provider_default" | "unknown";
+  hasActualUsage: boolean;
   note?: string;
 }
 
@@ -79,19 +85,66 @@ export function findLastMessageIndex(messages: AgentChatMessage[], predicate: (m
 export function resolveContextUsage(input: {
   providerId: string;
   providers: ProviderSummary[];
+  events?: AgentEvent[];
 }): ContextUsage {
   const provider = input.providers.find((item) => item.id === input.providerId);
   const contextWindow = provider?.contextWindow;
   const limit = contextWindow?.tokens || contextLimitForProvider(input.providerId);
-  const percent = Math.min(100, Math.max(8, Math.round((limit / 1_000_000) * 100)));
+  const usage = summarizeActualTokenUsage(input.events || []);
+  const hasActualUsage = usage.totalTokens > 0;
+  const percent = hasActualUsage && limit > 0
+    ? Math.min(100, Math.max(2, Math.round((usage.totalTokens / limit) * 100)))
+    : 0;
+  const model = usage.model || contextWindow?.model || "";
   return {
     limit,
+    used: usage.totalTokens,
+    inputTokens: usage.inputTokens,
+    cachedInputTokens: usage.cachedInputTokens,
+    outputTokens: usage.outputTokens,
     percent,
-    level: limit >= 1_000_000 ? "high" : limit >= 400_000 ? "medium" : "low",
-    ...(contextWindow?.model ? { model: contextWindow.model } : {}),
+    level: percent >= 85 ? "high" : percent >= 45 ? "medium" : "low",
+    ...(model ? { model } : {}),
     source: contextWindow?.source || "provider_default",
+    hasActualUsage,
     ...(contextWindow?.note ? { note: contextWindow.note } : {}),
   };
+}
+
+function summarizeActualTokenUsage(events: AgentEvent[]): {
+  inputTokens: number;
+  cachedInputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  model?: string;
+} {
+  const summary = events.reduce((current, event) => {
+    const summary = current as {
+      inputTokens: number;
+      cachedInputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+      model?: string;
+    };
+    if (event.type !== "usage") return summary;
+    summary.inputTokens += normalizeTokenCount(event.inputTokens);
+    summary.cachedInputTokens += normalizeTokenCount(event.cachedInputTokens);
+    summary.outputTokens += normalizeTokenCount(event.outputTokens);
+    summary.totalTokens += normalizeTokenCount(event.totalTokens || event.inputTokens + event.cachedInputTokens + event.outputTokens);
+    if (event.model) summary.model = event.model;
+    return summary;
+  }, {
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    outputTokens: 0,
+    totalTokens: 0,
+  });
+  return summary;
+}
+
+function normalizeTokenCount(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 0;
 }
 
 export function formatTokenCount(value: number): string {

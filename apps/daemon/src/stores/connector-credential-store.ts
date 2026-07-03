@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import type { ConnectorCredentialSummary, SaveEmailConnectorCredentialRequest } from "@ucareer/shared";
 import { connectorCredentials } from "../db/schema";
@@ -11,17 +11,19 @@ interface ConnectorCredentialSecret extends ConnectorCredentialSummary {
   secret: string;
 }
 
-export function createConnectorCredentialStore(dbPath: string, workspaceRoot: string) {
+export function createConnectorCredentialStore(dbPath: string, workspaceRoot: string, options: { tenantId?: string } = {}) {
   const sqlite = openDaemonDatabase(dbPath);
   const db = drizzle(sqlite);
   const key = readOrCreateEncryptionKey(join(workspaceRoot, ".ucareer", "connector.key"));
+  const tenantId = options.tenantId || "legacy";
 
   return {
     saveQqEmail(input: SaveEmailConnectorCredentialRequest): ConnectorCredentialSummary {
       const now = new Date().toISOString();
-      const existing = db.select().from(connectorCredentials).where(eq(connectorCredentials.connectorId, "qq-email")).get();
+      const existing = db.select().from(connectorCredentials).where(connectorWhere("qq-email")).get();
       const encrypted = encryptSecret(normalizeAuthorizationCode(input.authorizationCode), key);
       const row = {
+        tenantId,
         connectorId: "qq-email",
         account: normalizeEmail(input.email),
         secretCiphertext: encrypted.ciphertext,
@@ -32,7 +34,7 @@ export function createConnectorCredentialStore(dbPath: string, workspaceRoot: st
         verifiedAt: input.verifiedAt || now,
       };
       db.insert(connectorCredentials).values(row).onConflictDoUpdate({
-        target: connectorCredentials.connectorId,
+        target: [connectorCredentials.tenantId, connectorCredentials.connectorId],
         set: {
           account: row.account,
           secretCiphertext: row.secretCiphertext,
@@ -46,12 +48,12 @@ export function createConnectorCredentialStore(dbPath: string, workspaceRoot: st
     },
 
     getSummary(connectorId = "qq-email"): ConnectorCredentialSummary | undefined {
-      const row = db.select().from(connectorCredentials).where(eq(connectorCredentials.connectorId, connectorId)).get();
+      const row = db.select().from(connectorCredentials).where(connectorWhere(connectorId)).get();
       return row ? toSummary(row) : undefined;
     },
 
     getSecret(connectorId = "qq-email"): ConnectorCredentialSecret | undefined {
-      const row = db.select().from(connectorCredentials).where(eq(connectorCredentials.connectorId, connectorId)).get();
+      const row = db.select().from(connectorCredentials).where(connectorWhere(connectorId)).get();
       if (!row) return undefined;
       return {
         ...toSummary(row),
@@ -63,6 +65,10 @@ export function createConnectorCredentialStore(dbPath: string, workspaceRoot: st
       };
     },
   };
+
+  function connectorWhere(connectorId: string) {
+    return and(eq(connectorCredentials.tenantId, tenantId), eq(connectorCredentials.connectorId, connectorId));
+  }
 }
 
 function readOrCreateEncryptionKey(path: string): Buffer {

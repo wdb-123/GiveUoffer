@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import { promisify } from "node:util";
 import type {
   AgentCapabilities,
@@ -21,6 +22,8 @@ import * as openclawServer from "../paperclip-adapters/openclaw-gateway/server/i
 import { parseOpenClawGatewayStdoutLine } from "../paperclip-adapters/openclaw-gateway/ui/parse-stdout.js";
 import * as opencodeServer from "../paperclip-adapters/opencode-local/server/index.js";
 import { parseOpenCodeStdoutLine } from "../paperclip-adapters/opencode-local/ui/parse-stdout.js";
+import { buildToolResultFollowupInstruction } from "../workflow/prompt-builder";
+import { getSkill } from "../skills/registry";
 
 const execFileAsync = promisify(execFile);
 
@@ -32,6 +35,9 @@ type TranscriptEntry = {
   input?: unknown;
   content?: string;
   isError?: boolean;
+  inputTokens?: number;
+  cachedTokens?: number;
+  outputTokens?: number;
 };
 
 type PaperclipServerModule = {
@@ -40,6 +46,8 @@ type PaperclipServerModule = {
     signal: string | null;
     timedOut: boolean;
     errorMessage?: string | null;
+    usage?: { inputTokens?: number; cachedInputTokens?: number; outputTokens?: number };
+    model?: string | null;
   }>;
   testEnvironment?: (ctx: Record<string, unknown>) => Promise<{
     status: "pass" | "warn" | "fail";
@@ -136,9 +144,13 @@ export class PaperclipAdapterProvider implements AgentProvider {
     taskStore: TaskStore;
     toolExecutor?: AgentToolExecutor;
   }): Promise<void> {
+    const totalStartMs = performance.now();
+    const loadStartMs = performance.now();
     const server = await this.loadServerModule();
     const parser = await this.loadStdoutParser();
     const config = this.buildConfig(input.workspacePath);
+    appendTimingEvent(input.taskStore, input.taskId, "provider.load_adapter", performance.now() - loadStartMs, `provider=${this.id}`);
+    logTiming("provider.load_adapter", performance.now() - loadStartMs, { taskId: input.taskId, providerId: this.id });
 
     input.taskStore.updateTaskStatus(input.taskId, "running");
     input.taskStore.appendEvent(input.taskId, {
@@ -149,6 +161,7 @@ export class PaperclipAdapterProvider implements AgentProvider {
     });
 
     let prompt = input.prompt;
+    let firstAssistantOutputMs: number | null = null;
     for (let iteration = 0; iteration < 4; iteration += 1) {
       appendProcessStatus(
         input.taskStore,
@@ -157,6 +170,8 @@ export class PaperclipAdapterProvider implements AgentProvider {
       );
       const assistantOutput: string[] = [];
       const lineBuffers: Record<"stdout" | "stderr", string> = { stdout: "", stderr: "" };
+      const iterationStartMs = performance.now();
+      let iterationSawUsage = false;
       const result = await server.execute({
         runId: input.taskId,
         agent: {
@@ -201,12 +216,23 @@ export class PaperclipAdapterProvider implements AgentProvider {
             stream,
             parseStdoutLine: parser,
             onEntry: (entry) => {
-              if (entry.kind === "assistant" && entry.text) assistantOutput.push(entry.text);
+              if (entry.kind === "assistant" && entry.text) {
+                assistantOutput.push(entry.text);
+                if (firstAssistantOutputMs === null) {
+                  firstAssistantOutputMs = performance.now() - totalStartMs;
+                  appendTimingEvent(input.taskStore, input.taskId, "provider.first_assistant_output", firstAssistantOutputMs, `iteration=${iteration + 1}`);
+                  logTiming("provider.first_assistant_output", firstAssistantOutputMs, { taskId: input.taskId, providerId: this.id, iteration: iteration + 1 });
+                }
+              }
+              if (isUsageTranscriptEntry(entry)) iterationSawUsage = true;
               appendTranscriptEntry(input.taskStore, input.taskId, entry, stream);
             },
           });
         },
       });
+      const iterationMs = performance.now() - iterationStartMs;
+      appendTimingEvent(input.taskStore, input.taskId, "provider.iteration_execute", iterationMs, `iteration=${iteration + 1} exitCode=${result.exitCode}`);
+      logTiming("provider.iteration_execute", iterationMs, { taskId: input.taskId, providerId: this.id, iteration: iteration + 1, exitCode: result.exitCode });
 
       for (const stream of ["stdout", "stderr"] as const) {
         const remainder = lineBuffers[stream].trim();
@@ -214,10 +240,20 @@ export class PaperclipAdapterProvider implements AgentProvider {
         const ts = new Date().toISOString();
         const entries = stream === "stdout" ? parser(remainder, ts) : [{ kind: "stderr", ts, text: remainder }];
         for (const entry of entries) {
-          if (entry.kind === "assistant" && entry.text) assistantOutput.push(entry.text);
+          if (entry.kind === "assistant" && entry.text) {
+            assistantOutput.push(entry.text);
+            if (firstAssistantOutputMs === null) {
+              firstAssistantOutputMs = performance.now() - totalStartMs;
+              appendTimingEvent(input.taskStore, input.taskId, "provider.first_assistant_output", firstAssistantOutputMs, `iteration=${iteration + 1} remainder=${stream}`);
+              logTiming("provider.first_assistant_output", firstAssistantOutputMs, { taskId: input.taskId, providerId: this.id, iteration: iteration + 1, stream });
+            }
+          }
+          if (isUsageTranscriptEntry(entry)) iterationSawUsage = true;
           appendTranscriptEntry(input.taskStore, input.taskId, entry, stream);
         }
       }
+
+      if (!iterationSawUsage) appendUsageEvent(input.taskStore, input.taskId, this.id, result.usage, result.model);
 
       if (result.errorMessage) {
         input.taskStore.appendEvent(input.taskId, {
@@ -229,12 +265,16 @@ export class PaperclipAdapterProvider implements AgentProvider {
       }
       if (result.exitCode !== 0) {
         input.taskStore.updateTaskStatus(input.taskId, "failed");
+        appendTimingEvent(input.taskStore, input.taskId, "provider.total", performance.now() - totalStartMs, "status=failed");
+        logTiming("provider.total", performance.now() - totalStartMs, { taskId: input.taskId, providerId: this.id, status: "failed" });
         return;
       }
 
       const toolCall = parseAgentToolCall(assistantOutput.join("\n"));
       if (!toolCall || !input.toolExecutor) {
         input.taskStore.updateTaskStatus(input.taskId, "completed");
+        appendTimingEvent(input.taskStore, input.taskId, "provider.total", performance.now() - totalStartMs, "status=completed");
+        logTiming("provider.total", performance.now() - totalStartMs, { taskId: input.taskId, providerId: this.id, status: "completed" });
         return;
       }
 
@@ -246,7 +286,11 @@ export class PaperclipAdapterProvider implements AgentProvider {
       });
       appendProcessStatus(input.taskStore, input.taskId, `正在调用工具：${toolCall.tool}`);
       try {
+        const toolStartMs = performance.now();
         const toolResult = await input.toolExecutor.execute(toolCall);
+        const toolMs = performance.now() - toolStartMs;
+        appendTimingEvent(input.taskStore, input.taskId, "tool.execute", toolMs, `tool=${toolCall.tool}`);
+        logTiming("tool.execute", toolMs, { taskId: input.taskId, providerId: this.id, tool: toolCall.tool });
         input.taskStore.appendEvent(input.taskId, {
           type: "message",
           role: "system",
@@ -261,18 +305,30 @@ export class PaperclipAdapterProvider implements AgentProvider {
             createdAt: new Date().toISOString(),
           });
           input.taskStore.updateTaskStatus(input.taskId, "completed");
+          appendTimingEvent(input.taskStore, input.taskId, "provider.total", performance.now() - totalStartMs, "status=completed");
+          logTiming("provider.total", performance.now() - totalStartMs, { taskId: input.taskId, providerId: this.id, status: "completed" });
           return;
         }
         appendProcessStatus(input.taskStore, input.taskId, summarizeToolResult(toolCall.tool, toolResult));
-        prompt = `${prompt}\n\n---\nUC_TOOL_RESULT for ${toolCall.tool}:\n${toolResult}\n\n请基于工具结果回答用户。不要再次输出同一个工具调用，除非确实需要分页读取更多结果。`;
+        const currentTask = input.taskStore.getTask(input.taskId);
+        prompt = `${prompt}\n\n---\nUC_TOOL_RESULT for ${toolCall.tool}:\n${toolResult}\n\n${buildToolResultFollowupInstruction(currentTask?.skillId ? getSkill(currentTask.skillId) : undefined)}`;
       } catch (cause) {
+        const failureMessage = formatToolExecutionFailureMessage(toolCall.tool, cause);
         input.taskStore.appendEvent(input.taskId, {
           type: "error",
-          message: cause instanceof Error ? cause.message : "Tool execution failed",
+          message: failureMessage,
           provider: this.id,
           createdAt: new Date().toISOString(),
         });
+        input.taskStore.appendEvent(input.taskId, {
+          type: "message",
+          role: "assistant",
+          text: failureMessage,
+          createdAt: new Date().toISOString(),
+        });
         input.taskStore.updateTaskStatus(input.taskId, "failed");
+        appendTimingEvent(input.taskStore, input.taskId, "provider.total", performance.now() - totalStartMs, "status=failed");
+        logTiming("provider.total", performance.now() - totalStartMs, { taskId: input.taskId, providerId: this.id, status: "failed" });
         return;
       }
     }
@@ -284,6 +340,8 @@ export class PaperclipAdapterProvider implements AgentProvider {
       createdAt: new Date().toISOString(),
     });
     input.taskStore.updateTaskStatus(input.taskId, "failed");
+    appendTimingEvent(input.taskStore, input.taskId, "provider.total", performance.now() - totalStartMs, "status=failed_too_many_tool_calls");
+    logTiming("provider.total", performance.now() - totalStartMs, { taskId: input.taskId, providerId: this.id, status: "failed_too_many_tool_calls" });
   }
 
   async executeRouterPrompt(input: {
@@ -450,6 +508,24 @@ function appendProcessStatus(taskStore: TaskStore, taskId: string, status: strin
   });
 }
 
+function appendTimingEvent(taskStore: TaskStore, taskId: string, phase: string, durationMs: number, detail?: string): void {
+  taskStore.appendEvent(taskId, {
+    type: "message",
+    role: "system",
+    text: `性能埋点：phase=${phase} durationMs=${Math.round(durationMs)}${detail ? ` ${detail}` : ""}`,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+function logTiming(phase: string, durationMs: number, detail: Record<string, unknown> = {}): void {
+  console.info(JSON.stringify({
+    event: "ucareer.agent_timing",
+    phase,
+    durationMs: Math.round(durationMs),
+    ...detail,
+  }));
+}
+
 function transcriptEntryToEvents(entry: TranscriptEntry, stream: "stdout" | "stderr", createdAt: string): AgentEvent[] {
   if (entry.kind === "assistant" && entry.text) {
     return [{ type: "message", role: "assistant", text: entry.text, createdAt }];
@@ -482,16 +558,68 @@ function transcriptEntryToEvents(entry: TranscriptEntry, stream: "stdout" | "std
     return [{ type: "message", role: "system", text: "执行状态：本地 Agent 会话已建立", createdAt }];
   }
   if (entry.kind === "result") {
-    if (entry.isError) {
-      return [{ type: "message", role: "system", text: `执行状态：本轮执行失败${entry.text ? `：${entry.text}` : ""}`, createdAt }];
+    const inputTokens = normalizeTokenCount(entry.inputTokens);
+    const cachedInputTokens = normalizeTokenCount(entry.cachedTokens);
+    const outputTokens = normalizeTokenCount(entry.outputTokens);
+    const events: AgentEvent[] = [];
+    if (inputTokens || cachedInputTokens || outputTokens) {
+      events.push({
+        type: "usage",
+        inputTokens,
+        cachedInputTokens,
+        outputTokens,
+        totalTokens: inputTokens + cachedInputTokens + outputTokens,
+        createdAt,
+      });
     }
-    return [{ type: "message", role: "system", text: "执行状态：本轮输出完成", createdAt }];
+    if (entry.isError) {
+      events.push({ type: "message", role: "system", text: `执行状态：本轮执行失败${entry.text ? `：${entry.text}` : ""}`, createdAt });
+      return events;
+    }
+    events.push({ type: "message", role: "system", text: "执行状态：本轮输出完成", createdAt });
+    return events;
   }
   if (entry.kind === "system") {
     return [];
   }
   const text = entry.text || entry.content;
   return text ? [{ type: "message", role: "system", text, createdAt }] : [];
+}
+
+function appendUsageEvent(
+  taskStore: TaskStore,
+  taskId: string,
+  providerId: string,
+  usage: { inputTokens?: number; cachedInputTokens?: number; outputTokens?: number } | undefined,
+  model?: string | null,
+): void {
+  const inputTokens = normalizeTokenCount(usage?.inputTokens);
+  const cachedInputTokens = normalizeTokenCount(usage?.cachedInputTokens);
+  const outputTokens = normalizeTokenCount(usage?.outputTokens);
+  if (!inputTokens && !cachedInputTokens && !outputTokens) return;
+  taskStore.appendEvent(taskId, {
+    type: "usage",
+    providerId,
+    ...(model ? { model } : {}),
+    inputTokens,
+    cachedInputTokens,
+    outputTokens,
+    totalTokens: inputTokens + cachedInputTokens + outputTokens,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+function normalizeTokenCount(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : 0;
+}
+
+function isUsageTranscriptEntry(entry: TranscriptEntry): boolean {
+  return entry.kind === "result" && Boolean(
+    normalizeTokenCount(entry.inputTokens)
+    || normalizeTokenCount(entry.cachedTokens)
+    || normalizeTokenCount(entry.outputTokens),
+  );
 }
 
 function summarizeToolResult(toolName: string, toolResult: string): string {
@@ -519,7 +647,7 @@ function formatJobSearchAnswer(toolResult: string): string {
       parsed.status === "failed" ? "岗位搜索没有成功完成。" : "岗位搜索已完成。",
       `新增 ${Number(stats.added || 0)} 个，候选 ${Number(stats.candidatesSeen || 0)} 个，重复 ${Number(stats.duplicatesSkipped || 0)} 个。`,
       parsed.message ? `说明：${parsed.message}` : "",
-      jobs.length ? "" : "这次没有拿到可展示岗位。可以换成 `source: \"china-crawler\"` 或减少关键词后重试。",
+      jobs.length ? "" : "这次没有拿到可展示岗位。系统已尝试可用来源；建议减少关键词、换城市，或确认招聘平台登录态/当前页面可读取后重试。",
       ...jobs.slice(0, 12).map((job, index) => {
         const company = stringField(job.company) || "公司待复核";
         const role = stringField(job.role) || stringField(job.title) || "岗位待复核";
@@ -576,4 +704,12 @@ function parseAgentToolCall(output: string): AgentToolCall | undefined {
   } catch {
     return undefined;
   }
+}
+
+function formatToolExecutionFailureMessage(tool: string, cause: unknown): string {
+  const detail = cause instanceof Error ? cause.message : "工具执行失败";
+  if (tool === "mailbox.search_messages" && /QQ 邮箱尚未连接|IMAP 授权码|qq_email_credential_missing/u.test(detail)) {
+    return "我没法读取 QQ 邮箱：当前租户还没有连接 QQ 邮箱 IMAP 授权码。请先在输入框旁边的邮箱连接器里保存授权码，然后再让我搜索邮件。";
+  }
+  return detail;
 }

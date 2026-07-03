@@ -5,18 +5,22 @@ import type {
   EvidenceRequest,
   FulfillEvidenceRequestInput,
   FulfillEvidenceRequestResult,
+  SaveEvidenceNoteInput,
+  SaveEvidenceNoteResult,
 } from "@ucareer/shared";
 import { isInsideDir } from "../path-guards";
+import { workspaceDataPath } from "../workspace-paths";
 
 export interface EvidenceStore {
   listEvidenceRequests(): Promise<EvidenceRequestsOverview>;
   upsertEvidenceRequest(input: Partial<EvidenceRequest> & { id?: string; direction: string; gap: string }): Promise<EvidenceRequest>;
   deleteEvidenceRequest(id: string): Promise<string>;
   fulfillEvidenceRequest(input: FulfillEvidenceRequestInput): Promise<FulfillEvidenceRequestResult>;
+  saveEvidenceNote(input: SaveEvidenceNoteInput): Promise<SaveEvidenceNoteResult>;
 }
 
 export function createEvidenceStore(workspaceRoot: string): EvidenceStore {
-  const evidenceRequestsPath = join(workspaceRoot, "workspace/ops/data/evidence-requests.json");
+  const evidenceRequestsPath = workspaceDataPath(workspaceRoot, "evidenceRequests");
 
   return {
     async listEvidenceRequests() {
@@ -78,7 +82,54 @@ export function createEvidenceStore(workspaceRoot: string): EvidenceStore {
         appendedAt,
       };
     },
+
+    async saveEvidenceNote(input) {
+      const content = String(input.content || "").trim();
+      if (!content) throw new Error("Evidence note content is required");
+      const overview = await this.listEvidenceRequests();
+      const appendedAt = new Date().toISOString();
+      const noteId = `note-${Date.now().toString(36)}`;
+      const title = String(input.title || firstMeaningfulLine(content) || "复盘笔记").trim().slice(0, 80);
+      const targetFile = "workspace/jobs/project-notes/evidence.md";
+      const targetPath = resolve(workspaceRoot, targetFile);
+      if (!isInsideDir(workspaceRoot, targetPath)) throw new Error("Invalid evidence target path");
+      await mkdir(dirname(targetPath), { recursive: true });
+      const markdown = [
+        "",
+        "",
+        `## ${title} - ${appendedAt}`,
+        "",
+        "来源：Ucareer 复盘中心",
+        "",
+        content,
+        "",
+      ].join("\n");
+      await appendFile(targetPath, markdown, "utf8");
+      const request: EvidenceRequest = {
+        id: noteId,
+        priority: "low",
+        status: "fulfilled",
+        direction: title,
+        gap: content.slice(0, 240),
+        marketSignal: "manual_review_note",
+        currentEvidence: content,
+        askHuman: [],
+        targetFile,
+        resumeImpact: "",
+      };
+      await writeEvidenceRequests(evidenceRequestsPath, { ...overview, requests: [request, ...(overview.requests || [])] });
+      return {
+        noteId,
+        targetFile,
+        appended: true,
+        appendedAt,
+      };
+    },
   };
+}
+
+function firstMeaningfulLine(content: string): string {
+  return content.split(/\r?\n/u).map((line) => line.trim()).find(Boolean) || "";
 }
 
 function normalizeEvidenceRequest(input: Partial<EvidenceRequest> & { id?: string; direction: string; gap: string }): EvidenceRequest {

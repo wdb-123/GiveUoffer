@@ -1,11 +1,16 @@
 import type { DaemonRouteContext } from "./context";
 import { ok, requirePermission } from "./context";
+import { getTenantRouteScope, isScopeError } from "./tenant-scope";
 
 export function registerExperienceRoutes(ctx: DaemonRouteContext): void {
-  const { app, stores } = ctx;
+  const { app } = ctx;
 
-  app.get("/api/experience-overview", async () => {
-    return ok(await stores.experienceStore.getExperienceOverview());
+  app.get("/api/experience-overview", async (request) => {
+    const authError = requirePermission(ctx, request, "workspace.read");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    return ok(await scope.stores.experienceStore.getExperienceOverview());
   });
 
   app.post<{
@@ -13,6 +18,8 @@ export function registerExperienceRoutes(ctx: DaemonRouteContext): void {
   }>("/api/experience-metadata", async (request) => {
     const authError = requirePermission(ctx, request, "workspace.write");
     if (authError) return authError;
-    return ok(await stores.experienceStore.saveExperienceMetadata(request.body));
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    return ok(await scope.stores.experienceStore.saveExperienceMetadata(request.body));
   });
 }

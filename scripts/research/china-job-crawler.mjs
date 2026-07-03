@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { writeFile } from 'fs/promises';
+import { mkdir, writeFile } from 'fs/promises';
+import { join } from 'path';
 import { chromium } from 'playwright';
 import { readRecruitmentMarket, writeRecruitmentMarket } from '../cli/recruitment-market-store.mjs';
 
@@ -159,6 +160,7 @@ await browser.close();
 if (!dryRun && discovered.length) {
   market.jobs = [...(market.jobs || []), ...discovered];
   renumberMarketJobs(market.jobs);
+  await attachJobDescriptionFiles(discovered);
   market.updatedAt = todayChina();
   market.lastDirectCrawler = {
     runAt: new Date().toISOString(),
@@ -227,6 +229,7 @@ async function enrichContactInfo(page, job) {
     await page.waitForTimeout(1800);
     stats.detailPagesVisited += 1;
     const detailText = await page.evaluate(() => document.body?.innerText?.replace(/\s+/g, ' ').trim() || '');
+    if (detailText) job.rawText = `${baseText}\n${detailText}`.trim().slice(0, 8000);
     const detailContact = extractContactInfo(`${baseText} ${detailText}`, job.url);
     Object.assign(job, detailContact);
   } catch {
@@ -267,6 +270,48 @@ function buildCrawlerJob(item, target) {
     contactHint: '未在列表页发现公开邮箱；可打开 JD 详情页复核。',
     rawText: item.text.slice(0, 600),
   };
+}
+
+async function attachJobDescriptionFiles(jobs) {
+  for (const job of jobs) {
+    const description = String(job.rawText || '').trim();
+    if (!description || job.jdPath || !job.id) continue;
+    job.jdPath = await writeJobDescriptionFile(job, description);
+  }
+}
+
+async function writeJobDescriptionFile(job, description) {
+  const jdsDir = 'workspace/jobs/jds';
+  await mkdir(jdsDir, { recursive: true });
+  const fileName = `${job.id}-${slugifyFileName([job.company, job.role].filter(Boolean).join('-') || 'job-description')}.md`;
+  const relativePath = `${jdsDir}/${fileName}`;
+  const markdown = [
+    `# ${job.role || '待解析岗位'}`,
+    '',
+    `- ID: ${job.id}`,
+    job.company ? `- 公司: ${job.company}` : '',
+    job.salary ? `- 薪资: ${job.salary}` : '',
+    job.location ? `- 地点: ${job.location}` : '',
+    job.url ? `- URL: ${job.url}` : '',
+    `- 来源: ${job.source || '平台爬虫'}`,
+    `- 入库时间: ${new Date().toISOString()}`,
+    '',
+    '## JD 原文',
+    '',
+    description,
+    '',
+  ].filter((line) => line !== '').join('\n');
+  await writeFile(join(process.cwd(), relativePath), markdown, 'utf8');
+  return relativePath;
+}
+
+function slugifyFileName(value) {
+  const slug = String(value || '')
+    .normalize('NFKD')
+    .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+  return slug.slice(0, 80) || 'job-description';
 }
 
 function extractContactInfo(text, url) {

@@ -1138,3 +1138,250 @@
     grid-template-columns: 1fr;
   }
 }
+
+.evidence-notebook {
+  display: grid;
+  gap: 14px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  max-width: 1040px;
+  min-height: 0;
+  width: min(1040px, 100%);
+}
+
+.view-evidence .evidence-notebook {
+  grid-template-rows: auto auto minmax(0, auto);
+  min-height: 0;
+}
+
+.evidence-note-header {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  margin-top: 0;
+  max-width: none;
+  padding: 14px 18px;
+  width: 100%;
+}
+
+.evidence-note-header h2 {
+  color: #111827;
+  font-size: 20px;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.evidence-note-header p {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.5;
+  margin: 6px 0 0;
+  max-width: 620px;
+}
+
+.evidence-note-stats {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.evidence-note-stats span {
+  border-left: 1px solid rgba(214, 221, 229, 0.9);
+  color: #64748b;
+  display: grid;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 3px;
+  min-width: 70px;
+  padding-left: 14px;
+}
+
+.evidence-note-stats strong {
+  color: #111827;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.evidence-note-panel {
+  display: grid;
+  gap: 10px;
+  grid-template-rows: auto auto;
+  margin-top: 0;
+  max-width: none;
+  min-height: 0;
+  padding: 14px 16px;
+  width: 100%;
+}
+
+.evidence-note-editor {
+  color: #111827;
+  display: grid;
+  font-size: 13px;
+  font-weight: 850;
+  gap: 8px;
+}
+
+.evidence-note-editor textarea {
+  background: #ffffff;
+  border: 1px solid rgba(203, 213, 225, 0.92);
+  border-radius: 8px;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.6;
+  min-height: 142px;
+  padding: 12px;
+  resize: vertical;
+  width: 100%;
+}
+
+.evidence-note-editor textarea:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.24);
+  outline: none;
+}
+
+.evidence-note-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: flex-start;
+}
+
+.evidence-note-actions button {
+  margin-top: 0;
+}
+
+.evidence-note-actions small {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.evidence-records {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.evidence-records-head {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.evidence-records-head h3 {
+  color: #111827;
+  font-size: 16px;
+  margin: 0;
+}
+
+.evidence-records-head span {
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.evidence-record-list {
+  background: #ffffff;
+  border: 1px solid rgba(214, 221, 229, 0.92);
+  border-radius: 8px;
+  display: grid;
+  overflow: hidden;
+}
+
+.evidence-record-item {
+  align-items: start;
+  border-top: 1px solid rgba(226, 232, 240, 0.95);
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 14px 16px;
+}
+
+.evidence-record-item:first-child {
+  border-top: 0;
+}
+
+.evidence-record-main {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.evidence-record-main strong {
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.evidence-record-main p {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.evidence-record-meta {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.evidence-record-meta span {
+  background: #f8fafc;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  max-width: 360px;
+  overflow: hidden;
+  padding: 4px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.evidence-record-action {
+  border-radius: 8px;
+  font-size: 12px;
+  margin-top: 0;
+  min-height: 32px;
+  padding: 6px 10px;
+}
+
+.evidence-empty-state {
+  background: #ffffff;
+  border: 1px dashed rgba(203, 213, 225, 0.98);
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 22px;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .evidence-note-header,
+  .evidence-record-item {
+    grid-template-columns: 1fr;
+  }
+
+  .evidence-note-header {
+    align-items: start;
+    display: grid;
+  }
+
+  .evidence-note-stats {
+    width: 100%;
+  }
+
+  .evidence-note-stats span {
+    flex: 1 1 0;
+  }
+}

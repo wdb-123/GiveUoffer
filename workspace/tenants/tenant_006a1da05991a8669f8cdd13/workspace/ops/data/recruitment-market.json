@@ -1,0 +1,248 @@
+{
+  "updatedAt": "2026-06-14",
+  "queryScope": [
+    "深圳 机器人系统工程师 EtherCAT ROS2 招聘 职位 -酒店 -天气",
+    "深圳 具身智能 数据基建 机器人数据 Pipeline 招聘 职位 -酒店 -天气",
+    "深圳 RAG Agent 企业知识库 招聘 职位 -酒店 -天气",
+    "深圳 机器人软件 SDK ROS2 CANopen EtherCAT 招聘 职位 -酒店 -天气",
+    "site:zhaopin.com 深圳 具身智能 机器人 数据 工程师",
+    "site:liepin.com 深圳 RAG Agent 工程师",
+    "site:zhipin.com 深圳 机器人 ROS2 EtherCAT 工程师",
+    "site:jobs.tencent.com RAG Agent 深圳",
+    "site:zhaopin.com 深圳 ROS开发工程师 机器人",
+    "site:liepin.com 深圳 具身智能 数据平台"
+  ],
+  "jobs": [],
+  "platforms": [
+    {
+      "name": "Boss 直聘",
+      "priority": "P0",
+      "status": "active",
+      "mode": "manual-login",
+      "modeLabel": "已登录读取",
+      "segment": "直聊主渠道",
+      "capture": "Chrome可见页采集",
+      "searchUrl": "https://www.zhipin.com/web/geek/jobs?city=101280600&query=%E6%9C%BA%E5%99%A8%E4%BA%BA%E7%B3%BB%E7%BB%9F%E5%B7%A5%E7%A8%8B%E5%B8%88",
+      "note": "中国求职主渠道，适合机器人软件、系统工程、AI工具链岗位；优势是岗位多、响应快。",
+      "nextAction": "按关键词分批采集：机器人系统工程师、ROS2、具身智能、AI工具链。"
+    },
+    {
+      "name": "智联招聘",
+      "priority": "P0",
+      "status": "active",
+      "mode": "manual-login",
+      "modeLabel": "已登录读取",
+      "segment": "综合/制造/国企",
+      "capture": "Chrome可见页采集",
+      "searchUrl": "https://www.zhaopin.com/sou/jl765/kwCST5CQ2EN9UFMVMVBNINK2QU10/p1",
+      "note": "适合深圳制造业、机器人、自动化、国企/研究院和中大型企业岗位补充。",
+      "nextAction": "继续采集 ROS2、机器人系统、自动化、具身智能数据岗位。"
+    },
+    {
+      "name": "脉脉",
+      "priority": "P0",
+      "status": "active",
+      "mode": "manual-login",
+      "modeLabel": "已登录读取",
+      "segment": "猎头/内推/消息",
+      "capture": "社区+聊天线索",
+      "searchUrl": "https://maimai.cn/chat",
+      "note": "不走招聘方入口，主要从聊天、猎头动态、内推帖拿线索，适合高质量机会和隐藏岗位。",
+      "nextAction": "优先确认机器人平台、AI平台工具、Skill生态产品、感知算法等聊天线索。"
+    },
+    {
+      "name": "猎聘",
+      "priority": "P1",
+      "status": "todo",
+      "mode": "public-or-login",
+      "modeLabel": "待登录/待验证",
+      "segment": "中高端/猎头",
+      "capture": "搜索页+猎头线索",
+      "searchUrl": "https://www.liepin.com/",
+      "note": "适合 35K+、专家/系统架构/机器人平台负责人类岗位，也适合猎头线索。",
+      "nextAction": "打开并验证登录状态，检索机器人系统工程师、具身智能平台、RAG Agent。"
+    },
+    {
+      "name": "前程无忧 51Job",
+      "priority": "P1",
+      "status": "todo",
+      "mode": "public-or-login",
+      "modeLabel": "待接入",
+      "segment": "传统大厂/制造业",
+      "capture": "搜索页采集",
+      "searchUrl": "https://www.51job.com/",
+      "note": "综合招聘老牌平台，适合制造业、外企、传统行业、校招/社招补充。",
+      "nextAction": "接入深圳机器人、自动化、嵌入式、系统工程搜索。"
+    },
+    {
+      "name": "拉勾招聘",
+      "priority": "P2",
+      "status": "todo",
+      "mode": "public-or-login",
+      "modeLabel": "待接入",
+      "segment": "互联网/开发岗",
+      "capture": "搜索页采集",
+      "searchUrl": "https://www.lagou.com/",
+      "note": "互联网和技术岗补充渠道，适合 AI工具链、RAG、Agent、平台研发岗位。",
+      "nextAction": "检索 AI Agent、RAG、平台工程、Python/TypeScript 工具链岗位。"
+    },
+    {
+      "name": "国聘",
+      "priority": "P2",
+      "status": "todo",
+      "mode": "public-or-login",
+      "modeLabel": "待接入",
+      "segment": "国企/央企",
+      "capture": "搜索页采集",
+      "searchUrl": "https://www.iguopin.com/",
+      "note": "适合国企央企、研究院、能源/电力/智能制造方向机会，岗位节奏较慢但稳定。",
+      "nextAction": "检索具身智能、机器人、智能制造、AI平台相关央国企岗位。"
+    },
+    {
+      "name": "公司官网",
+      "priority": "P1",
+      "status": "configured",
+      "mode": "public",
+      "modeLabel": "公开网页",
+      "segment": "重点公司直投",
+      "capture": "官网/ATS/搜索",
+      "searchUrl": "https://careers.tencent.com/",
+      "note": "重点公司应单独看官网：腾讯、字节、智元、优必选、宇树、道通、自变量、速腾聚创等。",
+      "nextAction": "建立重点公司清单，官网岗位与 Boss/脉脉线索交叉验证。"
+    },
+    {
+      "name": "猎头/内推私域",
+      "priority": "P1",
+      "status": "configured",
+      "mode": "manual",
+      "modeLabel": "人工确认",
+      "segment": "高质量线索",
+      "capture": "聊天/微信/推荐",
+      "searchUrl": "https://maimai.cn/chat",
+      "note": "来自脉脉聊天、微信、朋友内推、猎头，通常需要先确认 JD 再入正式投递表。",
+      "nextAction": "把高优先级聊天线索补 JD、薪资、汇报线、面试流程。"
+    }
+  ],
+  "lastBossCapture": {
+    "runAt": "2026-06-01T01:19:27.675Z",
+    "query": "机器人生态",
+    "city": "深圳",
+    "visibleJobsAdded": 18,
+    "note": "从用户已登录 Boss 直聘 Chrome 标签页可见岗位只读采集，未点击沟通或投递。"
+  },
+  "lastMaimaiCapture": {
+    "runAt": "2026-06-01T01:23:12.404Z",
+    "sourcePage": "community/home/recommended",
+    "leadsAdded": 2,
+    "note": "从用户已登录脉脉社区推荐流只读采集招聘线索，未发消息、未评论、未点感兴趣。"
+  },
+  "lastMaimaiChatCapture": {
+    "runAt": "2026-06-01T01:49:13.331Z",
+    "sourcePage": "https://maimai.cn/chat",
+    "leadsAddedToMarket": 6,
+    "note": "从用户已登录脉脉聊天列表只读记录招聘线索，未发送消息。"
+  },
+  "chinaLocalization": {
+    "updatedAt": "2026-06-01",
+    "principle": "以 Boss/智联/脉脉为主，猎聘/51Job/官网为补充，拉勾/国聘按方向专项扫描；所有沟通和投递必须人工确认。",
+    "missingChannels": [
+      "猎聘",
+      "前程无忧 51Job",
+      "拉勾招聘",
+      "国聘",
+      "重点公司官网清单"
+    ],
+    "verifiedChannels": [
+      "Boss 直聘",
+      "智联招聘",
+      "脉脉聊天/社区"
+    ]
+  },
+  "lastSearch": {
+    "runAt": "2026-06-01T02:57:18.250Z",
+    "queries": [
+      "深圳 机器人系统工程师 EtherCAT ROS2 招聘 职位 -酒店 -天气",
+      "深圳 具身智能 数据基建 机器人数据 Pipeline 招聘 职位 -酒店 -天气",
+      "深圳 RAG Agent 企业知识库 招聘 职位 -酒店 -天气",
+      "深圳 机器人软件 SDK ROS2 CANopen EtherCAT 招聘 职位 -酒店 -天气",
+      "site:zhaopin.com 深圳 具身智能 机器人 数据 工程师",
+      "site:liepin.com 深圳 RAG Agent 工程师",
+      "site:zhipin.com 深圳 机器人 ROS2 EtherCAT 工程师",
+      "site:jobs.tencent.com RAG Agent 深圳",
+      "site:zhaopin.com 深圳 ROS开发工程师 机器人",
+      "site:liepin.com 深圳 具身智能 数据平台"
+    ],
+    "added": 0,
+    "removedDuplicates": 6,
+    "stats": {
+      "queriesChecked": 10,
+      "pagesChecked": 40,
+      "resultsSeen": 150,
+      "duplicatesSkipped": 6,
+      "filteredOut": 150,
+      "networkEmptyPages": 25
+    }
+  },
+  "lastDirectCrawler": {
+    "runAt": "2026-06-01T03:43:34.241Z",
+    "added": 20,
+    "stats": {
+      "targets": 6,
+      "pagesVisited": 6,
+      "candidatesSeen": 41,
+      "duplicatesSkipped": 21,
+      "added": 20,
+      "failedPages": 2,
+      "detailPagesVisited": 20,
+      "detailPagesFailed": 0,
+      "emailsFound": 0,
+      "existingEnriched": 0
+    },
+    "note": "直接访问中国招聘平台搜索页采集岗位卡片；不绕过登录、验证码或投递动作。"
+  },
+  "lastContactEnrichment": {
+    "runAt": "2026-06-01T03:30:01.799Z",
+    "enriched": 11,
+    "stats": {
+      "targets": 0,
+      "pagesVisited": 0,
+      "candidatesSeen": 0,
+      "duplicatesSkipped": 0,
+      "added": 0,
+      "failedPages": 0,
+      "detailPagesVisited": 11,
+      "detailPagesFailed": 0,
+      "emailsFound": 0,
+      "existingEnriched": 11
+    },
+    "note": "打开已有 JD 详情页提取公开投递邮箱；不绕过登录、验证码或平台权限。"
+  },
+  "jobs_file": "/Users/don/Documents/career-ops/workspace/ops/data/recruitment-market.json.jobs.d",
+  "jobsCount": 20,
+  "lastUpdatedFromShardsAt": "2026-06-13T16:13:53.172Z",
+  "lastManualImport": {
+    "runAt": "2026-06-04T16:19:17.875Z",
+    "company": "字节跳动",
+    "role": "大模型数据策略专家（VLA方向）-AI数据与安全",
+    "source": "手工导入"
+  },
+  "lastDeletedJob": {
+    "runAt": "2026-06-04T15:59:40.679Z",
+    "id": "MJ-074",
+    "company": "待解析公司",
+    "role": "待解析岗位",
+    "url": "https://www.zhipin.com/job_detail/9687c01726e88d390nB50tm9E1VS.html"
+  },
+  "lastScoreRecalculation": {
+    "runAt": "2026-06-05T00:50:25.462Z",
+    "changed": 8
+  },
+  "lastUpdatedJob": {
+    "runAt": "2026-06-05T09:46:43.505Z",
+    "id": "MJ-075",
+    "company": "腾讯 TEG",
+    "role": "机器人具身智能软件工程师-系统集成",
+    "url": "https://careers.tencent.com/jobdesc.html?postId=1987721108937396224",
+    "reason": "priority-focus-removed"
+  }
+}

@@ -1,15 +1,15 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { CareerProfileOverview } from "@ucareer/shared";
+import { workspaceDataPath } from "../workspace-paths";
 
 export interface ProfileStore {
   getProfileOverview(): Promise<CareerProfileOverview>;
 }
 
 export function createProfileStore(workspaceRoot: string): ProfileStore {
-  const cvPath = join(workspaceRoot, "workspace/profile/cv.md");
-  const profilePath = join(workspaceRoot, "workspace/profile/profile.yml");
-  const profileOverlayPath = join(workspaceRoot, "workspace/profile/_profile.md");
+  const cvPath = workspaceDataPath(workspaceRoot, "profileCv");
+  const profilePath = workspaceDataPath(workspaceRoot, "profileYaml");
+  const profileOverlayPath = workspaceDataPath(workspaceRoot, "profileOverlay");
 
   return {
     async getProfileOverview() {

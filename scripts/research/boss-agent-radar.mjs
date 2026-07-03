@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { spawn } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { readRecruitmentMarket, writeRecruitmentMarket } from '../cli/recruitment-market-store.mjs';
 
 const marketPath = 'workspace/ops/data/recruitment-market.json';
@@ -92,6 +93,7 @@ for (const query of queries) {
 if (!dryRun && discovered.length) {
   market.jobs = [...(market.jobs || []), ...discovered];
   renumberMarketJobs(market.jobs);
+  await attachJobDescriptionFiles(discovered);
   market.updatedAt = todayChina();
   market.lastBossAgentRadar = {
     runAt: new Date().toISOString(),
@@ -223,6 +225,48 @@ function mergeDetail(job, detail) {
   job.direction = inferDirection(rawText);
   job.matchScore = inferMatchScore(job.keywords, job.direction, rawText);
   job.evidenceGap = inferEvidenceGap(job.direction, job.keywords);
+}
+
+async function attachJobDescriptionFiles(jobs) {
+  for (const job of jobs) {
+    const description = String(job.rawText || '').trim();
+    if (!description || job.jdPath || !job.id) continue;
+    job.jdPath = await writeJobDescriptionFile(job, description);
+  }
+}
+
+async function writeJobDescriptionFile(job, description) {
+  const jdsDir = 'workspace/jobs/jds';
+  await mkdir(jdsDir, { recursive: true });
+  const fileName = `${job.id}-${slugifyFileName([job.company, job.role].filter(Boolean).join('-') || 'job-description')}.md`;
+  const relativePath = `${jdsDir}/${fileName}`;
+  const markdown = [
+    `# ${job.role || '待解析岗位'}`,
+    '',
+    `- ID: ${job.id}`,
+    job.company ? `- 公司: ${job.company}` : '',
+    job.salary ? `- 薪资: ${job.salary}` : '',
+    job.location ? `- 地点: ${job.location}` : '',
+    job.url ? `- URL: ${job.url}` : '',
+    `- 来源: ${job.source || 'Boss Agent'}`,
+    `- 入库时间: ${new Date().toISOString()}`,
+    '',
+    '## JD 原文',
+    '',
+    description,
+    '',
+  ].filter((line) => line !== '').join('\n');
+  await writeFile(join(process.cwd(), relativePath), markdown, 'utf8');
+  return relativePath;
+}
+
+function slugifyFileName(value) {
+  const slug = String(value || '')
+    .normalize('NFKD')
+    .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+  return slug.slice(0, 80) || 'job-description';
 }
 
 function normalizeBossUrl(item) {

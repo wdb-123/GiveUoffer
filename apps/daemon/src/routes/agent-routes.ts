@@ -8,33 +8,27 @@ import type {
   ApprovalRequest,
   CreateAgentTaskRequest,
   CreateLocalCommandRequest,
+  AgentExecutionQueueOverview,
   ProviderInstallStatus,
   ProviderSummary,
 } from "@ucareer/shared";
 import { getProvider } from "../index";
-import { createAgentTaskService, isServiceError } from "../services/agent-task-service";
+import { createAgentTaskService, isServiceError, type AgentTaskService } from "../services/agent-task-service";
+import { cancelAgentExecution, getAgentExecutionQueueSnapshot } from "../services/agent-execution-queue-service";
+import { createWorkflowRunService } from "../services/workflow-run-service";
 import { subscribeTaskChange } from "../stores/task-change-bus";
+import { createSqliteTaskStore } from "../stores/sqlite-task-store";
+import { createSqliteWorkflowRunStore } from "../stores/workflow-run-store";
+import { createConnectorCredentialStore } from "../stores/connector-credential-store";
+import { createBillingStore } from "../stores/billing-store";
 import { createAgentToolExecutor } from "../tools/tool-executor";
+import { isInsideOrSameDir } from "../path-guards";
 import type { DaemonRouteContext } from "./context";
 import { error, ok, requirePermission, toProviderSummary } from "./context";
+import { getTenantRouteScope, isScopeError, type TenantRouteScope } from "./tenant-scope";
 
 export function registerAgentRoutes(ctx: DaemonRouteContext): void {
-  const { app, runtime, taskStore, workspaceRoot, services } = ctx;
-  const agentTaskService = createAgentTaskService({
-    runtime,
-    taskStore,
-    workspaceRoot,
-    workflowRunService: services.workflowRunService,
-    toolExecutor: createAgentToolExecutor({
-      applicationStore: ctx.stores.applicationStore,
-      connectorCredentialStore: ctx.stores.connectorCredentialStore,
-      evidenceStore: ctx.stores.evidenceStore,
-      experienceStore: ctx.stores.experienceStore,
-      jobSearchService: services.jobSearchService,
-      marketStore: ctx.stores.marketStore,
-      resumeStore: ctx.stores.resumeStore,
-    }),
-  });
+  const { app, runtime } = ctx;
 
   app.get("/api/providers", async (): Promise<ApiEnvelope<ProviderSummary[]>> => {
     return ok(runtime.providers.map(toProviderSummary));
@@ -51,8 +45,41 @@ export function registerAgentRoutes(ctx: DaemonRouteContext): void {
     return ok(toProviderInstallStatus(provider.id, await provider.checkInstalled()));
   });
 
-  app.get("/api/agent-tasks", async (): Promise<ApiEnvelope<AgentTask[]>> => {
-    return ok(taskStore.listTasks());
+  app.get("/api/agent-tasks", async (request): Promise<ApiEnvelope<AgentTask[]>> => {
+    const authError = requirePermission(ctx, request, "agent.run");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    const scopedTaskStore = createScopedTaskStore(ctx, scope);
+    return ok(scopedTaskStore.listTasks().filter((task) => isTenantTask(scope, task)));
+  });
+
+  app.get("/api/agent-execution-queue", async (request): Promise<ApiEnvelope<AgentExecutionQueueOverview>> => {
+    const authError = requirePermission(ctx, request, "agent.run");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    const snapshot = getAgentExecutionQueueSnapshot();
+    const tenantId = scope.session.activeTenant.id;
+    const currentTenantRunning = snapshot.runningByTenant[tenantId] ?? 0;
+    const currentTenantQueued = snapshot.queuedByTenant[tenantId] ?? 0;
+    return ok({
+      maxConcurrent: snapshot.maxConcurrent,
+      maxConcurrentPerTenant: snapshot.maxConcurrentPerTenant,
+      maxQueued: snapshot.maxQueued,
+      maxQueuedPerTenant: snapshot.maxQueuedPerTenant,
+      running: snapshot.running,
+      queued: snapshot.queued,
+      queuedExclusive: snapshot.queuedExclusive,
+      currentTenant: {
+        tenantId,
+        tenantName: scope.session.activeTenant.name,
+        running: currentTenantRunning,
+        queued: currentTenantQueued,
+      },
+      saturated: snapshot.queued >= snapshot.maxQueued,
+      tenantSaturated: currentTenantQueued >= snapshot.maxQueuedPerTenant,
+    });
   });
 
   app.post<{
@@ -60,6 +87,10 @@ export function registerAgentRoutes(ctx: DaemonRouteContext): void {
   }>("/api/agent-tasks", async (request): Promise<ApiEnvelope<AgentTask | { task: AgentTask; approval: ApprovalRequest }>> => {
     const authError = requirePermission(ctx, request, "agent.run");
     if (authError) return authError;
+    const agentTaskService = createScopedAgentTaskService(ctx, request);
+    if (isAgentTaskServiceError(agentTaskService)) return agentTaskService;
+    const quotaError = assertTenantCanRunAgent(ctx, request);
+    if (quotaError) return quotaError;
     const result = await agentTaskService.createOrContinueTask(request.body);
     if (isServiceError(result)) return error(result.errorCode, result.message);
     return ok(result);
@@ -70,6 +101,8 @@ export function registerAgentRoutes(ctx: DaemonRouteContext): void {
   }>("/api/local-commands", async (request): Promise<ApiEnvelope<import("@ucareer/shared").CreateLocalCommandResult>> => {
     const authError = requirePermission(ctx, request, "agent.run");
     if (authError) return authError;
+    const agentTaskService = createScopedAgentTaskService(ctx, request);
+    if (isAgentTaskServiceError(agentTaskService)) return agentTaskService;
     const result = agentTaskService.createLocalCommand(request.body);
     if (isServiceError(result)) return error(result.errorCode, result.message);
     return ok(result);
@@ -78,8 +111,13 @@ export function registerAgentRoutes(ctx: DaemonRouteContext): void {
   app.get<{
     Params: { taskId: string };
   }>("/api/agent-tasks/:taskId", async (request): Promise<ApiEnvelope<AgentTask>> => {
-    const task = taskStore.getTask(request.params.taskId);
-    if (!task) return error("task_not_found", `Task not found: ${request.params.taskId}`);
+    const authError = requirePermission(ctx, request, "agent.run");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    const scopedTaskStore = createScopedTaskStore(ctx, scope);
+    const task = scopedTaskStore.getTask(request.params.taskId);
+    if (!task || !isTenantTask(scope, task)) return error("task_not_found", `Task not found: ${request.params.taskId}`);
     return ok(task);
   });
 
@@ -88,12 +126,15 @@ export function registerAgentRoutes(ctx: DaemonRouteContext): void {
   }>("/api/agent-tasks/:taskId", async (request): Promise<ApiEnvelope<AgentTask>> => {
     const authError = requirePermission(ctx, request, "agent.run");
     if (authError) return authError;
-    const existingTask = taskStore.getTask(request.params.taskId);
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    const scopedTaskStore = createScopedTaskStore(ctx, scope);
+    const existingTask = scopedTaskStore.getTask(request.params.taskId);
     if (!existingTask) return error("task_not_found", `Task not found: ${request.params.taskId}`);
     if (existingTask.status === "queued" || existingTask.status === "running" || existingTask.status === "waiting_approval") {
       return error("task_busy", "Cannot delete a task while it is queued, running, or waiting for approval");
     }
-    const task = taskStore.deleteTask(request.params.taskId);
+    const task = scopedTaskStore.deleteTask(request.params.taskId);
     if (!task) return error("task_not_found", `Task not found: ${request.params.taskId}`);
     return ok(task);
   });
@@ -101,24 +142,39 @@ export function registerAgentRoutes(ctx: DaemonRouteContext): void {
   app.get<{
     Params: { taskId: string };
   }>("/api/agent-tasks/:taskId/events", async (request): Promise<ApiEnvelope<AgentEvent[]>> => {
-    const task = taskStore.getTask(request.params.taskId);
-    if (!task) return error("task_not_found", `Task not found: ${request.params.taskId}`);
-    return ok(taskStore.listEvents(task.id));
+    const authError = requirePermission(ctx, request, "agent.run");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    const scopedTaskStore = createScopedTaskStore(ctx, scope);
+    const task = scopedTaskStore.getTask(request.params.taskId);
+    if (!task || !isTenantTask(scope, task)) return error("task_not_found", `Task not found: ${request.params.taskId}`);
+    return ok(scopedTaskStore.listEvents(task.id));
   });
 
   app.get<{
     Params: { taskId: string };
   }>("/api/agent-tasks/:taskId/turns", async (request): Promise<ApiEnvelope<AgentTaskTurn[]>> => {
-    const task = taskStore.getTask(request.params.taskId);
-    if (!task) return error("task_not_found", `Task not found: ${request.params.taskId}`);
-    return ok(buildAgentTaskTurns(task.id, taskStore.listEvents(task.id)));
+    const authError = requirePermission(ctx, request, "agent.run");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    const scopedTaskStore = createScopedTaskStore(ctx, scope);
+    const task = scopedTaskStore.getTask(request.params.taskId);
+    if (!task || !isTenantTask(scope, task)) return error("task_not_found", `Task not found: ${request.params.taskId}`);
+    return ok(buildAgentTaskTurns(task.id, scopedTaskStore.listEvents(task.id)));
   });
 
   app.get<{
     Params: { taskId: string };
   }>("/api/agent-tasks/:taskId/events/stream", async (request, reply) => {
-    const task = taskStore.getTask(request.params.taskId);
-    if (!task) return error("task_not_found", `Task not found: ${request.params.taskId}`);
+    const authError = requirePermission(ctx, request, "agent.run");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    const scopedTaskStore = createScopedTaskStore(ctx, scope);
+    const task = scopedTaskStore.getTask(request.params.taskId);
+    if (!task || !isTenantTask(scope, task)) return error("task_not_found", `Task not found: ${request.params.taskId}`);
 
     reply.raw.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
@@ -130,14 +186,14 @@ export function registerAgentRoutes(ctx: DaemonRouteContext): void {
 
     let lastPayload = "";
     const writeSnapshot = () => {
-      const nextTask = taskStore.getTask(task.id);
-      if (!nextTask || reply.raw.destroyed) return;
-      const events = taskStore.listEvents(task.id);
+      const nextTask = scopedTaskStore.getTask(task.id);
+      if (!nextTask || !isTenantTask(scope, nextTask) || reply.raw.destroyed) return;
+      const events = scopedTaskStore.listEvents(task.id);
       const payload = JSON.stringify({
         task: nextTask,
         events,
         turns: buildAgentTaskTurns(task.id, events),
-        approvals: taskStore.listApprovals().filter((approval) => approval.taskId === task.id),
+        approvals: scopedTaskStore.listApprovals().filter((approval) => approval.taskId === task.id),
       });
       if (payload === lastPayload) return;
       lastPayload = payload;
@@ -157,14 +213,26 @@ export function registerAgentRoutes(ctx: DaemonRouteContext): void {
   app.post<{
     Params: { taskId: string };
   }>("/api/agent-tasks/:taskId/cancel", async (request): Promise<ApiEnvelope<AgentTask>> => {
-    const task = taskStore.updateTaskStatus(request.params.taskId, "cancelled");
+    const authError = requirePermission(ctx, request, "agent.run");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    const scopedTaskStore = createScopedTaskStore(ctx, scope);
+    const existingTask = scopedTaskStore.getTask(request.params.taskId);
+    if (!existingTask || !isTenantTask(scope, existingTask)) return error("task_not_found", `Task not found: ${request.params.taskId}`);
+    const task = scopedTaskStore.updateTaskStatus(request.params.taskId, "cancelled");
     if (!task) return error("task_not_found", `Task not found: ${request.params.taskId}`);
-    services.workflowRunService.syncTaskStatus(task);
+    cancelAgentExecution(task.id);
+    createScopedWorkflowRunService(ctx, scope).syncTaskStatus(task);
     return ok(task);
   });
 
-  app.get("/api/approvals", async (): Promise<ApiEnvelope<ApprovalRequest[]>> => {
-    return ok(taskStore.listApprovals());
+  app.get("/api/approvals", async (request): Promise<ApiEnvelope<ApprovalRequest[]>> => {
+    const authError = requirePermission(ctx, request, "agent.approve");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    return ok(createScopedTaskStore(ctx, scope).listApprovals());
   });
 
   app.post<{
@@ -173,9 +241,72 @@ export function registerAgentRoutes(ctx: DaemonRouteContext): void {
   }>("/api/approvals/:approvalId/decision", async (request) => {
     const authError = requirePermission(ctx, request, "agent.approve");
     if (authError) return authError;
+    const agentTaskService = createScopedAgentTaskService(ctx, request);
+    if (isAgentTaskServiceError(agentTaskService)) return agentTaskService;
     const result = agentTaskService.decideApproval(request.params.approvalId, request.body);
     if (isServiceError(result)) return error(result.errorCode, result.message);
     return ok(result);
+  });
+}
+
+function assertTenantCanRunAgent(
+  ctx: DaemonRouteContext,
+  request: { headers: Record<string, string | string[] | undefined> },
+): ApiEnvelope<never> | undefined {
+  const scope = getTenantRouteScope(ctx, request);
+  if (isScopeError(scope)) return scope;
+  try {
+    createBillingStore(ctx.daemonDbPath).assertTenantCanRunAgent(scope.session.activeTenant.id);
+    return undefined;
+  } catch (cause) {
+    return error("tenant_token_quota_exceeded", cause instanceof Error ? cause.message : "Tenant token quota exceeded");
+  }
+}
+
+function createScopedAgentTaskService(
+  ctx: DaemonRouteContext,
+  request: { headers: Record<string, string | string[] | undefined> },
+): AgentTaskService | ApiEnvelope<never> {
+  const scope = getTenantRouteScope(ctx, request);
+  if (isScopeError(scope)) return scope;
+  return createAgentTaskService({
+    runtime: ctx.runtime,
+    taskStore: createSqliteTaskStore(ctx.daemonDbPath, { tenantId: scope.session.activeTenant.id }),
+    workspaceRoot: scope.workspaceRoot,
+    tenantId: scope.session.activeTenant.id,
+    workflowRunService: createWorkflowRunService({
+      workflowRunStore: createSqliteWorkflowRunStore(ctx.daemonDbPath, { tenantId: scope.session.activeTenant.id }),
+    }),
+    toolExecutor: createAgentToolExecutor({
+      workspaceRoot: scope.workspaceRoot,
+      applicationStore: scope.stores.applicationStore,
+      connectorCredentialStore: createConnectorCredentialStore(ctx.daemonDbPath, scope.workspaceRoot, {
+        tenantId: scope.session.activeTenant.id,
+      }),
+      evidenceStore: scope.stores.evidenceStore,
+      experienceStore: scope.stores.experienceStore,
+      jobSearchService: scope.services.jobSearchService,
+      marketStore: scope.stores.marketStore,
+      resumeStore: scope.stores.resumeStore,
+    }),
+  });
+}
+
+function isAgentTaskServiceError(value: AgentTaskService | ApiEnvelope<never>): value is ApiEnvelope<never> {
+  return "ok" in value && value.ok === false;
+}
+
+function isTenantTask(scope: TenantRouteScope, task: AgentTask): boolean {
+  return isInsideOrSameDir(scope.workspaceRoot, task.workspacePath);
+}
+
+function createScopedTaskStore(ctx: DaemonRouteContext, scope: TenantRouteScope) {
+  return createSqliteTaskStore(ctx.daemonDbPath, { tenantId: scope.session.activeTenant.id });
+}
+
+function createScopedWorkflowRunService(ctx: DaemonRouteContext, scope: TenantRouteScope) {
+  return createWorkflowRunService({
+    workflowRunStore: createSqliteWorkflowRunStore(ctx.daemonDbPath, { tenantId: scope.session.activeTenant.id }),
   });
 }
 

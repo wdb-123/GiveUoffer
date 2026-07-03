@@ -36,7 +36,6 @@ export function ExperienceSection({ experienceOverview, profile }: ExperienceSec
   const experiences = experienceOverview?.experiences || [];
   const photos = experienceOverview?.photos || [];
   const intentions = experienceOverview?.intentions || [];
-  const profileAssets = assets.filter((asset) => asset.type === "profile" || asset.type === "overlay");
 
   return (
     <div className="experience-classic-workspace">
@@ -45,27 +44,6 @@ export function ExperienceSection({ experienceOverview, profile }: ExperienceSec
           <h2>经历资产</h2>
           <span>{experienceOverview?.updatedAt ? `更新于 ${formatShortDate(experienceOverview.updatedAt)}` : profile ? "画像已加载" : "等待更新"}</span>
         </div>
-        <details className="experience-asset-group" open>
-          <summary>
-            <h3>我的职业画像</h3>
-            <span className="experience-asset-count">{profileAssets.length} 个</span>
-            <span className="experience-asset-toggle" aria-hidden="true" />
-          </summary>
-          <div className="experience-file-list">
-            {profileAssets.map((asset) => (
-              <button
-                className={selectedAsset?.id === asset.id ? "experience-file-item is-active" : "experience-file-item"}
-                key={asset.id}
-                type="button"
-                onClick={() => setSelectedId(asset.id)}
-              >
-                <span className="experience-file-kind">{asset.type === "profile" ? "画像" : "偏好"}</span>
-                <strong>{asset.title}</strong>
-                <span className="experience-file-name">{asset.subtitle}</span>
-              </button>
-            ))}
-          </div>
-        </details>
         <details className="experience-asset-group">
           <summary>
             <h3>项目经历文件</h3>

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import type {
   AgentEvent,
@@ -13,9 +13,11 @@ import type { ApprovalDecisionRecord, CreateApprovalInput, CreateTaskInput, Task
 import { publishTaskChange } from "./task-change-bus";
 import { openDaemonDatabase } from "../db/sqlite";
 import { agentEvents, agentTasks, approvalDecisions, approvalGrants, approvalRequests, syncEvents } from "../db/schema";
+import { createBillingStore } from "./billing-store";
 
 export interface SyncOutboxEvent {
   id: number;
+  tenantId?: string;
   entityType: string;
   entityId: string;
   eventType: string;
@@ -23,17 +25,18 @@ export interface SyncOutboxEvent {
   createdAt: string;
 }
 
-export function createSqliteTaskStore(path: string): TaskStore {
+export function createSqliteTaskStore(path: string, options: { tenantId?: string } = {}): TaskStore {
   const sqlite = openDaemonDatabase(path);
   const db = drizzle(sqlite);
-
-  recoverInterruptedTasks();
+  const tenantId = options.tenantId;
+  const billingStore = createBillingStore(path);
 
   return {
     createTask(input) {
       const now = new Date().toISOString();
       const task: AgentTask = {
         id: randomUUID(),
+        ...(tenantId ? { tenantId } : {}),
         providerId: input.providerId,
         workspacePath: input.workspacePath,
         prompt: input.prompt,
@@ -56,21 +59,22 @@ export function createSqliteTaskStore(path: string): TaskStore {
     },
 
     listTasks() {
-      return db.select().from(agentTasks).orderBy(desc(agentTasks.createdAt)).all().map(fromTaskRow);
+      const query = db.select().from(agentTasks).where(tenantFilter(agentTasks.tenantId)).orderBy(desc(agentTasks.createdAt));
+      return query.all().map(fromTaskRow);
     },
 
     getTask(taskId) {
-      const row = db.select().from(agentTasks).where(eq(agentTasks.id, taskId)).get();
+      const row = db.select().from(agentTasks).where(and(eq(agentTasks.id, taskId), tenantFilter(agentTasks.tenantId))).get();
       return row ? fromTaskRow(row) : undefined;
     },
 
     deleteTask(taskId) {
       const task = this.getTask(taskId);
       if (!task) return undefined;
-      db.delete(agentEvents).where(eq(agentEvents.taskId, taskId)).run();
-      db.delete(approvalRequests).where(eq(approvalRequests.taskId, taskId)).run();
-      db.delete(approvalDecisions).where(eq(approvalDecisions.taskId, taskId)).run();
-      db.delete(agentTasks).where(eq(agentTasks.id, taskId)).run();
+      db.delete(agentEvents).where(and(eq(agentEvents.taskId, taskId), tenantFilter(agentEvents.tenantId))).run();
+      db.delete(approvalRequests).where(and(eq(approvalRequests.taskId, taskId), tenantFilter(approvalRequests.tenantId))).run();
+      db.delete(approvalDecisions).where(and(eq(approvalDecisions.taskId, taskId), tenantFilter(approvalDecisions.tenantId))).run();
+      db.delete(agentTasks).where(and(eq(agentTasks.id, taskId), tenantFilter(agentTasks.tenantId))).run();
       writeSyncEvent("agent_task", taskId, "deleted", task);
       return task;
     },
@@ -81,7 +85,7 @@ export function createSqliteTaskStore(path: string): TaskStore {
       const updated: AgentTask = { ...task, prompt, updatedAt: new Date().toISOString() };
       db.update(agentTasks)
         .set({ prompt: updated.prompt, updatedAt: updated.updatedAt })
-        .where(eq(agentTasks.id, taskId))
+        .where(and(eq(agentTasks.id, taskId), tenantFilter(agentTasks.tenantId)))
         .run();
       writeSyncEvent("agent_task", taskId, "prompt_updated", updated);
       publishTaskChange(taskId);
@@ -94,7 +98,7 @@ export function createSqliteTaskStore(path: string): TaskStore {
       const updated: AgentTask = { ...task, status, updatedAt: new Date().toISOString() };
       db.update(agentTasks)
         .set({ status: updated.status, updatedAt: updated.updatedAt })
-        .where(eq(agentTasks.id, taskId))
+        .where(and(eq(agentTasks.id, taskId), tenantFilter(agentTasks.tenantId)))
         .run();
       writeSyncEvent("agent_task", taskId, "status_updated", updated);
       this.appendEvent(taskId, { type: "task_status", taskId, status, createdAt: updated.updatedAt });
@@ -102,15 +106,20 @@ export function createSqliteTaskStore(path: string): TaskStore {
     },
 
     appendEvent(taskId, event) {
+      const eventTenantId = requireScopedTaskTenantId(taskId);
       db.insert(agentEvents)
         .values({
           id: randomUUID(),
+          tenantId: eventTenantId,
           taskId,
           eventType: event.type,
           payload: JSON.stringify(event),
           createdAt: event.createdAt,
         })
         .run();
+      if (event.type === "usage" && eventTenantId) {
+        billingStore.recordUsage({ tenantId: eventTenantId, taskId, event });
+      }
       writeSyncEvent("agent_event", taskId, event.type, event);
       publishTaskChange(taskId);
     },
@@ -120,15 +129,18 @@ export function createSqliteTaskStore(path: string): TaskStore {
         SELECT payload
         FROM agent_events
         WHERE task_id = ?
+          ${tenantId ? "AND tenant_id = ?" : ""}
         ORDER BY created_at ASC, rowid ASC
-      `).all(taskId).map((row) => sanitizeDisplayEvent(JSON.parse((row as { payload: string }).payload) as AgentEvent));
+      `).all(...(tenantId ? [taskId, tenantId] : [taskId])).map((row) => sanitizeDisplayEvent(JSON.parse((row as { payload: string }).payload) as AgentEvent));
     },
 
     createApproval(input) {
+      const approvalTenantId = requireScopedTaskTenantId(input.taskId);
       const approval = createApprovalRecord(input);
       db.insert(approvalRequests)
         .values({
           id: approval.id,
+          tenantId: approvalTenantId,
           taskId: approval.taskId,
           action: approval.action,
           risk: approval.risk,
@@ -146,11 +158,17 @@ export function createSqliteTaskStore(path: string): TaskStore {
     },
 
     listApprovals() {
-      return db.select().from(approvalRequests).orderBy(desc(approvalRequests.createdAt)).all().map(fromApprovalRow);
+      return db.select().from(approvalRequests)
+        .where(tenantFilter(approvalRequests.tenantId))
+        .orderBy(desc(approvalRequests.createdAt))
+        .all()
+        .map(fromApprovalRow);
     },
 
     getApproval(approvalId) {
-      const row = db.select().from(approvalRequests).where(eq(approvalRequests.id, approvalId)).get();
+      const row = db.select().from(approvalRequests)
+        .where(and(eq(approvalRequests.id, approvalId), tenantFilter(approvalRequests.tenantId)))
+        .get();
       return row ? fromApprovalRow(row) : undefined;
     },
 
@@ -167,6 +185,7 @@ export function createSqliteTaskStore(path: string): TaskStore {
       db.insert(approvalDecisions)
         .values({
           approvalId: record.approvalId,
+          tenantId: approval.tenantId ?? requireScopedTaskTenantId(record.taskId),
           taskId: record.taskId,
           decision: record.decision,
           note: record.note ?? null,
@@ -174,7 +193,7 @@ export function createSqliteTaskStore(path: string): TaskStore {
         })
         .run();
       writeSyncEvent("approval_decision", record.approvalId, record.decision, record);
-      db.delete(approvalRequests).where(eq(approvalRequests.id, approvalId)).run();
+      db.delete(approvalRequests).where(and(eq(approvalRequests.id, approvalId), tenantFilter(approvalRequests.tenantId))).run();
       if (record.decision === "allow_workspace") {
         const grant = parseStartAgentGrant(approval.command, approval.id);
         if (grant) this.createWorkspaceApprovalGrant(grant);
@@ -193,7 +212,7 @@ export function createSqliteTaskStore(path: string): TaskStore {
       const row = db
         .select()
         .from(approvalGrants)
-        .where(eq(approvalGrants.action, input.action))
+        .where(and(eq(approvalGrants.action, input.action), tenantFilter(approvalGrants.tenantId)))
         .all()
         .find((grant) => grant.providerId === input.providerId && grant.workspacePath === input.workspacePath);
       return Boolean(row);
@@ -203,6 +222,7 @@ export function createSqliteTaskStore(path: string): TaskStore {
       const now = new Date().toISOString();
       const grant = {
         id: randomUUID(),
+        tenantId: tenantId ?? null,
         action: input.action,
         providerId: input.providerId,
         workspacePath: input.workspacePath,
@@ -211,9 +231,9 @@ export function createSqliteTaskStore(path: string): TaskStore {
       };
       sqlite.prepare(`
         INSERT OR REPLACE INTO approval_grants
-          (id, action, provider_id, workspace_path, source_approval_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(grant.id, grant.action, grant.providerId, grant.workspacePath, grant.sourceApprovalId, grant.createdAt);
+          (id, tenant_id, action, provider_id, workspace_path, source_approval_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(grant.id, grant.tenantId, grant.action, grant.providerId, grant.workspacePath, grant.sourceApprovalId, grant.createdAt);
       writeSyncEvent("approval_grant", grant.id, "created", grant);
     },
   };
@@ -221,6 +241,7 @@ export function createSqliteTaskStore(path: string): TaskStore {
   function writeSyncEvent(entityType: string, entityId: string, eventType: string, payload: unknown): void {
     db.insert(syncEvents)
       .values({
+        tenantId: tenantId ?? null,
         entityType,
         entityId,
         eventType,
@@ -231,34 +252,17 @@ export function createSqliteTaskStore(path: string): TaskStore {
       .run();
   }
 
-  function recoverInterruptedTasks(): void {
-    const interrupted = db.select().from(agentTasks).where(eq(agentTasks.status, "running")).all();
-    for (const row of interrupted) {
-      const now = new Date().toISOString();
-      const task = fromTaskRow(row);
-      const updated: AgentTask = { ...task, status: "failed", updatedAt: now };
-      db.update(agentTasks)
-        .set({ status: updated.status, updatedAt: updated.updatedAt })
-        .where(eq(agentTasks.id, task.id))
-        .run();
-      const event: AgentEvent = {
-        type: "error",
-        message: "本地 Codex 执行在 daemon 重启或进程退出时中断，请重新发送这条消息。",
-        provider: task.providerId,
-        createdAt: now,
-      };
-      db.insert(agentEvents)
-        .values({
-          id: randomUUID(),
-          taskId: task.id,
-          eventType: event.type,
-          payload: JSON.stringify(event),
-          createdAt: now,
-        })
-        .run();
-      writeSyncEvent("agent_task", task.id, "recovered_interrupted", updated);
-      writeSyncEvent("agent_event", task.id, event.type, event);
-    }
+  function tenantFilter(column: any) {
+    return tenantId ? eq(column, tenantId) : undefined;
+  }
+
+  function requireScopedTaskTenantId(taskId: string): string | null {
+    const row = db.select({ tenantId: agentTasks.tenantId })
+      .from(agentTasks)
+      .where(and(eq(agentTasks.id, taskId), tenantFilter(agentTasks.tenantId)))
+      .get();
+    if (!row) throw new Error(`Task not found in tenant scope: ${taskId}`);
+    return row.tenantId ?? tenantId ?? null;
   }
 }
 
@@ -300,18 +304,19 @@ function parseStartAgentGrant(command: string | undefined, sourceApprovalId: str
   }
 }
 
-export function listSyncOutbox(path: string, limit = 100): SyncOutboxEvent[] {
+export function listSyncOutbox(path: string, limit = 100, tenantId?: string): SyncOutboxEvent[] {
   const sqlite = openDaemonDatabase(path);
   const db = drizzle(sqlite);
   return db
     .select()
     .from(syncEvents)
-    .where(isNull(syncEvents.pushedAt))
+    .where(and(isNull(syncEvents.pushedAt), tenantId ? eq(syncEvents.tenantId, tenantId) : undefined))
     .orderBy(syncEvents.id)
     .limit(limit)
     .all()
     .map((row) => ({
       id: row.id,
+      ...(row.tenantId ? { tenantId: row.tenantId } : {}),
       entityType: row.entityType,
       entityId: row.entityId,
       eventType: row.eventType,
@@ -320,18 +325,22 @@ export function listSyncOutbox(path: string, limit = 100): SyncOutboxEvent[] {
     }));
 }
 
-export function markSyncEventsPushed(path: string, ids: number[]): number {
+export function markSyncEventsPushed(path: string, ids: number[], tenantId?: string): number {
   if (ids.length === 0) return 0;
   const sqlite = openDaemonDatabase(path);
   const db = drizzle(sqlite);
   const pushedAt = new Date().toISOString();
-  db.update(syncEvents).set({ pushedAt }).where(inArray(syncEvents.id, ids)).run();
-  return ids.length;
+  const result = db.update(syncEvents)
+    .set({ pushedAt })
+    .where(and(inArray(syncEvents.id, ids), tenantId ? eq(syncEvents.tenantId, tenantId) : undefined))
+    .run();
+  return result.changes;
 }
 
 function toTaskRow(task: AgentTask) {
   return {
     id: task.id,
+    tenantId: task.tenantId ?? null,
     providerId: task.providerId,
     workspacePath: task.workspacePath,
     prompt: task.prompt,
@@ -352,6 +361,7 @@ function fromTaskRow(row: typeof agentTasks.$inferSelect): AgentTask {
   const routeDecision = row.routeDecision ? (JSON.parse(row.routeDecision) as RouteDecision) : undefined;
   return {
     id: row.id,
+    ...(row.tenantId ? { tenantId: row.tenantId } : {}),
     providerId: row.providerId,
     workspacePath: row.workspacePath,
     prompt: row.prompt,
@@ -386,6 +396,7 @@ function createApprovalRecord(input: CreateApprovalInput): ApprovalRequest {
 function fromApprovalRow(row: typeof approvalRequests.$inferSelect): ApprovalRequest {
   return {
     id: row.id,
+    ...(row.tenantId ? { tenantId: row.tenantId } : {}),
     taskId: row.taskId,
     action: row.action as ApprovalRequest["action"],
     risk: row.risk as ApprovalRequest["risk"],

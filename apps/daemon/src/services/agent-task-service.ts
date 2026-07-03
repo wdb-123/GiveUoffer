@@ -1,3 +1,4 @@
+import { performance } from "node:perf_hooks";
 import { resolve } from "node:path";
 import type { AgentProvider } from "@ucareer/agent-core";
 import type {
@@ -13,10 +14,12 @@ import { getProvider, type DaemonRuntime } from "../index";
 import { isInsideOrSameDir } from "../path-guards";
 import { evaluateActionPolicy, evaluateAgentExecutionPolicy } from "../policy/agent-execution-policy";
 import { runApprovedLocalCommand, runApprovedTask } from "../execution/runner";
+import { defaultTaskExecutionScheduler, type TaskExecutionScheduler } from "../execution/task-execution-scheduler";
+import { runWithAgentExecutionSlot } from "./agent-execution-queue-service";
 import { isPaperclipAdapterProvider } from "../providers/paperclip-adapter-provider";
 import type { TaskStore } from "../stores/task-store";
 import type { AgentToolExecutor } from "../tools/tool-executor";
-import { classifyIntake } from "../workflow/classify-intake";
+import { classifyIntake, isSimpleGeneralConversation } from "../workflow/classify-intake";
 import type { WorkflowRunService } from "./workflow-run-service";
 
 export interface AgentTaskService {
@@ -30,14 +33,30 @@ export interface ServiceError {
   message: string;
 }
 
+type TimingMark = {
+  phase: string;
+  durationMs: number;
+  detail?: string;
+};
+
 export function createAgentTaskService(input: {
   runtime: DaemonRuntime;
   taskStore: TaskStore;
   workspaceRoot: string;
+  tenantId?: string;
   workflowRunService?: WorkflowRunService;
   toolExecutor?: AgentToolExecutor;
+  executionScheduler?: TaskExecutionScheduler;
 }): AgentTaskService {
-  const { runtime, taskStore, workspaceRoot, workflowRunService, toolExecutor } = input;
+  const {
+    runtime,
+    taskStore,
+    workspaceRoot,
+    tenantId,
+    workflowRunService,
+    toolExecutor,
+    executionScheduler = defaultTaskExecutionScheduler,
+  } = input;
 
   return {
     async createOrContinueTask(body) {
@@ -55,8 +74,10 @@ export function createAgentTaskService(input: {
           provider,
           runtime,
           taskStore,
+          workspaceRoot,
           ...(workflowRunService ? { workflowRunService } : {}),
           ...(toolExecutor ? { toolExecutor } : {}),
+          executionScheduler,
         });
       }
 
@@ -64,17 +85,50 @@ export function createAgentTaskService(input: {
       if (!provider) {
         return serviceError("provider_not_found", `Provider not found: ${body.providerId}`);
       }
-      const routedTask = await resolveNewTaskRoute({ body, provider, runtime });
+      const taskWorkspacePath = resolveTaskWorkspacePath(workspaceRoot, body.workspacePath);
+      if (isServiceError(taskWorkspacePath)) return taskWorkspacePath;
+      const requestStartMs = performance.now();
+      const routedTask = await resolveNewTaskRoute({ body, provider, runtime, workspacePath: taskWorkspacePath });
 
       const routeMetadata = workflowRunService?.createRunMetadata(routedTask.routeMetadata) ?? routedTask.routeMetadata;
+      const createTaskStartMs = performance.now();
       const task = taskStore.createTask({
+        ...(tenantId ? { tenantId } : {}),
         providerId: routedTask.providerId,
-        workspacePath: body.workspacePath || runtime.workspaceRoot,
+        workspacePath: taskWorkspacePath,
         prompt: routedTask.prompt,
         mode: body.mode || "structured",
         routeMetadata,
       });
+      const taskCreateMs = performance.now() - createTaskStartMs;
+      appendTimingEvents(taskStore, task.id, [
+        ...routedTask.timings,
+        { phase: "task.create", durationMs: taskCreateMs },
+        {
+          phase: "task.pre_approval_total",
+          durationMs: performance.now() - requestStartMs,
+          detail: `skill=${routeMetadata.skillId || "unknown"} provider=${routedTask.providerId}`,
+        },
+      ]);
+      logTiming("task.create", taskCreateMs, { taskId: task.id, providerId: routedTask.providerId });
       workflowRunService?.attachTask(task);
+
+      const localFastReply = buildLocalFastReply(routeMetadata, body.prompt);
+      if (localFastReply) {
+        const fastReplyStartMs = performance.now();
+        taskStore.appendEvent(task.id, {
+          type: "message",
+          role: "assistant",
+          text: localFastReply,
+          createdAt: new Date().toISOString(),
+        });
+        const updatedTask = taskStore.updateTaskStatus(task.id, "completed") ?? task;
+        const fastReplyMs = performance.now() - fastReplyStartMs;
+        appendTimingEvent(taskStore, task.id, "local.fast_reply", fastReplyMs, "reason=simple_general_conversation");
+        logTiming("local.fast_reply", fastReplyMs, { taskId: task.id, skillId: routeMetadata.skillId });
+        workflowRunService?.syncTaskStatus(updatedTask);
+        return updatedTask;
+      }
 
       taskStore.appendEvent(task.id, {
         type: "message",
@@ -89,6 +143,7 @@ export function createAgentTaskService(input: {
         taskStore,
         ...(workflowRunService ? { workflowRunService } : {}),
         ...(toolExecutor ? { toolExecutor } : {}),
+        executionScheduler,
         isContinuation: false,
         permissionMode: body.permissionMode,
       });
@@ -105,6 +160,7 @@ export function createAgentTaskService(input: {
       if (!isInsideOrSameDir(workspaceRoot, cwd)) return serviceError("invalid_cwd", "cwd must stay inside workspace");
 
       const task = taskStore.createTask({
+        ...(tenantId ? { tenantId } : {}),
         providerId: "local-shell",
         workspacePath: cwd,
         prompt: body.label || [command, ...args].join(" "),
@@ -135,6 +191,10 @@ export function createAgentTaskService(input: {
       }
 
       const approval = taskStore.getApproval(approvalId);
+      const approvalTask = approval ? taskStore.getTask(approval.taskId) : undefined;
+      if (approvalTask && !isInsideOrSameDir(workspaceRoot, approvalTask.workspacePath)) {
+        return serviceError("approval_not_found", `Approval not found: ${approvalId}`);
+      }
       const decision = taskStore.decideApproval(approvalId, body);
       if (!decision) return serviceError("approval_not_found", `Approval not found: ${approvalId}`);
       const decidedTask = taskStore.getTask(decision.taskId);
@@ -148,6 +208,7 @@ export function createAgentTaskService(input: {
             task,
             taskStore,
             ...(workflowRunService ? { workflowRunService } : {}),
+            executionScheduler,
             approvalCommand: approval.command,
           });
         } else if (task && provider) {
@@ -157,6 +218,7 @@ export function createAgentTaskService(input: {
             taskStore,
             ...(workflowRunService ? { workflowRunService } : {}),
             ...(toolExecutor ? { toolExecutor } : {}),
+            executionScheduler,
           });
         }
       }
@@ -170,20 +232,31 @@ async function resolveNewTaskRoute(input: {
   body: CreateAgentTaskRequest;
   provider: AgentProvider;
   runtime: DaemonRuntime;
+  workspacePath: string;
 }): Promise<{
   providerId: string;
   prompt: string;
   routeMetadata: NonNullable<CreateAgentTaskRequest["routeMetadata"]>;
+  timings: TimingMark[];
 }> {
+  const totalStartMs = performance.now();
+  const timings: TimingMark[] = [];
   const displaySourceText = input.body.routeMetadata?.sourceText?.trim() || composeDisplaySourceText(input.body);
   if (input.body.routeMetadata) {
+    timings.push({
+      phase: "route.reuse_metadata",
+      durationMs: performance.now() - totalStartMs,
+      detail: `skill=${input.body.routeMetadata.skillId || "unknown"}`,
+    });
     return {
       providerId: input.body.providerId,
       prompt: composePromptWithAttachments(input.body.prompt.trim(), input.body.attachments),
       routeMetadata: input.body.routeMetadata,
+      timings,
     };
   }
 
+  const routeStartMs = performance.now();
   const route = await classifyIntake({
     text: displaySourceText,
     promptText: displaySourceText,
@@ -191,11 +264,32 @@ async function resolveNewTaskRoute(input: {
     ...(input.body.pageContext ? { pageContext: input.body.pageContext } : {}),
     routeWithAgent: (prompt) => runAgentRouterPrompt({
       provider: input.provider,
-      workspacePath: input.body.workspacePath || input.runtime.workspaceRoot,
+      workspacePath: input.workspacePath,
       prompt,
     }),
   });
+  const routeMs = performance.now() - routeStartMs;
+  timings.push({
+    phase: "route.classify",
+    durationMs: routeMs,
+    detail: `skill=${route.skillId} inputKind=${route.inputKind} confidence=${route.confidence}`,
+  });
+  logTiming("route.classify", routeMs, {
+    providerId: input.body.providerId,
+    skillId: route.skillId,
+    inputKind: route.inputKind,
+  });
+  const providerSelectStartMs = performance.now();
   const recommendedProvider = getProvider(input.runtime, route.recommendedProviderId);
+  timings.push({
+    phase: "route.provider_select",
+    durationMs: performance.now() - providerSelectStartMs,
+    detail: `recommended=${route.recommendedProviderId} selected=${recommendedProvider ? route.recommendedProviderId : input.body.providerId}`,
+  });
+  timings.push({
+    phase: "route.total",
+    durationMs: performance.now() - totalStartMs,
+  });
   return {
     providerId: recommendedProvider ? route.recommendedProviderId : input.body.providerId,
     prompt: composePromptWithAttachments(route.agentPrompt || displaySourceText, input.body.attachments),
@@ -206,6 +300,7 @@ async function resolveNewTaskRoute(input: {
       sourceText: displaySourceText,
       routeDecision: route,
     },
+    timings,
   };
 }
 
@@ -213,17 +308,34 @@ export function isServiceError(value: unknown): value is ServiceError {
   return Boolean(value && typeof value === "object" && "errorCode" in value && "message" in value);
 }
 
+function resolveTaskWorkspacePath(workspaceRoot: string, value: unknown): string | ServiceError {
+  const workspacePath = resolve(workspaceRoot, String(value || "."));
+  if (!isInsideOrSameDir(workspaceRoot, workspacePath)) {
+    return serviceError("invalid_workspace_path", "workspacePath must stay inside tenant workspace");
+  }
+  return workspacePath;
+}
+
 async function continueTask(input: {
   body: CreateAgentTaskRequest;
   provider: AgentProvider;
   runtime: DaemonRuntime;
   taskStore: TaskStore;
+  workspaceRoot: string;
   workflowRunService?: WorkflowRunService;
   toolExecutor?: AgentToolExecutor;
+  executionScheduler: TaskExecutionScheduler;
 }): Promise<AgentTask | { task: AgentTask; approval: ApprovalRequest } | ServiceError> {
-  const { body, provider, taskStore, workflowRunService, toolExecutor } = input;
+  const { body, provider, taskStore, workspaceRoot, workflowRunService, toolExecutor } = input;
   const existingTask = taskStore.getTask(body.continueTaskId || "");
   if (!existingTask) return serviceError("task_not_found", `Task not found: ${body.continueTaskId}`);
+  if (!isInsideOrSameDir(workspaceRoot, existingTask.workspacePath)) {
+    return serviceError("task_not_found", `Task not found: ${body.continueTaskId}`);
+  }
+  const continuationWorkspacePath = body.workspacePath
+    ? resolveTaskWorkspacePath(workspaceRoot, body.workspacePath)
+    : existingTask.workspacePath;
+  if (isServiceError(continuationWorkspacePath)) return continuationWorkspacePath;
   if (existingTask.providerId !== body.providerId) {
     return serviceError("provider_mismatch", "Cannot continue a task with a different provider");
   }
@@ -241,7 +353,7 @@ async function continueTask(input: {
     ...(body.pageContext ? { pageContext: body.pageContext } : {}),
     routeWithAgent: (prompt) => runAgentRouterPrompt({
       provider,
-      workspacePath: body.workspacePath || existingTask.workspacePath,
+      workspacePath: continuationWorkspacePath,
       prompt,
     }),
   });
@@ -267,13 +379,14 @@ async function continueTask(input: {
   const approval = requestAgentExecutionApproval({
     task: {
       ...continuedTask,
-      workspacePath: body.workspacePath || existingTask.workspacePath,
+      workspacePath: continuationWorkspacePath,
       mode: body.mode || existingTask.mode,
     },
     provider,
     taskStore,
     ...(workflowRunService ? { workflowRunService } : {}),
     ...(toolExecutor ? { toolExecutor } : {}),
+    executionScheduler: input.executionScheduler,
     isContinuation: true,
     permissionMode: body.permissionMode,
   });
@@ -298,10 +411,11 @@ async function runAgentRouterPrompt(input: {
   if (!isPaperclipAdapterProvider(input.provider)) {
     throw new Error(`Provider ${input.provider.id} does not support agent router execution`);
   }
-  return await input.provider.executeRouterPrompt({
+  const provider = input.provider;
+  return await runWithAgentExecutionSlot(`router:${provider.id}`, () => provider.executeRouterPrompt({
     prompt: input.prompt,
     workspacePath: input.workspacePath,
-  });
+  }));
 }
 
 function buildContinuationRouteText(existingTask: AgentTask, latestSourceText: string): string {
@@ -357,9 +471,11 @@ function requestAgentExecutionApproval(input: {
   taskStore: TaskStore;
   workflowRunService?: WorkflowRunService;
   toolExecutor?: AgentToolExecutor;
+  executionScheduler: TaskExecutionScheduler;
   isContinuation: boolean;
   permissionMode?: "default" | "auto_review" | "full_access" | undefined;
 }): ApprovalRequest | undefined {
+  const policyStartMs = performance.now();
   const hasWorkspaceGrant = input.taskStore.hasWorkspaceApprovalGrant({
     action: "start_agent",
     providerId: input.provider.id,
@@ -372,6 +488,13 @@ function requestAgentExecutionApproval(input: {
     permissionMode: input.permissionMode,
     hasWorkspaceGrant,
   });
+  const policyMs = performance.now() - policyStartMs;
+  appendTimingEvent(input.taskStore, input.task.id, "approval.policy", policyMs, `required=${policy.required}`);
+  logTiming("approval.policy", policyMs, {
+    taskId: input.task.id,
+    providerId: input.provider.id,
+    required: policy.required,
+  });
   if (!policy.required) {
     input.taskStore.appendEvent(input.task.id, {
       type: "message",
@@ -383,16 +506,24 @@ function requestAgentExecutionApproval(input: {
           : "Agent auto-start enabled by UCAREER_AGENT_AUTO_START=1.",
       createdAt: new Date().toISOString(),
     });
-    runApprovedTask({
+    const enqueueResult = input.executionScheduler.enqueue({
       task: input.task,
-      provider: input.provider,
       taskStore: input.taskStore,
-      ...(input.toolExecutor ? { toolExecutor: input.toolExecutor } : {}),
-      onTaskStatusChange: (task) => input.workflowRunService?.syncTaskStatus(task),
+      label: input.provider.id,
+      run: ({ onTaskSettled }) => runApprovedTask({
+        task: input.task,
+        provider: input.provider,
+        taskStore: input.taskStore,
+        ...(input.toolExecutor ? { toolExecutor: input.toolExecutor } : {}),
+        onTaskStatusChange: (task) => input.workflowRunService?.syncTaskStatus(task),
+        onTaskSettled,
+      }),
     });
+    if (!enqueueResult.accepted) input.workflowRunService?.syncTaskStatus(enqueueResult.task);
     return undefined;
   }
-  return input.taskStore.createApproval({
+  const approvalStartMs = performance.now();
+  const approval = input.taskStore.createApproval({
     taskId: input.task.id,
     action: policy.action,
     risk: policy.risk,
@@ -401,12 +532,17 @@ function requestAgentExecutionApproval(input: {
     cwd: input.task.workspacePath,
     affectedPaths: policy.affectedPaths,
   });
+  const approvalMs = performance.now() - approvalStartMs;
+  appendTimingEvent(input.taskStore, input.task.id, "approval.create", approvalMs);
+  logTiming("approval.create", approvalMs, { taskId: input.task.id, providerId: input.provider.id });
+  return approval;
 }
 
 function startApprovedLocalCommand(input: {
   task: AgentTask;
   taskStore: TaskStore;
   workflowRunService?: WorkflowRunService;
+  executionScheduler: TaskExecutionScheduler;
   approvalCommand: string;
 }): void {
   const execution = parseLocalCommandApproval(input.approvalCommand);
@@ -420,12 +556,19 @@ function startApprovedLocalCommand(input: {
     const updated = input.taskStore.updateTaskStatus(input.task.id, "failed");
     if (updated) input.workflowRunService?.syncTaskStatus(updated);
   } else if (input.task.status === "queued" || input.task.status === "waiting_approval") {
-    runApprovedLocalCommand({
+    const enqueueResult = input.executionScheduler.enqueue({
       task: input.task,
       taskStore: input.taskStore,
-      execution,
-      onTaskStatusChange: (task) => input.workflowRunService?.syncTaskStatus(task),
+      label: "local command",
+      run: ({ onTaskSettled }) => runApprovedLocalCommand({
+        task: input.task,
+        taskStore: input.taskStore,
+        execution,
+        onTaskStatusChange: (task) => input.workflowRunService?.syncTaskStatus(task),
+        onTaskSettled,
+      }),
     });
+    if (!enqueueResult.accepted) input.workflowRunService?.syncTaskStatus(enqueueResult.task);
   }
 }
 
@@ -435,15 +578,23 @@ function startApprovedProviderTask(input: {
   taskStore: TaskStore;
   workflowRunService?: WorkflowRunService;
   toolExecutor?: AgentToolExecutor;
+  executionScheduler: TaskExecutionScheduler;
 }): void {
   if (input.task.status === "queued" || input.task.status === "waiting_approval") {
-    runApprovedTask({
+    const enqueueResult = input.executionScheduler.enqueue({
       task: input.task,
-      provider: input.provider,
       taskStore: input.taskStore,
-      ...(input.toolExecutor ? { toolExecutor: input.toolExecutor } : {}),
-      onTaskStatusChange: (task) => input.workflowRunService?.syncTaskStatus(task),
+      label: input.provider.id,
+      run: ({ onTaskSettled }) => runApprovedTask({
+        task: input.task,
+        provider: input.provider,
+        taskStore: input.taskStore,
+        ...(input.toolExecutor ? { toolExecutor: input.toolExecutor } : {}),
+        onTaskStatusChange: (task) => input.workflowRunService?.syncTaskStatus(task),
+        onTaskSettled,
+      }),
     });
+    if (!enqueueResult.accepted) input.workflowRunService?.syncTaskStatus(enqueueResult.task);
   } else {
     input.taskStore.appendEvent(input.task.id, {
       type: "message",
@@ -495,4 +646,37 @@ function extractDisplayPrompt(prompt: string): string {
 
 function serviceError(errorCode: string, message: string): ServiceError {
   return { errorCode, message };
+}
+
+function buildLocalFastReply(routeMetadata: CreateAgentTaskRequest["routeMetadata"], prompt: string): string | null {
+  if (routeMetadata?.skillId !== "agent.general" || routeMetadata.inputKind !== "general") return null;
+  if (!isSimpleGeneralConversation(prompt)) return null;
+  const normalized = prompt.replace(/\s+/g, " ").trim();
+  if (/^(?:谢谢|感谢|thanks|thank you)/iu.test(normalized)) return "不客气。";
+  if (/^(?:在吗|在不在)/u.test(normalized)) return "在的。你可以直接发岗位、简历、截图或问题。";
+  return "你好！你可以直接发岗位、简历、截图或问题。";
+}
+
+function appendTimingEvents(taskStore: TaskStore, taskId: string, timings: TimingMark[]): void {
+  for (const timing of timings) {
+    appendTimingEvent(taskStore, taskId, timing.phase, timing.durationMs, timing.detail);
+  }
+}
+
+function appendTimingEvent(taskStore: TaskStore, taskId: string, phase: string, durationMs: number, detail?: string): void {
+  taskStore.appendEvent(taskId, {
+    type: "message",
+    role: "system",
+    text: `性能埋点：phase=${phase} durationMs=${Math.round(durationMs)}${detail ? ` ${detail}` : ""}`,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+function logTiming(phase: string, durationMs: number, detail: Record<string, unknown> = {}): void {
+  console.info(JSON.stringify({
+    event: "ucareer.agent_timing",
+    phase,
+    durationMs: Math.round(durationMs),
+    ...detail,
+  }));
 }

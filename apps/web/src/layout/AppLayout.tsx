@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Sidebar } from "./Sidebar";
 import type { AppView, ViewId } from "../views";
 import type { LoginCredentials } from "../auth/LoginPage";
-import type { AgentTask } from "@ucareer/shared";
+import type { AgentTask, AuthSession } from "@ucareer/shared";
 
 export interface SidebarAgentConversations {
   selectedProvider: string;
@@ -20,12 +20,14 @@ interface AppLayoutProps {
   agentConversations?: SidebarAgentConversations;
   authMethod: LoginCredentials["method"];
   children: ReactNode;
+  session: AuthSession;
+  viewBadges?: Partial<Record<ViewId, number | string>>;
   views: AppView[];
   onLogout(): void;
   onViewChange(viewId: ViewId): void;
 }
 
-export function AppLayout({ activeView, accountEmail, agentConversations, authMethod, children, views, onLogout, onViewChange }: AppLayoutProps) {
+export function AppLayout({ activeView, accountEmail, agentConversations, authMethod, children, session, viewBadges, views, onLogout, onViewChange }: AppLayoutProps) {
   const [navCollapsed, setNavCollapsed] = useState(false);
   const layoutClasses = [
     "shell",
@@ -42,6 +44,8 @@ export function AppLayout({ activeView, accountEmail, agentConversations, authMe
         agentConversations={agentConversations}
         authMethod={authMethod}
         collapsed={navCollapsed}
+        session={session}
+        viewBadges={viewBadges || {}}
         views={views}
         onLogout={onLogout}
         onToggleCollapsed={() => setNavCollapsed((collapsed) => !collapsed)}

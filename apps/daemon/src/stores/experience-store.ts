@@ -8,6 +8,7 @@ import type {
   SaveExperienceMetadataInput,
 } from "@ucareer/shared";
 import { isInsideDir } from "../path-guards";
+import { workspaceDataPath } from "../workspace-paths";
 
 interface ExperienceMetadataFile {
   updatedAt?: string;
@@ -23,10 +24,10 @@ export interface ExperienceStore {
 
 export function createExperienceStore(workspaceRoot: string): ExperienceStore {
   const workspaceAssetsDir = join(workspaceRoot, "workspace");
-  const projectNotesDir = join(workspaceRoot, "workspace/jobs/project-notes");
-  const headshotsDir = join(workspaceRoot, "workspace/profile/headshots");
-  const intentionsDir = join(workspaceRoot, "workspace/profile/intentions");
-  const metadataPath = join(workspaceRoot, "workspace/ops/data/experience-metadata.json");
+  const projectNotesDir = workspaceDataPath(workspaceRoot, "projectNotes");
+  const headshotsDir = workspaceDataPath(workspaceRoot, "headshots");
+  const intentionsDir = workspaceDataPath(workspaceRoot, "intentions");
+  const metadataPath = workspaceDataPath(workspaceRoot, "experienceMetadata");
 
   return {
     async getExperienceOverview() {

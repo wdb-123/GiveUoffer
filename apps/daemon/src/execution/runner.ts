@@ -4,6 +4,8 @@ import type { AgentTask } from "@ucareer/shared";
 import { isPaperclipAdapterProvider } from "../providers/paperclip-adapter-provider";
 import type { TaskStore } from "../stores/task-store";
 import type { AgentToolCall, AgentToolExecutor } from "../tools/tool-executor";
+import { buildToolResultFollowupInstruction } from "../workflow/prompt-builder";
+import { getSkill } from "../skills/registry";
 
 export interface RunApprovedTaskInput {
   task: AgentTask;
@@ -11,9 +13,16 @@ export interface RunApprovedTaskInput {
   taskStore: TaskStore;
   toolExecutor?: AgentToolExecutor;
   onTaskStatusChange?: (task: AgentTask) => void;
+  onTaskSettled?: (taskId: string) => void;
 }
 
-export function runApprovedTask({ task, provider, taskStore, toolExecutor, onTaskStatusChange }: RunApprovedTaskInput): void {
+export function runApprovedTask({ task, provider, taskStore, toolExecutor, onTaskStatusChange, onTaskSettled }: RunApprovedTaskInput): void {
+  let settled = false;
+  const settleTask = () => {
+    if (settled) return;
+    settled = true;
+    onTaskSettled?.(task.id);
+  };
   if (isPaperclipAdapterProvider(provider)) {
     void provider.executePaperclipTask({
       taskId: task.id,
@@ -21,7 +30,7 @@ export function runApprovedTask({ task, provider, taskStore, toolExecutor, onTas
       workspacePath: task.workspacePath,
       taskStore: withTaskStatusCallback(taskStore, onTaskStatusChange),
       ...(toolExecutor ? { toolExecutor } : {}),
-    });
+    }).finally(settleTask);
     return;
   }
 
@@ -33,6 +42,7 @@ export function runApprovedTask({ task, provider, taskStore, toolExecutor, onTas
       createdAt: new Date().toISOString(),
     });
     updateTaskStatus(taskStore, task.id, "failed", onTaskStatusChange);
+    settleTask();
     return;
   }
 
@@ -44,6 +54,7 @@ export function runApprovedTask({ task, provider, taskStore, toolExecutor, onTas
       createdAt: new Date().toISOString(),
     });
     updateTaskStatus(taskStore, task.id, "failed", onTaskStatusChange);
+    settleTask();
     return;
   }
 
@@ -53,6 +64,7 @@ export function runApprovedTask({ task, provider, taskStore, toolExecutor, onTas
     taskStore,
     ...(toolExecutor ? { toolExecutor } : {}),
     ...(onTaskStatusChange ? { onTaskStatusChange } : {}),
+    settleTask,
     prompt: task.prompt,
     iteration: 0,
   });
@@ -64,6 +76,7 @@ function runStructuredProviderIteration(input: {
   taskStore: TaskStore;
   toolExecutor?: AgentToolExecutor;
   onTaskStatusChange?: (task: AgentTask) => void;
+  settleTask: () => void;
   prompt: string;
   iteration: number;
 }): void {
@@ -81,6 +94,7 @@ function runStructuredProviderIteration(input: {
       createdAt: new Date().toISOString(),
     });
     updateTaskStatus(input.taskStore, input.task.id, "failed", input.onTaskStatusChange);
+    input.settleTask();
     return;
   }
 
@@ -118,6 +132,7 @@ function runStructuredProviderIteration(input: {
       createdAt: new Date().toISOString(),
     });
     updateTaskStatus(input.taskStore, input.task.id, "failed", input.onTaskStatusChange);
+    input.settleTask();
   });
 
   child.on("close", (code) => {
@@ -131,11 +146,13 @@ function runStructuredProviderIteration(input: {
     });
     if (code !== 0) {
       updateTaskStatus(input.taskStore, input.task.id, "failed", input.onTaskStatusChange);
+      input.settleTask();
       return;
     }
     const toolCall = parseAgentToolCall(assistantOutput);
     if (!toolCall || !input.toolExecutor || input.iteration >= 3) {
       updateTaskStatus(input.taskStore, input.task.id, "completed", input.onTaskStatusChange);
+      input.settleTask();
       return;
     }
     void executeToolAndContinue({
@@ -151,6 +168,7 @@ async function executeToolAndContinue(input: {
   taskStore: TaskStore;
   toolExecutor?: AgentToolExecutor;
   onTaskStatusChange?: (task: AgentTask) => void;
+  settleTask: () => void;
   prompt: string;
   iteration: number;
   toolCall: AgentToolCall;
@@ -172,17 +190,25 @@ async function executeToolAndContinue(input: {
     });
     runStructuredProviderIteration({
       ...input,
-      prompt: `${input.prompt}\n\n---\nUC_TOOL_RESULT for ${input.toolCall.tool}:\n${toolResult}\n\n请基于工具结果回答用户。不要再次输出同一个工具调用，除非确实需要分页读取更多结果。`,
+      prompt: `${input.prompt}\n\n---\nUC_TOOL_RESULT for ${input.toolCall.tool}:\n${toolResult}\n\n${buildToolResultFollowupInstruction(input.task.skillId ? getSkill(input.task.skillId) : undefined)}`,
       iteration: input.iteration + 1,
     });
   } catch (cause) {
+    const failureMessage = formatToolExecutionFailureMessage(input.toolCall.tool, cause);
     input.taskStore.appendEvent(input.task.id, {
       type: "error",
-      message: cause instanceof Error ? cause.message : "Tool execution failed",
+      message: failureMessage,
       provider: input.provider.id,
       createdAt: new Date().toISOString(),
     });
+    input.taskStore.appendEvent(input.task.id, {
+      type: "message",
+      role: "assistant",
+      text: failureMessage,
+      createdAt: new Date().toISOString(),
+    });
     updateTaskStatus(input.taskStore, input.task.id, "failed", input.onTaskStatusChange);
+    input.settleTask();
   }
 }
 
@@ -202,10 +228,19 @@ function parseAgentToolCall(output: string): AgentToolCall | undefined {
   }
 }
 
+function formatToolExecutionFailureMessage(tool: string, cause: unknown): string {
+  const detail = cause instanceof Error ? cause.message : "Tool execution failed";
+  if (tool === "mailbox.search_messages" && /QQ 邮箱尚未连接|IMAP 授权码|qq_email_credential_missing/u.test(detail)) {
+    return "我没法读取 QQ 邮箱：当前租户还没有连接 QQ 邮箱 IMAP 授权码。请先在输入框旁边的邮箱连接器里保存授权码，然后再让我搜索邮件。";
+  }
+  return detail;
+}
+
 export interface RunApprovedLocalCommandInput {
   task: AgentTask;
   taskStore: TaskStore;
   onTaskStatusChange?: (task: AgentTask) => void;
+  onTaskSettled?: (taskId: string) => void;
   execution: {
     command: string;
     args: string[];
@@ -213,7 +248,13 @@ export interface RunApprovedLocalCommandInput {
   };
 }
 
-export function runApprovedLocalCommand({ task, taskStore, onTaskStatusChange, execution }: RunApprovedLocalCommandInput): void {
+export function runApprovedLocalCommand({ task, taskStore, onTaskStatusChange, onTaskSettled, execution }: RunApprovedLocalCommandInput): void {
+  let settled = false;
+  const settleTask = () => {
+    if (settled) return;
+    settled = true;
+    onTaskSettled?.(task.id);
+  };
   const startedAt = new Date().toISOString();
   taskStore.appendEvent(task.id, {
     type: "command",
@@ -246,6 +287,7 @@ export function runApprovedLocalCommand({ task, taskStore, onTaskStatusChange, e
       createdAt: new Date().toISOString(),
     });
     updateTaskStatus(taskStore, task.id, "failed", onTaskStatusChange);
+    settleTask();
   });
 
   child.on("close", (code) => {
@@ -258,6 +300,7 @@ export function runApprovedLocalCommand({ task, taskStore, onTaskStatusChange, e
       createdAt,
     });
     updateTaskStatus(taskStore, task.id, code === 0 ? "completed" : "failed", onTaskStatusChange);
+    settleTask();
   });
 }
 
@@ -267,6 +310,8 @@ function updateTaskStatus(
   status: AgentTask["status"],
   onTaskStatusChange?: (task: AgentTask) => void,
 ): AgentTask | undefined {
+  const current = taskStore.getTask(taskId);
+  if (current?.status === "cancelled" && status !== "cancelled") return current;
   const updated = taskStore.updateTaskStatus(taskId, status);
   if (updated) onTaskStatusChange?.(updated);
   return updated;

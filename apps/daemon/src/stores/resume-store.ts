@@ -5,12 +5,14 @@ import type {
   GenerateResumePreviewRequest,
   GenerateResumePreviewResult,
   MarketJob,
+  ResumeDiagnosisReport,
   ResumeDocument,
   ResumeSummary,
   SaveGeneratedResumeRequest,
   SaveGeneratedResumeResult,
 } from "@ucareer/shared";
 import { isInsideDir } from "../path-guards";
+import { workspaceDataPath } from "../workspace-paths";
 
 interface ResumeJobLinkStore {
   updatedAt?: string;
@@ -30,21 +32,24 @@ interface ResumeJobLinkStore {
 export interface ResumeStore {
   listResumes(): Promise<ResumeSummary[]>;
   getResume(file: string): Promise<ResumeDocument | undefined>;
+  listDiagnosisReports(resumeFile?: string): Promise<ResumeDiagnosisReport[]>;
   generatePreview(input: GenerateResumePreviewRequest, jobs: MarketJob[]): Promise<GenerateResumePreviewResult>;
   saveGeneratedResume(input: SaveGeneratedResumeRequest): Promise<SaveGeneratedResumeResult>;
   saveResume(input: { file?: string; title: string; markdown: string; baseFile?: string; targetJobId?: string; targetJobTitle?: string }): Promise<ResumeDocument>;
+  saveDiagnosis(input: { file?: string; title: string; markdown: string; resumeFile?: string; targetJobId?: string }): Promise<{ file: string; title: string; path: string; resumeFile: string; targetJobId: string; updatedAt: string }>;
   deleteResume(file: string): Promise<string>;
 }
 
 export function createResumeStore(workspaceRoot: string): ResumeStore {
-  const resumesDir = join(workspaceRoot, "workspace/resumes/library");
-  const resumeJobLinksPath = join(workspaceRoot, "workspace/ops/data/resume-job-links.json");
+  const resumesDir = workspaceDataPath(workspaceRoot, "resumeLibrary");
+  const diagnosticsDir = workspaceDataPath(workspaceRoot, "resumeDiagnostics");
+  const resumeJobLinksPath = workspaceDataPath(workspaceRoot, "resumeJobLinks");
 
   return {
     async listResumes() {
       const linkStore = await readResumeJobLinks(resumeJobLinksPath);
       const linksByFile = new Map((linkStore.links || []).map((item) => [item.file, item]));
-      const files = (await readdir(resumesDir))
+      const files = (await readDirectorySafe(resumesDir))
         .filter(isResumeMarkdownFile)
         .sort();
 
@@ -74,6 +79,17 @@ export function createResumeStore(workspaceRoot: string): ResumeStore {
       };
     },
 
+    async listDiagnosisReports(resumeFile) {
+      const files = await readDirectorySafe(diagnosticsDir);
+      const reports = await Promise.all(files
+        .filter(isDiagnosisMarkdownFile)
+        .map(async (file) => readDiagnosisReport(diagnosticsDir, file)));
+      const normalizedResumeFile = String(resumeFile || "").trim();
+      return reports
+        .filter((report) => !normalizedResumeFile || report.resumeFile === normalizedResumeFile || report.file.startsWith(slugifyFileName(normalizedResumeFile.replace(/\.md$/, ""))))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    },
+
     async generatePreview(input, jobs) {
       const baseFile = isResumeMarkdownFile(input.baseFile) ? input.baseFile : (await this.listResumes())[0]?.file || "";
       if (!baseFile) throw new Error("No base resume found");
@@ -94,13 +110,12 @@ export function createResumeStore(workspaceRoot: string): ResumeStore {
     async saveGeneratedResume(input) {
       const title = String(input.title || "").trim() || extractResumeTitle(input.markdown || "", "generated-resume.md");
       const markdown = normalizeGeneratedMarkdown(title, input.markdown);
+      await mkdir(resumesDir, { recursive: true });
       const existing = await this.listResumes();
-      const used = new Set(existing.map((item) => Number(item.file.match(/^(\d{2})-/)?.[1] || 0)));
-      const nextIndex = Array.from({ length: 90 }, (_, index) => index + 10).find((index) => !used.has(index)) || 99;
-      const file = `${String(nextIndex).padStart(2, "0")}-generated-resume.md`;
+      const targetJobTitle = String(input.targetJobTitle || "").trim();
+      const file = nextReadableResumeFile(title, targetJobTitle, existing.map((item) => item.file));
       await writeFile(join(resumesDir, file), markdown, "utf8");
       const generatedAt = new Date().toISOString();
-      const targetJobTitle = String(input.targetJobTitle || "").trim();
       const { company, role } = splitTargetJobTitle(targetJobTitle);
       await upsertResumeJobLink(resumeJobLinksPath, {
         file,
@@ -126,14 +141,15 @@ export function createResumeStore(workspaceRoot: string): ResumeStore {
     async saveResume(input) {
       const title = String(input.title || "").trim() || extractResumeTitle(input.markdown || "", "generated-resume.md");
       const markdown = normalizeGeneratedMarkdown(title, input.markdown);
+      const existing = await this.listResumes();
+      const targetJobTitle = String(input.targetJobTitle || "").trim();
       const file = input.file && isResumeMarkdownFile(input.file)
         ? input.file
-        : await nextGeneratedResumeFile(this);
+        : nextReadableResumeFile(title, targetJobTitle, existing.map((item) => item.file));
       const path = resolve(resumesDir, file);
       if (!isInsideDir(resumesDir, path)) throw new Error("Invalid resume file");
       await mkdir(resumesDir, { recursive: true });
       await writeFile(path, markdown, "utf8");
-      const targetJobTitle = String(input.targetJobTitle || "").trim();
       if (input.targetJobId || targetJobTitle || input.baseFile) {
         const { company, role } = splitTargetJobTitle(targetJobTitle);
         await upsertResumeJobLink(resumeJobLinksPath, {
@@ -151,6 +167,29 @@ export function createResumeStore(workspaceRoot: string): ResumeStore {
       return { file, title, markdown };
     },
 
+    async saveDiagnosis(input) {
+      const title = String(input.title || "").trim() || "简历诊断报告";
+      const markdown = normalizeDiagnosisMarkdown(title, input.markdown, {
+        resumeFile: input.resumeFile || "",
+        targetJobId: input.targetJobId || "",
+      });
+      const file = input.file && isDiagnosisMarkdownFile(input.file)
+        ? input.file
+        : buildDiagnosisFileName(title, input.resumeFile);
+      const path = resolve(diagnosticsDir, file);
+      if (!isInsideDir(diagnosticsDir, path)) throw new Error("Invalid resume diagnosis file");
+      await mkdir(diagnosticsDir, { recursive: true });
+      await writeFile(path, markdown, "utf8");
+      return {
+        file,
+        title,
+        path: `workspace/resumes/diagnostics/${file}`,
+        resumeFile: input.resumeFile || "",
+        targetJobId: input.targetJobId || "",
+        updatedAt: new Date().toISOString(),
+      };
+    },
+
     async deleteResume(file) {
       if (!isResumeMarkdownFile(file)) throw new Error("Invalid resume file");
       const path = resolve(resumesDir, file);
@@ -162,15 +201,9 @@ export function createResumeStore(workspaceRoot: string): ResumeStore {
   };
 }
 
-async function nextGeneratedResumeFile(store: Pick<ResumeStore, "listResumes">): Promise<string> {
-  const existing = await store.listResumes();
-  const used = new Set(existing.map((item) => Number(item.file.match(/^(\d{2})-/)?.[1] || 0)));
-  const nextIndex = Array.from({ length: 90 }, (_, index) => index + 10).find((index) => !used.has(index)) || 99;
-  return `${String(nextIndex).padStart(2, "0")}-agent-generated-resume.md`;
-}
-
 function isResumeMarkdownFile(file: string): boolean {
-  return /^\d{2}-.+\.md$/.test(file);
+  if (!/^[^/\\]+\.md$/u.test(file)) return false;
+  return !["README.md", "ARCHITECTURE.md"].includes(file);
 }
 
 function extractResumeTitle(markdown: string, file: string): string {
@@ -225,6 +258,79 @@ function normalizeGeneratedMarkdown(title: string, markdown: string): string {
   return `${normalized.trim()}\n`;
 }
 
+function normalizeDiagnosisMarkdown(title: string, markdown: string, meta: { resumeFile: string; targetJobId: string }): string {
+  const text = String(markdown || "").trim();
+  if (!text) throw new Error("Resume diagnosis markdown is required");
+  const hasTitle = text.startsWith("# ");
+  const body = hasTitle ? text : `# ${title}\n\n${text}`;
+  const metadata = [
+    `**Resume:** ${meta.resumeFile || "待补充"}`,
+    `**Target Job:** ${meta.targetJobId || "未绑定"}`,
+    `**Generated At:** ${new Date().toISOString()}`,
+  ].join("\n");
+  return `${body.trim()}\n\n---\n\n${metadata}\n`;
+}
+
+function isDiagnosisMarkdownFile(file: string): boolean {
+  return /^[^/\\]+\.md$/u.test(file) && !["README.md", "ARCHITECTURE.md"].includes(file);
+}
+
+function buildDiagnosisFileName(title: string, resumeFile?: string): string {
+  const date = new Date().toISOString().slice(0, 10);
+  const base = resumeFile?.replace(/\.md$/, "") || title;
+  return `${slugifyFileName(base)}-diagnosis-${date}.md`;
+}
+
+function slugifyFileName(value: string): string {
+  const slug = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug.slice(0, 90) || "resume";
+}
+
+function nextReadableResumeFile(title: string, targetJobTitle: string, existingFiles: string[]): string {
+  const base = buildReadableResumeName(title, targetJobTitle);
+  const used = new Set(existingFiles);
+  let candidate = `${base}.md`;
+  let index = 2;
+  while (used.has(candidate)) {
+    candidate = `${base}-${index}.md`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function buildReadableResumeName(title: string, targetJobTitle: string): string {
+  const cleanedTitle = stripPersonName(title);
+  const { company, role } = splitTargetJobTitle(targetJobTitle);
+  const targetRole = normalizeResumeNamePart(role || cleanedTitle || "机器人系统工程师");
+  const suffix = company ? normalizeResumeNamePart(company) : inferResumePurpose(cleanedTitle);
+  return slugifyFileName(`简历-${targetRole}-${suffix}`);
+}
+
+function stripPersonName(title: string): string {
+  return String(title || "")
+    .replace(/^[\u4e00-\u9fa5]{2,4}\s*[-—–]\s*/u, "")
+    .trim();
+}
+
+function normalizeResumeNamePart(value: string): string {
+  return String(value || "")
+    .replace(/[【】[\]（）()]/gu, " ")
+    .replace(/\s+/gu, "")
+    .replace(/[\\/|:*?"<>]/gu, "-")
+    .replace(/-+/gu, "-")
+    .replace(/^-+|-+$/gu, "")
+    .slice(0, 32) || "通用";
+}
+
+function inferResumePurpose(title: string): string {
+  if (/通用|基础|系统工程师|软件|SDK|具身|RAG|Agent/i.test(title)) return "通用";
+  return "通用";
+}
+
 async function readResumeJobLinks(path: string): Promise<ResumeJobLinkStore> {
   try {
     const text = await readFile(path, "utf8");
@@ -233,6 +339,53 @@ async function readResumeJobLinks(path: string): Promise<ResumeJobLinkStore> {
     if (isNodeError(error) && error.code === "ENOENT") return { links: [] };
     throw error;
   }
+}
+
+async function readDirectorySafe(path: string): Promise<string[]> {
+  try {
+    return await readdir(path);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+async function readDiagnosisReport(dir: string, file: string): Promise<ResumeDiagnosisReport> {
+  const path = resolve(dir, file);
+  if (!isInsideDir(dir, path)) throw new Error("Invalid resume diagnosis file");
+  const markdown = await readFile(path, "utf8");
+  const title = extractResumeTitle(markdown, file);
+  const resumeFile = extractMetadataValue(markdown, "Resume");
+  const targetJobId = extractMetadataValue(markdown, "Target Job");
+  const updatedAt = extractMetadataValue(markdown, "Generated At") || "";
+  return {
+    file,
+    title,
+    path: `workspace/resumes/diagnostics/${file}`,
+    resumeFile: resumeFile === "待补充" ? "" : resumeFile,
+    targetJobId: targetJobId === "未绑定" ? "" : targetJobId,
+    updatedAt,
+    excerpt: compactMarkdown(markdown, 180),
+    markdown,
+  };
+}
+
+function extractMetadataValue(markdown: string, key: string): string {
+  return markdown.match(new RegExp(`^\\*\\*${escapeRegExp(key)}:\\*\\*\\s*(.+?)\\s*$`, "m"))?.[1]?.trim() || "";
+}
+
+function compactMarkdown(markdown: string, limit: number): string {
+  const compact = markdown
+    .replace(/^---[\s\S]*$/m, "")
+    .replace(/^#+\s+/gm, "")
+    .replace(/[*_`>\-[\]]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return compact.length > limit ? `${compact.slice(0, limit)}...` : compact;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {

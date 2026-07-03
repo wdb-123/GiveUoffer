@@ -20,7 +20,7 @@ export function useJobSearch(enabled: boolean, onMarketChanged: () => void | Pro
     setError("");
     try {
       const request: JobSearchRequest = {
-        source: input.source || "boss-agent",
+        source: input.source || "codex-chrome",
         city: input.city || "深圳",
         max: input.max ?? 25,
       };

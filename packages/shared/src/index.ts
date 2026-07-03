@@ -68,6 +68,69 @@ export interface TenantMembership {
   permissions: TenantPermission[];
 }
 
+export interface TenantMember {
+  account: AccountSummary;
+  role: TenantRole;
+  permissions: TenantPermission[];
+  createdAt: string;
+}
+
+export interface TenantMembersOverview {
+  tenant: TenantSummary;
+  members: TenantMember[];
+}
+
+export type BillingPlanId = "free" | "pro" | "team";
+
+export interface BillingPlan {
+  id: BillingPlanId;
+  name: string;
+  monthlyTokenLimit: number;
+  monthlyPriceCents: number;
+  currency: string;
+}
+
+export interface TenantBilling {
+  tenant: TenantSummary;
+  plan: BillingPlan;
+  currentMonth: string;
+  usage: {
+    inputTokens: number;
+    cachedInputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    taskCount: number;
+    lastUsedAt?: string;
+  };
+  quota: {
+    monthlyTokenLimit: number;
+    remainingTokens: number;
+    usedPercent: number;
+    exceeded: boolean;
+  };
+}
+
+export interface UpdateTenantBillingPlanRequest {
+  planId: BillingPlanId;
+}
+
+export interface CreateTenantRequest {
+  name: string;
+}
+
+export interface SwitchTenantRequest {
+  tenantId: EntityId;
+}
+
+export interface AddTenantMemberRequest {
+  email: string;
+  role: Exclude<TenantRole, "owner">;
+}
+
+export interface UpdateTenantMemberRoleRequest {
+  role: Exclude<TenantRole, "owner">;
+}
+
 export interface AuthSession {
   token: string;
   account: AccountSummary;
@@ -77,6 +140,26 @@ export interface AuthSession {
   memberships: TenantMembership[];
   createdAt: string;
   expiresAt: string;
+}
+
+export interface AgentExecutionQueueTenantSnapshot {
+  tenantId: EntityId;
+  tenantName: string;
+  running: number;
+  queued: number;
+}
+
+export interface AgentExecutionQueueOverview {
+  maxConcurrent: number;
+  maxConcurrentPerTenant: number;
+  maxQueued: number;
+  maxQueuedPerTenant: number;
+  running: number;
+  queued: number;
+  queuedExclusive: number;
+  currentTenant: AgentExecutionQueueTenantSnapshot;
+  saturated: boolean;
+  tenantSaturated: boolean;
 }
 
 export interface LoginRequest {
@@ -110,6 +193,8 @@ export interface MarketJob {
   source?: string;
   url?: string;
   jdPath?: string;
+  rawText?: string;
+  description?: string;
   direction?: string;
   keywords?: string[];
   matchScore?: number;
@@ -145,14 +230,17 @@ export interface ApplicationSummary {
   notes: string;
   eventCount?: number;
   latestEvent?: ApplicationEvent;
+  events?: ApplicationEvent[];
 }
 
 export interface ApplicationsOverview {
   applications: ApplicationSummary[];
   metrics: {
     total: number;
+    active: number;
     evaluated: number;
     applied: number;
+    responded: number;
     interview: number;
     offer: number;
     rejected: number;
@@ -171,8 +259,21 @@ export interface ApplicationEvent {
   due: string;
   note: string;
   evidence: string;
+  email_snapshot?: ApplicationEmailSnapshot;
   created_at: string;
   updated_at?: string;
+}
+
+export interface ApplicationEmailSnapshot {
+  uid?: string;
+  mailbox?: string;
+  account?: string;
+  from?: string;
+  subject?: string;
+  date?: string;
+  snippet?: string;
+  rawText?: string;
+  attachments?: EmailAttachmentSummary[];
 }
 
 export interface CreateApplicationEventRequest {
@@ -190,6 +291,8 @@ export interface CreateApplicationEventRequest {
   due?: string;
   note?: string;
   evidence?: string;
+  email_snapshot?: ApplicationEmailSnapshot;
+  emailSnapshot?: ApplicationEmailSnapshot;
 }
 
 export interface UpdateApplicationEventRequest extends Partial<CreateApplicationEventRequest> {
@@ -277,6 +380,18 @@ export interface FulfillEvidenceRequestResult {
   appendedAt: string;
 }
 
+export interface SaveEvidenceNoteInput {
+  content: string;
+  title?: string;
+}
+
+export interface SaveEvidenceNoteResult {
+  noteId: EntityId;
+  targetFile: string;
+  appended: boolean;
+  appendedAt: string;
+}
+
 export interface ResumeVersion {
   id: EntityId;
   file: string;
@@ -296,6 +411,17 @@ export interface ResumeSummary {
 export interface ResumeDocument {
   file: string;
   title: string;
+  markdown: string;
+}
+
+export interface ResumeDiagnosisReport {
+  file: string;
+  title: string;
+  path: string;
+  resumeFile: string;
+  targetJobId: string;
+  updatedAt: string;
+  excerpt: string;
   markdown: string;
 }
 
@@ -321,7 +447,7 @@ export interface WorkspaceFilePreview {
   sizeBytes: number;
   updatedAt: string;
   content: string;
-  previewType: "text" | "pdf" | "docx" | "unsupported";
+  previewType: "text" | "pdf" | "docx" | "image" | "unsupported";
   languageHint: string;
   truncated: boolean;
   encoding: "utf8" | "binary";
@@ -384,17 +510,29 @@ export interface SaveGeneratedResumeResult {
   generatedAt: string;
 }
 
+export interface SaveResumeRequest {
+  file?: string;
+  title: string;
+  markdown: string;
+  baseFile?: string;
+  targetJobId?: string;
+  targetJobTitle?: string;
+}
+
 export type ResumeExportFormat = "md" | "html" | "pdf" | "docx";
+export type ResumeExportStyle = "classic" | "compact" | "ats" | "bluebar";
 
 export interface ExportResumeRequest {
   file: string;
   format: ResumeExportFormat;
+  style?: ResumeExportStyle;
 }
 
 export interface ExportResumeResult {
   file: string;
   sourceFile: string;
   format: ResumeExportFormat;
+  style?: ResumeExportStyle;
   outputPath: string;
   sizeBytes: number;
   exportedAt: string;
@@ -427,6 +565,7 @@ export interface PushSyncResult {
 
 export interface ApprovalRequest {
   id: EntityId;
+  tenantId?: EntityId;
   taskId: EntityId;
   action: PermissionAction;
   risk: RiskLevel;
@@ -622,6 +761,14 @@ export interface EmailMessageSummary {
   subject: string;
   date: string;
   snippet: string;
+  attachments?: EmailAttachmentSummary[];
+}
+
+export interface EmailAttachmentSummary {
+  filename: string;
+  contentType?: string;
+  size: number;
+  path?: string;
 }
 
 export interface ImportEmailMessagesResult {
@@ -662,6 +809,36 @@ export interface ConnectorToolDefinition {
   inputSchema?: Record<string, unknown>;
 }
 
+export type WorkspacePageCapability = "read" | "write" | "generate" | "diagnose" | "import" | "sync";
+
+export type SkillUiActionKind =
+  | "primary"
+  | "secondary"
+  | "quick_prompt"
+  | "contextual"
+  | "background";
+
+export interface SkillUiActionDefinition {
+  id: EntityId;
+  label: string;
+  description: string;
+  kind: SkillUiActionKind;
+  inputKind: string;
+  promptTemplate: string;
+  requiresSelection?: boolean;
+  requiredEntityTypes?: string[];
+  capabilities: WorkspacePageCapability[];
+  toolIds?: EntityId[];
+  outputArtifacts?: string[];
+}
+
+export interface SkillUiContract {
+  primaryPage: WorkspacePageId;
+  pages: WorkspacePageId[];
+  entryActions: SkillUiActionDefinition[];
+  quickPrompts?: string[];
+}
+
 export interface SkillDefinition {
   id: EntityId;
   label: string;
@@ -673,6 +850,7 @@ export interface SkillDefinition {
   risk: SkillRisk;
   fileManagement: SkillFileManagement;
   connectorTools?: ConnectorToolDefinition[];
+  ui?: SkillUiContract;
 }
 
 export interface RouteDecision {
@@ -757,7 +935,7 @@ export interface AgentPageContext {
   };
   readPaths: string[];
   writePaths: string[];
-  capabilities: Array<"read" | "write" | "generate" | "diagnose" | "import" | "sync">;
+  capabilities: WorkspacePageCapability[];
 }
 
 export type WorkflowStepKind =
@@ -791,6 +969,7 @@ export interface WorkflowDefinition {
 
 export interface WorkflowRun {
   id: EntityId;
+  tenantId?: EntityId;
   workflowId: EntityId;
   skillId?: EntityId;
   taskId?: EntityId;
@@ -804,6 +983,7 @@ export interface WorkflowRun {
 
 export interface WorkflowStepRun {
   id: EntityId;
+  tenantId?: EntityId;
   workflowRunId: EntityId;
   stepId: EntityId;
   status: TaskStatus;
@@ -821,6 +1001,7 @@ export interface WorkflowRunDetail {
 
 export interface AgentTask {
   id: EntityId;
+  tenantId?: EntityId;
   providerId: EntityId;
   workspacePath: string;
   prompt: string;
@@ -855,6 +1036,16 @@ export interface ApprovalDecisionRequest {
 
 export type AgentEvent =
   | { type: "message"; role: "user" | "assistant" | "system"; text: string; createdAt: string }
+  | {
+      type: "usage";
+      providerId?: EntityId;
+      model?: string;
+      inputTokens: number;
+      cachedInputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+      createdAt: string;
+    }
   | {
       type: "command";
       command: string;

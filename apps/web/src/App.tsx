@@ -2,8 +2,10 @@ import { useState } from "react";
 import { LoginPage, type LoginCredentials } from "./auth/LoginPage";
 import { createAccount, getAuthSession, login, logout, setApiSessionToken } from "./api";
 import { useAgentData } from "./hooks/useAgentData";
+import { useAgentEvidenceRefresh } from "./hooks/useAgentEvidenceRefresh";
 import { useJobSearch } from "./hooks/useJobSearch";
 import { useUcareerData } from "./hooks/useUcareerData";
+import { useViewBadges } from "./hooks/useViewBadges";
 import { AppLayout } from "./layout/AppLayout";
 import { ViewRenderer } from "./layout/ViewRenderer";
 import { buildAgentPageContext } from "./agentPageContext";
@@ -13,13 +15,8 @@ import type { AuthSession } from "@ucareer/shared";
 const SESSION_STORAGE_KEY = "ucareer.session";
 
 export function App() {
-  const [activeView, setActiveView] = useState<ViewId>("agent");
-  const [lastWorkspaceView, setLastWorkspaceView] = useState<ViewId>("resumes");
   const [session, setSession] = useState<AuthSession | null>(() => readStoredSession());
   setApiSessionToken(session?.token || "");
-  const { actions, state } = useUcareerData(Boolean(session));
-  const { actions: agentActions, state: agentState } = useAgentData(Boolean(session));
-  const jobSearch = useJobSearch(Boolean(session), actions.refreshMarket);
 
   async function handleLogin(credentials: LoginCredentials) {
     const nextSession = credentials.method === "create-account"
@@ -32,13 +29,12 @@ export function App() {
       : credentials.method === "google"
         ? await createAccount({
             email: credentials.email,
-            password: `google-local-${credentials.email}`,
+            password: `google-local-2026-${credentials.email}`,
             remember: credentials.remember,
             tenantName: "Personal Workspace",
-          }).catch(async () => login({ email: credentials.email, password: `google-local-${credentials.email}`, remember: credentials.remember }))
+          }).catch(async () => login({ email: credentials.email, password: `google-local-2026-${credentials.email}`, remember: credentials.remember }))
         : await login({ email: credentials.email, password: credentials.password, remember: credentials.remember });
-    setSession(nextSession);
-    setApiSessionToken(nextSession.token);
+    applySession(nextSession);
     if (credentials.remember) {
       window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession));
     } else {
@@ -53,10 +49,40 @@ export function App() {
     }
     setApiSessionToken("");
     setSession(null);
-    setActiveView("agent");
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
     window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
   }
+
+  function applySession(nextSession: AuthSession) {
+    setSession(nextSession);
+    setApiSessionToken(nextSession.token);
+    const storage = window.localStorage.getItem(SESSION_STORAGE_KEY) ? window.localStorage : window.sessionStorage;
+    storage.setItem(SESSION_STORAGE_KEY, JSON.stringify(nextSession));
+  }
+
+  if (!session) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  return <AuthenticatedWorkspace key={session.activeTenant.id} session={session} onLogout={handleLogout} onSessionChange={applySession} />;
+}
+
+function AuthenticatedWorkspace(props: {
+  session: AuthSession;
+  onLogout(): void;
+  onSessionChange(session: AuthSession): void;
+}) {
+  const [activeView, setActiveView] = useState<ViewId>("agent");
+  const [lastWorkspaceView, setLastWorkspaceView] = useState<ViewId>("resumes");
+  const { actions, state } = useUcareerData(true);
+  const { actions: agentActions, state: agentState } = useAgentData(true);
+  const jobSearch = useJobSearch(true, actions.refreshMarket);
+  const viewBadges = useViewBadges(state);
+  useAgentEvidenceRefresh({
+    selectedTaskEvents: agentState.selectedTaskEvents,
+    selectedTaskId: agentState.selectedTaskId,
+    refreshEvidenceRequests: actions.refreshEvidenceRequests,
+  });
 
   function handleViewChange(viewId: ViewId) {
     setActiveView(viewId);
@@ -65,14 +91,11 @@ export function App() {
     }
   }
 
-  if (!session) {
-    return <LoginPage onLogin={handleLogin} />;
-  }
-
   return (
     <AppLayout
         activeView={activeView}
-        accountEmail={session.account.email}
+        accountEmail={props.session.account.email}
+        session={props.session}
         agentConversations={{
           onDeleteTask: (taskId) => agentActions.onDeleteTask(taskId),
           onSelectTask: (taskId) => void agentActions.onSelectTask(taskId),
@@ -82,17 +105,21 @@ export function App() {
           tasks: agentState.tasks,
         }}
         authMethod="password"
-        views={views}
-      onLogout={handleLogout}
+      viewBadges={viewBadges}
+      views={views}
+      onLogout={props.onLogout}
       onViewChange={handleViewChange}
     >
       <ViewRenderer
         activeView={activeView}
+        session={props.session}
+        onSessionChange={props.onSessionChange}
         onViewChange={handleViewChange}
         views={views}
         agent={{
           approvals: agentState.approvals,
           installStatus: agentState.installStatus,
+          executionQueue: agentState.executionQueue,
           onCheckProvider: (providerId) => void agentActions.onCheckProvider(providerId),
           onCancelTask: (taskId) => void agentActions.onCancelTask(taskId),
           onCreateLocalCommand: (command, args) => void agentActions.onCreateLocalCommand(command, args),
@@ -147,6 +174,7 @@ export function App() {
         evidence={{
           data: state.evidenceRequests,
           onFulfillEvidence: (requestId, content) => void actions.onFulfillEvidence(requestId, content),
+          onSaveEvidenceNote: (content) => void actions.onSaveEvidenceNote(content),
         }}
         experience={{
           data: state.experienceOverview,
@@ -161,6 +189,7 @@ export function App() {
           status: jobSearch.status,
         }}
         onImportMarketJob={(input) => actions.onImportMarketJob(input)}
+        onDeleteMarketJob={(jobId) => actions.onDeleteMarketJob(jobId)}
         profile={state.profile}
         reports={{
           data: state.reports,
@@ -170,12 +199,14 @@ export function App() {
         }}
         resumes={{
           data: state.resumes,
+          diagnostics: state.resumeDiagnostics,
           exportResult: state.resumeExportResult,
           preview: state.resumePreview,
           selectedResume: state.selectedResume,
-          onExportResume: (file, format) => void actions.onExportResume(file, format),
+          onExportResume: (file, format, style) => actions.onExportResume(file, format, style),
           onGeneratePreview: (baseFile, targetJobId) => void actions.onGenerateResumePreview(baseFile, targetJobId),
           onSavePreview: () => void actions.onSaveResumePreview(),
+          onSaveResume: (file, title, markdown) => void actions.onSaveResume(file, title, markdown),
           onSelectResume: (file) => void actions.onSelectResume(file),
         }}
       />

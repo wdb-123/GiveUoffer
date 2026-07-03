@@ -3,6 +3,7 @@ import { blockKey, slugResumeSection, type ResumeBlock, type TextResumeBlock } f
 export function RenderedResumePage({ blocks, fallbackTitle, showHeader }: { blocks: ResumeBlock[]; fallbackTitle: string; showHeader: boolean }) {
   const titleBlock = blocks.find((block): block is TextResumeBlock => block.type === "h1");
   const title = titleBlock?.text || fallbackTitle;
+  const titleParts = splitResumeTitle(title);
   const contactBlock = blocks.find((block): block is TextResumeBlock => block.type === "contact");
   const body = blocks.filter((block) => block.type !== "h1" && block.type !== "contact");
   let activeSection = "";
@@ -12,8 +13,8 @@ export function RenderedResumePage({ blocks, fallbackTitle, showHeader }: { bloc
       {showHeader ? (
         <header className="resume-header-v2">
           <div className="resume-identity-v2">
-            <h1>{title}</h1>
-            <p>{contactBlock?.text || "深圳 | 2 年工作经验 | 181 7224 4940 | 12132301@mail.sustech.edu.cn | github.com/ZeroErrControl"}</p>
+            <h1><span className="resume-name-v2">{titleParts.name}</span><span className="resume-role-v2">{titleParts.role}</span></h1>
+            <ResumeContactLine value={contactBlock?.text || "深圳 | 2 年工作经验 | 181 7224 4940 | 12132301@mail.sustech.edu.cn | github.com/ZeroErrControl"} />
           </div>
           <figure className="resume-avatar-v2"><img src="/assets/headshot.png" alt="韦东波职业照" /></figure>
         </header>
@@ -32,8 +33,23 @@ export function RenderedResumePage({ blocks, fallbackTitle, showHeader }: { bloc
   );
 }
 
+function splitResumeTitle(title: string): { name: string; role: string } {
+  const [name = title, ...roleParts] = title.split(/\s*[-—–]\s*/u);
+  const role = roleParts.join(" - ").trim().replace(/^AI\s*[+＋]\s*/iu, "");
+  return { name: name.trim() || title, role };
+}
+
 export function ResumeEmptyState() {
   return <div className="resume-empty-paper">正在读取简历。</div>;
+}
+
+function ResumeContactLine({ value }: { value: string }) {
+  const items = value.split("|").map((item) => item.trim()).filter(Boolean);
+  return (
+    <div className="resume-contact-line" aria-label="联系方式">
+      {items.map((item) => <span key={item}>{item}</span>)}
+    </div>
+  );
 }
 
 function ResumeBlockView({ block, section }: { block: ResumeBlock; section: string }) {

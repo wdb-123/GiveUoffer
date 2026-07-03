@@ -1,15 +1,15 @@
-import type { RoutePreviewRequest } from "@ucareer/shared";
-import { getProvider } from "../index";
-import { isPaperclipAdapterProvider } from "../providers/paperclip-adapter-provider";
-import { classifyIntake } from "../workflow/classify-intake";
-import { skillRegistry } from "../workflow/skill-registry";
+import type { ApiEnvelope, RoutePreviewRequest } from "@ucareer/shared";
+import { getSkillUiContracts, getSkillsForPage, skillRegistry } from "../skills/registry";
 import { getWorkflow } from "../workflow/workflow-registry";
 import { workflowRegistry } from "../workflow/workflow-registry";
+import { createWorkflowRunService, type WorkflowRunService } from "../services/workflow-run-service";
+import { createSqliteWorkflowRunStore } from "../stores/workflow-run-store";
 import type { DaemonRouteContext } from "./context";
-import { ok } from "./context";
+import { ok, requirePermission } from "./context";
+import { getTenantRouteScope, isScopeError } from "./tenant-scope";
 
 export function registerWorkflowRoutes(ctx: DaemonRouteContext): void {
-  const { app, runtime, services, workspaceRoot } = ctx;
+  const { app, services } = ctx;
 
   app.get("/api/skills", async () => {
     return ok({ skills: skillRegistry, workflows: workflowRegistry });
@@ -24,28 +24,50 @@ export function registerWorkflowRoutes(ctx: DaemonRouteContext): void {
     })));
   });
 
+  app.get("/api/skills/ui-contracts", async () => {
+    return ok(getSkillUiContracts());
+  });
+
+  app.get<{
+    Params: { pageId: string };
+  }>("/api/skills/pages/:pageId", async (request) => {
+    return ok(getSkillsForPage(request.params.pageId as Parameters<typeof getSkillsForPage>[0]));
+  });
+
+  app.get("/api/memory/sources", async (request) => {
+    const authError = requirePermission(ctx, request, "workspace.read");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    return ok(await scope.services.memoryService.getMemorySnapshot());
+  });
+
   app.post<{
     Body: RoutePreviewRequest;
   }>("/api/agent-route/preview", async (request) => {
-    const providerId = request.body?.preferredProviderId || runtime.providers[0]?.id || "";
-    const provider = getProvider(runtime, providerId);
-    if (!provider) throw new Error(`Provider not found: ${providerId}`);
-    if (!isPaperclipAdapterProvider(provider)) throw new Error(`Provider ${provider.id} does not support agent router execution`);
-    return ok(await classifyIntake({
-      text: composePreviewText(request.body),
-      ...(request.body?.preferredProviderId ? { preferredProviderId: request.body.preferredProviderId } : {}),
-      routeWithAgent: (prompt) => provider.executeRouterPrompt({ prompt, workspacePath: workspaceRoot }),
-    }));
+    const authError = requirePermission(ctx, request, "workspace.read");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    return ok(await scope.services.routePreviewService.preview(request.body));
   });
 
-  app.get("/api/workflow-runs", async () => {
-    return ok(services.workflowRunService.listRuns());
+  app.get("/api/workflow-runs", async (request) => {
+    const authError = requirePermission(ctx, request, "agent.run");
+    if (authError) return authError;
+    const workflowRunService = createScopedWorkflowRunService(ctx, request);
+    if (isWorkflowRunServiceError(workflowRunService)) return workflowRunService;
+    return ok(workflowRunService.listRuns());
   });
 
   app.get<{
     Params: { runId: string };
   }>("/api/workflow-runs/:runId", async (request) => {
-    const run = services.workflowRunService.getRun(request.params.runId);
+    const authError = requirePermission(ctx, request, "agent.run");
+    if (authError) return authError;
+    const workflowRunService = createScopedWorkflowRunService(ctx, request);
+    if (isWorkflowRunServiceError(workflowRunService)) return workflowRunService;
+    const run = workflowRunService.getRun(request.params.runId);
     if (!run) {
       return {
         ok: false,
@@ -54,16 +76,23 @@ export function registerWorkflowRoutes(ctx: DaemonRouteContext): void {
     }
     return ok({
       run,
-      steps: services.workflowRunService.listStepRuns(run.id),
+      steps: workflowRunService.listStepRuns(run.id),
       ...(getWorkflow(run.workflowId) ? { workflow: getWorkflow(run.workflowId) } : {}),
     });
   });
 }
 
-function composePreviewText(body: RoutePreviewRequest | undefined): string {
-  const text = String(body?.text || "");
-  const attachmentText = (body?.attachments || [])
-    .map((attachment) => `[${attachment.kind}] ${attachment.fileName}: ${attachment.parsed.summary}`)
-    .join("\n");
-  return [text, attachmentText].filter(Boolean).join("\n\n");
+function createScopedWorkflowRunService(
+  ctx: DaemonRouteContext,
+  request: { headers: Record<string, string | string[] | undefined> },
+): WorkflowRunService | ApiEnvelope<never> {
+  const scope = getTenantRouteScope(ctx, request);
+  if (isScopeError(scope)) return scope;
+  return createWorkflowRunService({
+    workflowRunStore: createSqliteWorkflowRunStore(ctx.daemonDbPath, { tenantId: scope.session.activeTenant.id }),
+  });
+}
+
+function isWorkflowRunServiceError(value: WorkflowRunService | ApiEnvelope<never>): value is ApiEnvelope<never> {
+  return "ok" in value && value.ok === false;
 }

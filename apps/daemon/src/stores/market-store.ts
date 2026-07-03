@@ -1,19 +1,36 @@
 import { mkdir, stat, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import type { ImportJobRequest, ImportJobResult, MarketJob, RecruitmentMarket } from "@ucareer/shared";
+import { joinWorkspaceDataPath, workspaceDataPath, workspaceRelativeDataPath } from "../workspace-paths";
 
 const CHUNK_FILE_RE = /^\d{4}\.json$/;
 const DEFAULT_CHUNK_SIZE = 25;
 
 export interface MarketStore {
   getRecruitmentMarket(): Promise<RecruitmentMarket>;
+  recordLink(input: RecordMarketLinkRequest): Promise<RecordMarketLinkResult>;
   importJob(input: ImportJobRequest): Promise<ImportJobResult>;
   updateJob(id: string, patch: Partial<MarketJob>): Promise<MarketJob>;
   deleteJob(id: string): Promise<string>;
 }
 
+export interface RecordMarketLinkRequest {
+  url: string;
+  note?: string;
+  source?: string;
+}
+
+export interface RecordMarketLinkResult {
+  url: string;
+  recorded: boolean;
+  pipelinePath: string;
+  message: string;
+}
+
 export function createMarketStore(workspaceRoot: string): MarketStore {
-  const marketPath = join(workspaceRoot, "workspace/ops/data/recruitment-market.json");
+  const marketPath = workspaceDataPath(workspaceRoot, "recruitmentMarket");
+  const pipelinePath = workspaceDataPath(workspaceRoot, "pipeline");
+  const relativePipelinePath = workspaceRelativeDataPath("pipeline");
 
   return {
     async getRecruitmentMarket() {
@@ -31,6 +48,34 @@ export function createMarketStore(workspaceRoot: string): MarketStore {
         jobsCount: jobs.length,
       };
     },
+    async recordLink(input) {
+      const url = String(input.url || "").trim();
+      if (!url) throw new Error("请提供要记录的链接");
+      const normalizedUrl = normalizeUrl(url);
+      if (!normalizedUrl) throw new Error("链接格式不正确");
+
+      const current = await readPipelineFile(pipelinePath);
+      const existingUrls = extractPipelineUrls(current).map(normalizeUrl).filter(Boolean);
+      if (existingUrls.includes(normalizedUrl)) {
+        return {
+          url,
+          recorded: false,
+          pipelinePath: relativePipelinePath,
+          message: "链接已存在于待处理列表，没有重复记录。",
+        };
+      }
+
+      const source = sanitizePipelineField(input.source || "agent_link");
+      const note = sanitizePipelineField(input.note || "用户粘贴链接，仅记录，等待后续处理");
+      const line = `- [ ] ${url} | ${source} | ${note}`;
+      await writePipelinePendingLine(pipelinePath, current, line);
+      return {
+        url,
+        recorded: true,
+        pipelinePath: relativePipelinePath,
+        message: "已记录到待处理链接列表。",
+      };
+    },
     async importJob(input) {
       const url = String(input.url || "").trim();
       let description = String(input.description || "").trim();
@@ -41,6 +86,9 @@ export function createMarketStore(workspaceRoot: string): MarketStore {
 
       if (url && !description) {
         description = await fetchJobDescriptionFromUrl(url).catch(() => "");
+      }
+      if (url && !description) {
+        throw new Error("没有读取到岗位页面正文，已停止导入以避免生成待解析占位岗位。请打开可见岗位详情页后重试，或粘贴完整 JD 文本。");
       }
       if (isBossListSummary(description, url)) {
         throw new Error("当前内容是 Boss 列表/首页摘要。请打开具体岗位详情页后再导入。");
@@ -213,6 +261,48 @@ async function readJsonFile<T>(path: string, fallback: T): Promise<T> {
   }
 }
 
+async function readPipelineFile(path: string): Promise<string> {
+  try {
+    return await readFile(path, "utf8");
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return "# URL Pipeline\n\n## Pending\n\n## Processed\n";
+    throw error;
+  }
+}
+
+async function writePipelinePendingLine(path: string, current: string, line: string): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const normalized = normalizePipelineDocument(current);
+  const processedHeadingIndex = normalized.search(/^## Processed\s*$/m);
+  const next = processedHeadingIndex >= 0
+    ? `${normalized.slice(0, processedHeadingIndex).replace(/\s*$/, "\n")}${line}\n\n${normalized.slice(processedHeadingIndex)}`
+    : `${normalized.replace(/\s*$/, "\n")}${line}\n`;
+  await writeFile(path, next, "utf8");
+}
+
+function normalizePipelineDocument(value: string): string {
+  const text = value.trim();
+  if (!text) return "# URL Pipeline\n\n## Pending\n\n## Processed\n";
+  if (!/^#\s+/m.test(text)) return `# URL Pipeline\n\n## Pending\n${text}\n\n## Processed\n`;
+  if (!/^## Pending\s*$/m.test(text)) return `${text}\n\n## Pending\n\n## Processed\n`;
+  if (!/^## Processed\s*$/m.test(text)) return `${text}\n\n## Processed\n`;
+  return `${text}\n`;
+}
+
+function extractPipelineUrls(value: string): string[] {
+  const matches = value.match(/https?:\/\/[^\s|)>\]]+/g);
+  return matches || [];
+}
+
+function sanitizePipelineField(value: string): string {
+  return String(value || "")
+    .replace(/\r?\n/g, " ")
+    .replace(/\|/g, "/")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+}
+
 async function resolveJobsDir(marketPath: string, jobsFilePath?: string): Promise<string> {
   const candidate = jobsFilePath
     ? isAbsolute(jobsFilePath)
@@ -287,11 +377,11 @@ async function writeJobDescriptionFile(workspaceRoot: string, input: {
   source: string;
   url: string;
 }): Promise<string> {
-  const jdsDir = join(workspaceRoot, "workspace/jobs/jds");
+  const jdsDir = workspaceDataPath(workspaceRoot, "jobDescriptions");
   await mkdir(jdsDir, { recursive: true });
   const title = [input.company, input.role].filter(Boolean).join("-");
   const fileName = `${input.id}-${slugifyFileName(title || input.role || "job-description")}.md`;
-  const relativePath = `workspace/jobs/jds/${fileName}`;
+  const relativePath = `${workspaceRelativeDataPath("jobDescriptions")}/${fileName}`;
   const markdown = [
     `# ${input.role || "待解析岗位"}`,
     "",
@@ -307,7 +397,7 @@ async function writeJobDescriptionFile(workspaceRoot: string, input: {
     input.description.trim(),
     "",
   ].filter((line) => line !== "").join("\n");
-  await writeFile(join(workspaceRoot, relativePath), markdown, "utf8");
+  await writeFile(joinWorkspaceDataPath(workspaceRoot, "jobDescriptions", fileName), markdown, "utf8");
   return relativePath;
 }
 

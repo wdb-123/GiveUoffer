@@ -1,31 +1,55 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
-import { basename, extname, join, resolve } from "node:path";
+import { basename, extname, resolve } from "node:path";
 import type { DaemonRouteContext } from "./context";
 import { error, ok, requirePermission } from "./context";
 import { isInsideDir } from "../path-guards";
+import { workspaceDataPath } from "../workspace-paths";
+import { getTenantRouteScope, isScopeError } from "./tenant-scope";
 
 export function registerResumeRoutes(ctx: DaemonRouteContext): void {
-  const { app, services, stores } = ctx;
+  const { app } = ctx;
 
-  app.get("/api/resumes", async () => {
-    return ok(await stores.resumeStore.listResumes());
+  app.get("/api/resumes", async (request) => {
+    const authError = requirePermission(ctx, request, "workspace.read");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    return ok(await scope.stores.resumeStore.listResumes());
   });
 
   app.get<{
     Querystring: { file?: string };
   }>("/api/resume", async (request) => {
+    const authError = requirePermission(ctx, request, "workspace.read");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
     const file = request.query.file || "";
-    const resume = await stores.resumeStore.getResume(file);
+    const resume = await scope.stores.resumeStore.getResume(file);
     if (!resume) return error("resume_not_found", `Resume not found: ${file}`);
     return ok(resume);
+  });
+
+  app.get<{
+    Querystring: { resumeFile?: string };
+  }>("/api/resumes/diagnostics", async (request) => {
+    const authError = requirePermission(ctx, request, "workspace.read");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    return ok(await scope.stores.resumeStore.listDiagnosisReports(request.query.resumeFile));
   });
 
   app.post<{
     Body: import("@ucareer/shared").GenerateResumePreviewRequest;
   }>("/api/resumes/generate-preview", async (request) => {
-    const market = await stores.marketStore.getRecruitmentMarket();
-    return ok(await stores.resumeStore.generatePreview(request.body, market.jobs));
+    const authError = requirePermission(ctx, request, "workspace.read");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    const market = await scope.stores.marketStore.getRecruitmentMarket();
+    return ok(await scope.stores.resumeStore.generatePreview(request.body, market.jobs));
   });
 
   app.post<{
@@ -33,7 +57,19 @@ export function registerResumeRoutes(ctx: DaemonRouteContext): void {
   }>("/api/resumes/save-generated", async (request) => {
     const authError = requirePermission(ctx, request, "workspace.write");
     if (authError) return authError;
-    return ok(await stores.resumeStore.saveGeneratedResume(request.body));
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    return ok(await scope.stores.resumeStore.saveGeneratedResume(request.body));
+  });
+
+  app.post<{
+    Body: import("@ucareer/shared").SaveResumeRequest;
+  }>("/api/resumes/save", async (request) => {
+    const authError = requirePermission(ctx, request, "workspace.write");
+    if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    return ok(await scope.stores.resumeStore.saveResume(request.body));
   });
 
   app.post<{
@@ -41,7 +77,9 @@ export function registerResumeRoutes(ctx: DaemonRouteContext): void {
   }>("/api/resumes/export", async (request) => {
     const authError = requirePermission(ctx, request, "workspace.read");
     if (authError) return authError;
-    return ok(await services.resumeExportService.exportResume(request.body));
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
+    return ok(await scope.services.resumeExportService.exportResume(request.body));
   });
 
   app.get<{
@@ -49,10 +87,12 @@ export function registerResumeRoutes(ctx: DaemonRouteContext): void {
   }>("/api/resumes/export-file", async (request, reply) => {
     const authError = requirePermission(ctx, request, "workspace.read");
     if (authError) return authError;
+    const scope = getTenantRouteScope(ctx, request);
+    if (isScopeError(scope)) return scope;
     const file = basename(request.query.file || "");
     if (!isExportedResumeFile(file)) return error("invalid_export_file", "Invalid exported resume file");
 
-    const outputDir = join(ctx.workspaceRoot, "workspace/ops/exports/resumes");
+    const outputDir = workspaceDataPath(scope.workspaceRoot, "resumeExports");
     const outputPath = resolve(outputDir, file);
     if (!isInsideDir(outputDir, outputPath)) return error("invalid_export_file", "Invalid exported resume path");
 
@@ -68,7 +108,10 @@ export function registerResumeRoutes(ctx: DaemonRouteContext): void {
 }
 
 function isExportedResumeFile(file: string): boolean {
-  return /^\d{2}-.+\.(md|html|pdf|docx)$/u.test(file);
+  return Boolean(file)
+    && !file.startsWith(".")
+    && !/[\\/]/u.test(file)
+    && /\.(md|html|pdf|docx)$/iu.test(file);
 }
 
 function exportContentType(file: string): string {

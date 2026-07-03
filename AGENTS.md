@@ -11,6 +11,7 @@ There are two layers. Read `DATA_CONTRACT.md` for the full list.
 **User Layer (NEVER auto-updated, personalization goes HERE):**
 - `workspace/profile/cv.md`, `workspace/profile/profile.yml`, `workspace/profile/_profile.md`, `workspace/profile/article-digest.md`, `workspace/profile/portals.yml`
 - `workspace/ops/data/*`, `workspace/jobs/reports/*`, `workspace/jobs/jds/*`, `workspace/jobs/interview-prep/*`, `workspace/jobs/research/*`, `workspace/resumes/*`, `workspace/ops/batch/*`, `workspace/ops/exports/*`
+- `workspace/tenants/*/workspace/*` for tenant-scoped user data in authenticated multi-tenant Web/API sessions
 
 **System Layer (product source, DON'T put user data here):**
 - `modes/_shared.md`, `modes/oferta.md`, all other modes

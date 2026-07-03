@@ -31,6 +31,7 @@ export interface TaskStore {
 }
 
 export interface CreateTaskInput {
+  tenantId?: EntityId;
   providerId: EntityId;
   workspacePath: string;
   prompt: string;
@@ -82,6 +83,7 @@ export function createInMemoryTaskStore(persistPath?: string): TaskStore {
       const now = new Date().toISOString();
       const task: AgentTask = {
         id: randomUUID(),
+        ...(input.tenantId ? { tenantId: input.tenantId } : {}),
         providerId: input.providerId,
         workspacePath: input.workspacePath,
         prompt: input.prompt,

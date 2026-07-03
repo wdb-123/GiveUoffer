@@ -1,0 +1,99 @@
+# Career-Ops Profile Configuration
+# Copy this file to config/profile.yml and fill in your details.
+# This is the single source of truth for your personal data across all modes.
+
+candidate:
+  full_name: "韦东波"
+  email: "12132301@mail.sustech.edu.cn"
+  phone: "181 7224 4940"
+  location: "深圳"
+  linkedin: ""
+  portfolio_url: ""
+  github: "github.com/ZeroErrControl"
+  twitter: ""
+
+target_roles:
+  # Your North Star roles — what you're optimizing for
+  primary:
+    - "机器人系统工程师"
+    - "机器人软件工程师"
+    - "具身智能应用工程师"
+    - "具身智能数据基建工程师"
+    - "AI + 机器人解决方案工程师"
+  # Archetypes help the evaluation system score fit
+  archetypes:
+    - name: "机器人系统工程师"
+      level: "初中级/中级"
+      fit: "primary"        # primary = dream role, secondary = good fit, adjacent = stretch
+    - name: "机器人软件工程师"
+      level: "初中级/中级"
+      fit: "primary"
+    - name: "具身智能应用工程师"
+      level: "初中级/中级"
+      fit: "secondary"
+    - name: "具身智能数据基建工程师"
+      level: "初中级/中级"
+      fit: "secondary"
+    - name: "企业级 AI 系统工程师"
+      level: "初中级/中级"
+      fit: "adjacent"
+    - name: "AI + 机器人解决方案工程师"
+      level: "初中级/中级"
+      fit: "secondary"
+
+narrative:
+  # Your professional headline (1 line)
+  headline: "机器人软件工程师 / 企业级 AI 系统负责人 / 具身智能数据基建候选人"
+  # Your exit story — what makes you unique
+  exit_story: "南方科技大学智能制造与机器人硕士，当前负责机器人关节 SDK、EtherCAT 稳定性测试、ROS2 / MoveIt / Isaac 生态集成与企业级 AI / RAG / Agent 系统建设。希望进入更大的机器人/具身智能平台，把机器人系统理解、工程数据治理、评测闭环和 AI 工具链经验迁移到具身智能数据基建、机器人训练数据平台和 AI 工程化落地。"
+  # Your top 3-5 superpowers
+  superpowers:
+    - "机器人关节通信 SDK 与工业通信问题闭环"
+    - "企业级 AI / RAG 系统从 0 到 1 建设"
+    - "把客户问题沉淀成 SDK、文档、知识库、评测集和 Agent 工具"
+    - "把分散工程资料治理成可检索、可引用、可评测、可回流的数据资产"
+    - "熟练使用 Codex、Claude Code、Cursor、GPT、Manus 等 AI 工具进行需求拆解、代码开发、调试、重构和自动化工作流搭建"
+    - "跨学科整合：机器人、工业通信、AI 全栈、储能科研"
+    - "机器人开发者生态、NVIDIA 生态合作与技术成果转化"
+  # Proof points — projects, articles, case studies with measurable impact
+  proof_points:
+    - name: "eRob 关节模组通信 SDK"
+      url: "https://github.com/ZeroErrControl"
+      hero_metric: "覆盖 CAN/CANopen/EtherCAT/ROS2/MoveIt，周下载量超过 50 次"
+    - name: "ZeroErr GPT 企业级 AI 售前售后系统"
+      url: ""
+      hero_metric: "售前售后重复产品咨询减少约 50%，标准测试集约 1000 条，内部测试集 Top-10 召回率约 98.0%"
+    - name: "机器人行业知识数据平台 / 数据闭环"
+      url: ""
+      hero_metric: "覆盖文档解析、知识切分、混合检索、Evidence API、自动化评测和失败样本回流"
+    - name: "EtherCAT 通信稳定性与多关节压力测试"
+      url: ""
+      hero_metric: "围绕 SOEM/IGH、DC Sync、RT-Linux、1kHz 控制周期定位掉 OP、主站掉线和多电机 CSP 异常"
+    - name: "NVIDIA Inception 2025 荣耀企业"
+      url: ""
+      hero_metric: "推动公司从 340 家参评企业中进入 Top 10"
+  # Optional: dashboard/demo URL with credentials
+  # dashboard:
+  #   url: "https://janesmith.dev/demo"
+  #   password: "demo-2026"
+
+compensation:
+  target_range: "35K-45K/月"     # Your target total comp
+  currency: "CNY"
+  minimum: "35K/月"               # Walk-away number
+  location_flexibility: "深圳优先，可根据岗位质量考虑其他城市或混合办公"
+
+location:
+  country: "中国"
+  city: "深圳"
+  timezone: "Asia/Shanghai"
+  visa_status: "中国大陆就业"
+  # For remote roles outside your country:
+  # onsite_availability: "1 week/month in any city"
+
+cv:
+  output_format: "html" # "html" (default) or "latex"
+  # (Optional) Canva resume design ID for visual CV generation via /career-ops pdf.
+  # Find it in your Canva design URL: https://www.canva.com/design/DAxxxxxxx/...
+  # The ID starts with "D" and is 11 characters long.
+  # canva_resume_design_id: "DAxxxxxxxxx"

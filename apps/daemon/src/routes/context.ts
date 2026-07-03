@@ -23,13 +23,15 @@ export interface DaemonRouteContext {
     profileStore: ReturnType<typeof import("../stores/profile-store").createProfileStore>;
     reportStore: ReturnType<typeof import("../stores/report-store").createReportStore>;
     resumeStore: ReturnType<typeof import("../stores/resume-store").createResumeStore>;
-    workspaceFileStore: ReturnType<typeof import("../stores/workspace-file-store").createWorkspaceFileStore>;
   };
   services: {
     attachmentParserService: ReturnType<typeof import("../services/attachment-parser-service").createAttachmentParserService>;
     chromeBridgeService: ReturnType<typeof import("../services/chrome-bridge-service").createChromeBridgeService>;
     jobSearchService: ReturnType<typeof import("../services/jobsearch-service").createJobSearchService>;
+    memoryService: ReturnType<typeof import("../memory").createMemoryService>;
+    routePreviewService: ReturnType<typeof import("../services/route-preview-service").createRoutePreviewService>;
     resumeExportService: ReturnType<typeof import("../services/resume-export-service").createResumeExportService>;
+    workspaceFilePreviewService: ReturnType<typeof import("../services/workspace-file-preview-service").createWorkspaceFilePreviewService>;
     workflowRunService: ReturnType<typeof import("../services/workflow-run-service").createWorkflowRunService>;
   };
 }

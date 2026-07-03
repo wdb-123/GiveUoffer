@@ -14,11 +14,12 @@ interface MarketSectionProps {
   selectedReport: ReportDocument | null;
   onClearReport(): void;
   onImportJob(input: ImportJobRequest): Promise<void> | void;
+  onDeleteJob(jobId: string): Promise<void> | void;
   onGenerateReport(job: MarketJob): void;
   onSelectReport(file: string): void;
 }
 
-export function MarketSection({ market, reports, jobSearch, selectedReport, onClearReport, onImportJob, onGenerateReport, onSelectReport }: MarketSectionProps) {
+export function MarketSection({ market, reports, jobSearch, selectedReport, onClearReport, onImportJob, onDeleteJob, onGenerateReport, onSelectReport }: MarketSectionProps) {
   const [activeImportTool, setActiveImportTool] = useState<"manual" | "radar">("manual");
   const [manualUrl, setManualUrl] = useState("");
   const [manualImportStatus, setManualImportStatus] = useState<"idle" | "running" | "done" | "failed">("idle");
@@ -28,17 +29,21 @@ export function MarketSection({ market, reports, jobSearch, selectedReport, onCl
   const [radarMatch, setRadarMatch] = useState("3.0");
   const [radarKeywords, setRadarKeywords] = useState("机器人系统工程师, ROS2, 具身智能数据, AI Agent");
   const [radarMax, setRadarMax] = useState("25");
+  const [radarWithDetails, setRadarWithDetails] = useState(true);
   const [companyType, setCompanyType] = useState("");
   const [direction, setDirection] = useState("");
   const [salary, setSalary] = useState("");
   const [match, setMatch] = useState("");
   const [location, setLocation] = useState("");
   const [query, setQuery] = useState("");
+  const [deletingJobId, setDeletingJobId] = useState("");
+  const [selectedJobId, setSelectedJobId] = useState("");
 
   const jobs = market?.jobs || [];
+  const jobsWithDetails = useMemo(() => jobs.filter(hasMarketJobDetails), [jobs]);
   const filteredJobs = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
-    return jobs.filter((job) => {
+    return jobsWithDetails.filter((job) => {
       if (companyType && inferCompanyType(job) !== companyType) return false;
       if (direction && (job.direction || "未分类方向") !== direction) return false;
       if (salary && salaryBucket(job.salary) !== salary) return false;
@@ -62,11 +67,11 @@ export function MarketSection({ market, reports, jobSearch, selectedReport, onCl
         ...(job.keywords || []),
       ].some((value) => String(value || "").toLowerCase().includes(normalizedQuery));
     });
-  }, [companyType, direction, jobs, location, match, query, salary]);
+  }, [companyType, direction, jobsWithDetails, location, match, query, salary]);
 
-  const companyTypes = useMemo(() => uniqueOptions(jobs.map(inferCompanyType)), [jobs]);
-  const directions = useMemo(() => uniqueOptions(jobs.map((job) => job.direction || "未分类方向")), [jobs]);
-  const locations = useMemo(() => uniqueOptions(jobs.map(inferLocationBucket)), [jobs]);
+  const companyTypes = useMemo(() => uniqueOptions(jobsWithDetails.map(inferCompanyType)), [jobsWithDetails]);
+  const directions = useMemo(() => uniqueOptions(jobsWithDetails.map((job) => job.direction || "未分类方向")), [jobsWithDetails]);
+  const locations = useMemo(() => uniqueOptions(jobsWithDetails.map(inferLocationBucket)), [jobsWithDetails]);
 
   async function handleManualImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -86,6 +91,18 @@ export function MarketSection({ market, reports, jobSearch, selectedReport, onCl
     } catch (error) {
       setManualImportStatus("failed");
       setManualImportMessage(error instanceof Error ? error.message : "导入失败");
+    }
+  }
+
+  async function handleDeleteJob(job: MarketJob) {
+    if (!job.id || deletingJobId) return;
+    const label = [job.company || "待复核公司", job.role || "待复核岗位"].join(" - ");
+    if (!window.confirm(`删除岗位「${label}」？`)) return;
+    setDeletingJobId(job.id);
+    try {
+      await onDeleteJob(job.id);
+    } finally {
+      setDeletingJobId("");
     }
   }
 
@@ -181,7 +198,7 @@ export function MarketSection({ market, reports, jobSearch, selectedReport, onCl
                 </label>
                 <div className="market-radar-switches" aria-label="雷达运行选项">
                   <label><input type="checkbox" defaultChecked /> 去重</label>
-                  <label><input type="checkbox" /> 详情抓取</label>
+                  <label><input type="checkbox" checked={radarWithDetails} onChange={(event) => setRadarWithDetails(event.target.checked)} /> 详情抓取</label>
                   <label><input type="checkbox" defaultChecked /> 只读模式</label>
                 </div>
                 <button
@@ -193,6 +210,7 @@ export function MarketSection({ market, reports, jobSearch, selectedReport, onCl
                     city: radarCity,
                     max: Number(radarMax) || 25,
                     minMatchScore: Number(radarMatch) || 0,
+                    withDetails: radarWithDetails,
                     queries: radarKeywords.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean),
                   })}
                 >
@@ -272,7 +290,16 @@ export function MarketSection({ market, reports, jobSearch, selectedReport, onCl
 
         <div className="jobs-table market-table">
           {filteredJobs.length ? (
-            <MarketTable jobs={filteredJobs} reports={reports?.reports || []} onGenerateReport={onGenerateReport} onSelectReport={onSelectReport} />
+            <MarketTable
+              deletingJobId={deletingJobId}
+              jobs={filteredJobs}
+              reports={reports?.reports || []}
+              selectedJobId={selectedJobId}
+              onDeleteJob={handleDeleteJob}
+              onShowJobDetails={(job) => setSelectedJobId(job.id)}
+              onGenerateReport={onGenerateReport}
+              onSelectReport={onSelectReport}
+            />
           ) : (
             <div className="empty-state">暂无符合当前筛选的岗位。</div>
           )}
@@ -291,6 +318,13 @@ export function MarketSection({ market, reports, jobSearch, selectedReport, onCl
           </div>
           <pre>{selectedReport.markdown.slice(0, 6000)}</pre>
         </aside>
+      ) : null}
+      {selectedJobId ? (
+        <MarketJobDetailPanel
+          job={jobs.find((job) => job.id === selectedJobId) || null}
+          onClose={() => setSelectedJobId("")}
+          onGenerateReport={onGenerateReport}
+        />
       ) : null}
     </div>
   );
@@ -344,13 +378,21 @@ function MarketMiniSelect({
 }
 
 function MarketTable({
+  deletingJobId,
   jobs,
   reports,
+  selectedJobId,
+  onDeleteJob,
+  onShowJobDetails,
   onGenerateReport,
   onSelectReport,
 }: {
+  deletingJobId: string;
   jobs: MarketJob[];
   reports: ReportSummary[];
+  selectedJobId: string;
+  onDeleteJob(job: MarketJob): void;
+  onShowJobDetails(job: MarketJob): void;
   onGenerateReport(job: MarketJob): void;
   onSelectReport(file: string): void;
 }) {
@@ -361,6 +403,7 @@ function MarketTable({
         <col className="market-col-salary" />
         <col className="market-col-source" />
         <col className="market-col-score" />
+        <col className="market-col-jd" />
         <col className="market-col-report" />
         <col className="market-col-action" />
       </colgroup>
@@ -370,6 +413,7 @@ function MarketTable({
           <th>薪资</th>
           <th>来源 / 入库</th>
           <th>评分</th>
+          <th>JD</th>
           <th>评估报告</th>
           <th>操作</th>
         </tr>
@@ -377,12 +421,21 @@ function MarketTable({
       <tbody>
         {jobs.map((job) => {
           const report = findJobReport(job, reports);
+          const metaTags = marketJobMetaTags(job);
           return (
-            <tr key={job.id}>
+            <tr className={selectedJobId === job.id ? "is-selected" : ""} key={job.id}>
               <td className="market-job-cell">
-                <strong>{job.company || "待复核"}</strong>
-                {job.url ? <a className="market-job-title-link" href={job.url} target="_blank" rel="noreferrer">{job.role || "待复核岗位"}</a> : <span>{job.role || "待复核岗位"}</span>}
-                <small>{[job.id, compactMarketMeta(job)].filter(Boolean).join(" · ")}</small>
+                <strong className="market-job-company">{job.company || "待复核"}</strong>
+                {job.url ? <a className="market-job-title-link" href={job.url} target="_blank" rel="noreferrer">{job.role || "待复核岗位"}</a> : <span className="market-job-title-text">{job.role || "待复核岗位"}</span>}
+                {metaTags.length ? (
+                  <div className="market-job-meta-row" aria-label="岗位标签">
+                    {metaTags.map((tag) => (
+                      <span className="market-job-meta-chip" key={`${tag.label}-${tag.value}`} title={tag.value}>
+                        {tag.value}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </td>
               <td className="market-salary-cell">
                 <span className="salary-badge">{displaySalary(job.salary)}</span>
@@ -394,21 +447,31 @@ function MarketTable({
               <td className="market-score-cell">
                 <span className="score-badge">{typeof job.matchScore === "number" ? job.matchScore.toFixed(1) : "--"}</span>
               </td>
+              <td className="market-jd-cell">
+                <button className="market-detail-button" type="button" onClick={() => onShowJobDetails(job)}>查看</button>
+              </td>
               <td className="market-report-cell">
                 {report ? (
                   <button className="market-report-button" type="button" onClick={() => onSelectReport(report.file)}>
-                    评估报告
+                    报告
                   </button>
                 ) : (
                   <button className="market-generate-report-button" type="button" onClick={() => onGenerateReport(job)}>
-                    生成报告
+                    生成
                   </button>
                 )}
               </td>
               <td className="market-action-cell">
                 <div className="market-table-actions">
-                  <button className="market-focus-button" type="button">重点关注</button>
-                  {job.url ? <a className="market-job-jump" href={job.url} target="_blank" rel="noreferrer">打开</a> : null}
+                  <button className="market-focus-button" type="button">关注</button>
+                  <button
+                    className="market-delete-button"
+                    type="button"
+                    disabled={deletingJobId === job.id}
+                    onClick={() => onDeleteJob(job)}
+                  >
+                    {deletingJobId === job.id ? "删除中" : "删除"}
+                  </button>
                 </div>
               </td>
             </tr>
@@ -417,6 +480,82 @@ function MarketTable({
       </tbody>
     </table>
   );
+}
+
+function MarketJobDetailPanel({
+  job,
+  onClose,
+  onGenerateReport,
+}: {
+  job: MarketJob | null;
+  onClose(): void;
+  onGenerateReport(job: MarketJob): void;
+}) {
+  if (!job) return null;
+  const details = [
+    { label: "公司", value: job.company || "待复核" },
+    { label: "岗位", value: job.role || "待复核岗位" },
+    { label: "薪资", value: displaySalary(job.salary) },
+    { label: "地点", value: job.location || "未披露" },
+    { label: "方向", value: job.direction || "未分类" },
+    { label: "来源", value: platformLabel(job) },
+    { label: "入库", value: marketStoredAt(job).replace(/^入库\s*/, "") },
+  ];
+  const description = buildJobDescription(job);
+  return (
+    <aside className="market-job-detail-panel" aria-label="岗位详情">
+      <div className="market-job-detail-head">
+        <div>
+          <span>岗位详情</span>
+          <h3>{job.role || "待复核岗位"}</h3>
+          <p>{job.company || "待复核公司"}</p>
+        </div>
+        <button type="button" className="secondary compact-button" onClick={onClose}>关闭</button>
+      </div>
+      <div className="market-job-detail-body">
+        <dl className="market-job-detail-grid">
+          {details.map((item) => (
+            <div key={item.label}>
+              <dt>{item.label}</dt>
+              <dd>{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+        {job.keywords?.length ? (
+          <div className="market-job-detail-section">
+            <h4>关键词</h4>
+            <div className="market-job-keywords">
+              {job.keywords.map((keyword) => <span key={keyword}>{keyword}</span>)}
+            </div>
+          </div>
+        ) : null}
+        <MarketJobDetailSection title="匹配理由" value={job.fitReason} fallback="暂无匹配理由，建议先生成评估报告。" />
+        <MarketJobDetailSection title="证据缺口" value={job.evidenceGap} fallback="暂无证据缺口记录。" />
+        <MarketJobDetailSection title="职位描述" value={description} fallback="当前入库记录没有完整 JD 正文。可打开原始链接或重新从详情页抓取。" />
+      </div>
+      <div className="market-job-detail-actions">
+        {job.url ? <a className="market-job-jump" href={job.url} target="_blank" rel="noreferrer">打开链接</a> : null}
+        <button type="button" className="market-generate-report-button" onClick={() => onGenerateReport(job)}>生成报告</button>
+      </div>
+    </aside>
+  );
+}
+
+function MarketJobDetailSection({ title, value, fallback }: { title: string; value?: string | undefined; fallback: string }) {
+  return (
+    <section className="market-job-detail-section">
+      <h4>{title}</h4>
+      <p>{value?.trim() || fallback}</p>
+    </section>
+  );
+}
+
+function buildJobDescription(job: MarketJob): string {
+  const details = [
+    job.jdPath ? `JD 文件：${job.jdPath}` : "",
+    job.url ? `原始链接：${job.url}` : "",
+  ].filter(Boolean);
+  return details.join("\n");
 }
 
 function findJobReport(job: MarketJob, reports: ReportSummary[]) {
@@ -484,8 +623,27 @@ function displaySalary(raw?: string) {
   return text.replace(/^AI估算[:：]?\s*/i, "").replace(/^AI estimate[:：]?\s*/i, "").trim() || "未披露";
 }
 
-function compactMarketMeta(job: MarketJob) {
-  return [job.location, job.direction].filter(Boolean).join(" · ");
+function marketJobMetaTags(job: MarketJob) {
+  const tags = [
+    compactMarketTag(job.location, 18),
+    compactMarketTag(job.direction, 16),
+  ].filter(Boolean) as string[];
+  return Array.from(new Set(tags)).map((value) => ({ label: value, value }));
+}
+
+function hasMarketJobDetails(job: MarketJob) {
+  if (String(job.jdPath || "").trim()) return true;
+  const detailText = [job.rawText, job.description].join("\n").trim();
+  return detailText.length >= 120;
+}
+
+function compactMarketTag(value?: string, maxLength = 18) {
+  const text = String(value || "")
+    .replace(/工作地址|点击查看地图|地图|·/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return "";
+  return text.length > maxLength ? `${text.slice(0, maxLength)}...` : text;
 }
 
 function platformLabel(job: MarketJob) {

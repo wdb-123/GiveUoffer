@@ -39,6 +39,8 @@ export function AgentFilePreviewDrawer({
               <PdfPreview preview={preview} />
             ) : preview.previewType === "docx" ? (
               <DocxPreview preview={preview} />
+            ) : preview.previewType === "image" ? (
+              <ImagePreview preview={preview} />
             ) : preview.previewType === "text" ? (
               <FilePreviewBody preview={preview} />
             ) : (
@@ -49,6 +51,17 @@ export function AgentFilePreviewDrawer({
         ) : null}
       </div>
     </aside>
+  );
+}
+
+function ImagePreview({ preview }: { preview: WorkspaceFilePreview }) {
+  if (!preview.dataUrl) {
+    return <p className="agent-file-preview-state">图片预览数据不可用。</p>;
+  }
+  return (
+    <section className="agent-file-preview-image" aria-label={`${preview.fileName} 图片预览`}>
+      <img src={preview.dataUrl} alt={preview.fileName} />
+    </section>
   );
 }
 

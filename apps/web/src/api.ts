@@ -1,10 +1,14 @@
 import type {
   AgentEvent,
+  AgentExecutionQueueOverview,
   AgentAttachment,
   AgentTask,
   AgentTaskTurn,
+  AddTenantMemberRequest,
   ApplicationsOverview,
   AuthSession,
+  BillingPlan,
+  CreateTenantRequest,
   CreateAccountRequest,
   CreateApplicationEventRequest,
   DeleteApplicationEventRequest,
@@ -37,14 +41,23 @@ import type {
   ReportsOverview,
   RouteDecision,
   RoutePreviewRequest,
+  ResumeDiagnosisReport,
   ResumeDocument,
   ResumeSummary,
+  SaveEvidenceNoteInput,
+  SaveEvidenceNoteResult,
   SaveExperienceMetadataInput,
   SaveGeneratedResumeRequest,
   SaveGeneratedResumeResult,
+  SaveResumeRequest,
   JobSearchRequest,
   JobSearchResult,
   JobSearchSource,
+  SwitchTenantRequest,
+  TenantBilling,
+  TenantMembersOverview,
+  UpdateTenantBillingPlanRequest,
+  UpdateTenantMemberRoleRequest,
   UpdateApplicationEventRequest,
   UploadAgentAttachmentRequest,
   WorkspaceFilePreview,
@@ -91,6 +104,76 @@ export async function logout(token: string): Promise<{ loggedOut: boolean }> {
     await request<ApiEnvelope<{ loggedOut: boolean }>>("/api/auth/logout", {
       method: "POST",
       headers: sessionHeaders(token),
+    }),
+  );
+}
+
+export async function createTenant(input: CreateTenantRequest): Promise<AuthSession> {
+  return unwrap(
+    await request<ApiEnvelope<AuthSession>>("/api/tenants", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function switchTenant(input: SwitchTenantRequest): Promise<AuthSession> {
+  return unwrap(
+    await request<ApiEnvelope<AuthSession>>("/api/auth/switch-tenant", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function getTenantMembers(): Promise<TenantMembersOverview> {
+  return unwrap(await request<ApiEnvelope<TenantMembersOverview>>("/api/tenant-members"));
+}
+
+export async function addTenantMember(input: AddTenantMemberRequest): Promise<TenantMembersOverview> {
+  return unwrap(
+    await request<ApiEnvelope<TenantMembersOverview>>("/api/tenant-members", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function updateTenantMemberRole(accountId: string, input: UpdateTenantMemberRoleRequest): Promise<TenantMembersOverview> {
+  return unwrap(
+    await request<ApiEnvelope<TenantMembersOverview>>(`/api/tenant-members/${encodeURIComponent(accountId)}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function removeTenantMember(accountId: string): Promise<TenantMembersOverview> {
+  return unwrap(
+    await request<ApiEnvelope<TenantMembersOverview>>(`/api/tenant-members/${encodeURIComponent(accountId)}`, {
+      method: "DELETE",
+    }),
+  );
+}
+
+export async function getBillingPlans(): Promise<BillingPlan[]> {
+  return unwrap(await request<ApiEnvelope<BillingPlan[]>>("/api/billing/plans"));
+}
+
+export async function getTenantBilling(): Promise<TenantBilling> {
+  return unwrap(await request<ApiEnvelope<TenantBilling>>("/api/billing/tenant"));
+}
+
+export async function updateTenantBillingPlan(input: UpdateTenantBillingPlanRequest): Promise<TenantBilling> {
+  return unwrap(
+    await request<ApiEnvelope<TenantBilling>>("/api/billing/tenant/plan", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
     }),
   );
 }
@@ -181,6 +264,10 @@ export async function decideApproval(approvalId: string, input: ApprovalDecision
 
 export async function getAgentTasks(): Promise<AgentTask[]> {
   return unwrap(await request<ApiEnvelope<AgentTask[]>>("/api/agent-tasks"));
+}
+
+export async function getAgentExecutionQueue(): Promise<AgentExecutionQueueOverview> {
+  return unwrap(await request<ApiEnvelope<AgentExecutionQueueOverview>>("/api/agent-execution-queue"));
 }
 
 export async function getAgentTask(taskId: string): Promise<AgentTask> {
@@ -282,6 +369,11 @@ export async function getResume(file: string): Promise<ResumeDocument> {
   return unwrap(await request<ApiEnvelope<ResumeDocument>>(`/api/resume?file=${encodeURIComponent(file)}`));
 }
 
+export async function getResumeDiagnostics(resumeFile?: string): Promise<ResumeDiagnosisReport[]> {
+  const suffix = resumeFile ? `?resumeFile=${encodeURIComponent(resumeFile)}` : "";
+  return unwrap(await request<ApiEnvelope<ResumeDiagnosisReport[]>>(`/api/resumes/diagnostics${suffix}`));
+}
+
 export async function generateResumePreview(input: GenerateResumePreviewRequest): Promise<GenerateResumePreviewResult> {
   return unwrap(
     await request<ApiEnvelope<GenerateResumePreviewResult>>("/api/resumes/generate-preview", {
@@ -295,6 +387,16 @@ export async function generateResumePreview(input: GenerateResumePreviewRequest)
 export async function saveGeneratedResume(input: SaveGeneratedResumeRequest): Promise<SaveGeneratedResumeResult> {
   return unwrap(
     await request<ApiEnvelope<SaveGeneratedResumeResult>>("/api/resumes/save-generated", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function saveResume(input: SaveResumeRequest): Promise<ResumeDocument> {
+  return unwrap(
+    await request<ApiEnvelope<ResumeDocument>>("/api/resumes/save", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
@@ -326,6 +428,14 @@ export async function importMarketJob(input: ImportJobRequest): Promise<ImportJo
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function deleteMarketJob(id: string): Promise<{ deletedJobId: string }> {
+  return unwrap(
+    await request<ApiEnvelope<{ deletedJobId: string }>>(`/api/recruitment-market/${encodeURIComponent(id)}`, {
+      method: "DELETE",
     }),
   );
 }
@@ -411,6 +521,16 @@ export async function getEvidenceRequests(): Promise<EvidenceRequestsOverview> {
 export async function fulfillEvidenceRequest(input: FulfillEvidenceRequestInput): Promise<FulfillEvidenceRequestResult> {
   return unwrap(
     await request<ApiEnvelope<FulfillEvidenceRequestResult>>("/api/evidence-requests/fulfill", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function saveEvidenceNote(input: SaveEvidenceNoteInput): Promise<SaveEvidenceNoteResult> {
+  return unwrap(
+    await request<ApiEnvelope<SaveEvidenceNoteResult>>("/api/evidence-notes", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),

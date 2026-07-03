@@ -1,9 +1,14 @@
 import type {
+  AgentEvent,
+  AgentTask,
+  AgentTaskTurn,
   ExportResumeResult,
   GenerateResumePreviewResult,
   MarketJob,
+  ResumeDiagnosisReport,
   ResumeDocument,
   ResumeExportFormat,
+  ResumeExportStyle,
   ResumeSummary,
 } from "@ucareer/shared";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type WheelEvent } from "react";
@@ -11,80 +16,115 @@ import { RenderedResumePage, ResumeEmptyState } from "./resume/ResumePreview";
 import { ResumeDiagnosis, ResumeFileList, formatJobLabel, formatResumeDisplayTitle } from "./resume/ResumeSidebar";
 import { paginateMarkdown } from "./resume/resumeMarkdown";
 
-type ResumeSideView = "list" | "diagnosis" | "edit";
+type ResumeSideView = "list" | "export" | "diagnosis" | "edit" | "customize";
 type ResumePageMode = "single" | "spread";
-type ResumeMarginMode = "compact" | "standard" | "wide";
 
-const RESUME_MARGIN_OPTIONS: Array<{ value: ResumeMarginMode; label: string; single: number; spread: number }> = [
-  { value: "compact", label: "窄", single: 38, spread: 30 },
-  { value: "standard", label: "标准", single: 46, spread: 34 },
-  { value: "wide", label: "宽", single: 56, spread: 42 },
-];
-const DEFAULT_RESUME_MARGIN_OPTION = RESUME_MARGIN_OPTIONS[1] as (typeof RESUME_MARGIN_OPTIONS)[number];
+const RESUME_A4_WIDTH = 794;
+const RESUME_A4_HEIGHT = 1123;
+const RESUME_SPREAD_GAP = 12;
+const RESUME_PAGE_PADDING_X = 42;
+const RESUME_PAGE_PADDING_Y = 40;
 const RESUME_EXPORT_FORMATS = ["pdf", "docx", "md"] as const satisfies readonly ResumeExportFormat[];
 const RESUME_EXPORT_FORMAT_LABELS: Record<(typeof RESUME_EXPORT_FORMATS)[number], string> = {
   pdf: "PDF",
   docx: "DOCX",
   md: "Markdown",
 };
+const RESUME_EXPORT_STYLES: Array<{ value: ResumeExportStyle; label: string; description: string }> = [
+  { value: "classic", label: "经典", description: "保留当前预览版式，适合投递和分享。" }, { value: "compact", label: "紧凑", description: "更高信息密度，适合经历较多的版本。" }, { value: "ats", label: "ATS", description: "弱化装饰，优先保证机器解析友好。" }, { value: "bluebar", label: "蓝栏校招", description: "参考大厂实习模板，蓝色栏目条和紧凑项目经历。" },
+];
 
 interface ResumeSectionProps {
   resumes: ResumeSummary[];
+  diagnostics: ResumeDiagnosisReport[];
   jobs: MarketJob[];
   preview: GenerateResumePreviewResult | null;
   selectedResume: ResumeDocument | null;
   exportResult: ExportResumeResult | null;
+  agentTasks: AgentTask[];
+  selectedTaskEvents: AgentEvent[];
+  selectedTaskId: string;
+  selectedTaskTurns: AgentTaskTurn[];
   onSelectResume(file: string): void;
   onGeneratePreview(baseFile: string, targetJobId: string): void;
-  onExportResume(file: string, format: ResumeExportFormat): void;
+  onDiagnoseResume(file: string, targetJobId?: string): string | Promise<string>;
+  onExportResume(file: string, format: ResumeExportFormat, style?: ResumeExportStyle): Promise<void> | void;
   onSavePreview(): void;
+  onSaveResume(file: string, title: string, markdown: string): void | Promise<void>;
 }
 
 export function ResumeSection({
   resumes,
+  diagnostics,
   jobs,
   preview,
   selectedResume,
   exportResult,
+  agentTasks,
   onExportResume,
+  onDiagnoseResume,
   onGeneratePreview,
   onSavePreview,
+  onSaveResume,
   onSelectResume,
+  selectedTaskEvents,
+  selectedTaskId,
+  selectedTaskTurns,
 }: ResumeSectionProps) {
   const [baseFile, setBaseFile] = useState("");
   const [targetJobId, setTargetJobId] = useState("");
   const [pageIndex, setPageIndex] = useState(0);
-  const [sideView, setSideView] = useState<ResumeSideView>("diagnosis");
+  const [sideView, setSideView] = useState<ResumeSideView>("list");
   const [resumeSearch, setResumeSearch] = useState("");
   const [resumeTypeFilter, setResumeTypeFilter] = useState("");
   const [exportFormat, setExportFormat] = useState<ResumeExportFormat>("pdf");
-  const [formatMenuOpen, setFormatMenuOpen] = useState(false);
+  const [exportStyle, setExportStyle] = useState<ResumeExportStyle>("classic");
   const [pageMode, setPageMode] = useState<ResumePageMode>("spread");
-  const [marginMode, setMarginMode] = useState<ResumeMarginMode>("standard");
-  const [marginMenuOpen, setMarginMenuOpen] = useState(false);
-  const formatMenuRef = useRef<HTMLDivElement | null>(null);
-  const marginMenuRef = useRef<HTMLDivElement | null>(null);
+  const [editorTitle, setEditorTitle] = useState("");
+  const [editorMarkdown, setEditorMarkdown] = useState("");
+  const [editorDirty, setEditorDirty] = useState(false);
+  const [editorStatus, setEditorStatus] = useState("");
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportStatus, setExportStatus] = useState("");
+  const [diagnosisTaskId, setDiagnosisTaskId] = useState("");
+  const [diagnosisStatus, setDiagnosisStatus] = useState("");
+  const [paperStageSize, setPaperStageSize] = useState({ width: RESUME_A4_WIDTH, height: RESUME_A4_HEIGHT });
+  const paperStageRef = useRef<HTMLElement | null>(null);
   const wheelTurnRef = useRef(0);
   const selectedResumeSummary = resumes.find((resume) => resume.file === selectedResume?.file) || null;
   const diagnosisJob = selectedResumeSummary?.targetJobId
     ? jobs.find((job) => job.id === selectedResumeSummary.targetJobId) || null
     : null;
-  const activeResume = preview
+  const selectedDiagnosisReports = selectedResume
+    ? diagnostics.filter((report) => report.resumeFile === selectedResume.file || report.file.startsWith(selectedResume.file.replace(/\.md$/, "")))
+    : [];
+  const latestDiagnosisReport = selectedDiagnosisReports[0] || null;
+  const editingResume = selectedResume && sideView === "edit"
+    ? { title: editorTitle || selectedResume.title, markdown: editorMarkdown, file: selectedResume.file }
+    : null;
+  const activeResume = editingResume || (preview
     ? { title: preview.title, markdown: preview.markdown, file: preview.baseFile, targetJobTitle: preview.targetJobTitle }
-    : selectedResume;
+    : selectedResume);
   const pages = useMemo(() => paginateMarkdown(activeResume?.markdown || ""), [activeResume?.markdown]);
   const spreadMode = pageMode === "spread" && pages.length > 1;
-  const marginOption = RESUME_MARGIN_OPTIONS.find((option) => option.value === marginMode) || DEFAULT_RESUME_MARGIN_OPTION;
   const visiblePageIndex = spreadMode ? Math.floor(pageIndex / 2) * 2 : pageIndex;
   const spreadPages = spreadMode ? pages.slice(visiblePageIndex, visiblePageIndex + 2) : [];
   const selectedJob = jobs.find((job) => job.id === targetJobId) || jobs[0] || null;
   const targetJobOptions = jobs.slice(0, 80);
+  const deckWidth = spreadMode ? RESUME_A4_WIDTH * 2 + RESUME_SPREAD_GAP : RESUME_A4_WIDTH;
+  const deckHeight = RESUME_A4_HEIGHT;
+  const previewScale = Math.min(
+    1,
+    Math.max(0.24, paperStageSize.width / deckWidth),
+    Math.max(0.24, paperStageSize.height / deckHeight),
+  );
   const paperStageStyle = {
     "--resume-slide-index": visiblePageIndex,
-    "--resume-page-padding-x": `${marginOption.single}px`,
-    "--resume-page-padding-y": `${Math.max(30, marginOption.single - 2)}px`,
-    "--resume-spread-page-padding-x": `${marginOption.spread}px`,
-    "--resume-spread-page-padding-y": `${Math.max(28, marginOption.spread)}px`,
+    "--resume-page-padding-x": `${RESUME_PAGE_PADDING_X}px`,
+    "--resume-page-padding-y": `${RESUME_PAGE_PADDING_Y}px`,
+    "--resume-deck-width": `${deckWidth}px`,
+    "--resume-deck-height": `${deckHeight}px`,
+    "--resume-preview-scale": previewScale,
   } as CSSProperties;
 
   useEffect(() => {
@@ -101,12 +141,29 @@ export function ResumeSection({
   }, [activeResume?.markdown]);
 
   useEffect(() => {
-    function closeToolbarMenus(event: globalThis.MouseEvent) {
-      if (!formatMenuRef.current?.contains(event.target as Node)) setFormatMenuOpen(false);
-      if (!marginMenuRef.current?.contains(event.target as Node)) setMarginMenuOpen(false);
-    }
-    document.addEventListener("mousedown", closeToolbarMenus);
-    return () => document.removeEventListener("mousedown", closeToolbarMenus);
+    setEditorTitle(selectedResume?.title || "");
+    setEditorMarkdown(selectedResume?.markdown || "");
+    setEditorDirty(false);
+    setEditorStatus("");
+  }, [selectedResume?.file, selectedResume?.markdown, selectedResume?.title]);
+
+  useEffect(() => {
+    const node = paperStageRef.current;
+    if (!node) return;
+    const updateStageSize = () => {
+      const styles = window.getComputedStyle(node);
+      const width = node.clientWidth - parseFloat(styles.paddingLeft || "0") - parseFloat(styles.paddingRight || "0");
+      const height = node.clientHeight - parseFloat(styles.paddingTop || "0") - parseFloat(styles.paddingBottom || "0");
+      setPaperStageSize({ width: Math.max(1, width), height: Math.max(1, height) });
+    };
+    updateStageSize();
+    const observer = new ResizeObserver(updateStageSize);
+    observer.observe(node);
+    window.addEventListener("resize", updateStageSize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateStageSize);
+    };
   }, []);
 
   function turnPage(delta: number) {
@@ -126,9 +183,60 @@ export function ResumeSection({
     turnPage(event.deltaY > 0 ? 1 : -1);
   }
 
+  async function handleSaveEditedResume() {
+    if (!selectedResume) return;
+    setEditorStatus("保存中...");
+    try {
+      await onSaveResume(selectedResume.file, editorTitle.trim() || selectedResume.title, editorMarkdown);
+      setEditorDirty(false);
+      setEditorStatus("已保存");
+    } catch (error) {
+      setEditorStatus(error instanceof Error ? error.message : "保存失败");
+    }
+  }
+
+  async function handleExportCurrentResume(format = exportFormat) {
+    if (!selectedResume || exportBusy) return;
+    setExportBusy(true);
+    setExportFormat(format);
+    setExportStatus(`正在导出 ${formatExportLabel(format)}...`);
+    try {
+      await onExportResume(selectedResume.file, format, exportStyle);
+      setExportStatus(`已下载 ${formatExportLabel(format)}`);
+    } catch (error) {
+      setExportStatus(error instanceof Error ? error.message : "导出失败");
+    } finally {
+      setExportBusy(false);
+    }
+  }
+
+  async function handleDiagnoseCurrentResume() {
+    if (!selectedResume) return;
+    setSideView("diagnosis");
+    setDiagnosisStatus("正在启动诊断...");
+    try {
+      const taskId = await onDiagnoseResume(selectedResume.file, selectedResumeSummary?.targetJobId || targetJobId || undefined);
+      setDiagnosisTaskId(taskId || "");
+      setDiagnosisStatus(taskId ? "Agent 正在诊断当前简历" : "诊断任务未启动");
+    } catch (error) {
+      setDiagnosisStatus(error instanceof Error ? error.message : "诊断启动失败");
+    }
+  }
+
+  function handleOpenDiagnosisPanel() {
+    if (!selectedResume) return;
+    setSideView("diagnosis");
+    if (latestDiagnosisReport) {
+      setDiagnosisTaskId("");
+      setDiagnosisStatus("已读取最近诊断报告");
+      return;
+    }
+    void handleDiagnoseCurrentResume();
+  }
+
   return (
-    <div className={spreadMode ? "resume-classic-workspace is-spread" : "resume-classic-workspace"}>
-      <main className="resume-paper-stage" style={paperStageStyle}>
+    <div className={`resume-classic-workspace resume-preview-style-${exportStyle}${spreadMode ? " is-spread" : ""}`}>
+      <main className="resume-paper-stage" ref={paperStageRef} style={paperStageStyle}>
         <article className={spreadMode ? "resume-paper-deck is-spread" : "resume-paper-deck"} aria-label="简历预览" onWheel={handlePaperWheel}>
           {activeResume && spreadMode ? (
             <div className="resume-spread-window">
@@ -160,49 +268,18 @@ export function ResumeSection({
         </article>
         <div className="resume-deck-controls-v2" role="toolbar" aria-label="简历工具栏" onClick={(event) => event.stopPropagation()}>
           <div className="resume-toolbar-group" aria-label="导入导出">
-            <button type="button" className="resume-tool-button is-file-tool" aria-label="导入简历" data-tooltip="打开简历列表" onClick={() => setSideView("list")}>⇩</button>
+            <button type="button" className="resume-tool-button is-file-tool" aria-label="打开简历列表" data-tooltip="打开简历列表" onClick={() => setSideView("list")}>列表</button>
             <button
               type="button"
               className="resume-tool-button is-file-tool"
-              aria-label="导出简历"
-              data-tooltip={`导出 ${formatExportLabel(exportFormat)}`}
+              aria-label="打开导出面板"
+              data-tooltip="打开导出面板"
               disabled={!selectedResume}
-              onClick={() => selectedResume && onExportResume(selectedResume.file, exportFormat)}
+              onClick={() => setSideView("export")}
             >
-              ⇧
+              {exportBusy ? "导出中" : "导出"}
             </button>
-            <div className="resume-format-menu" ref={formatMenuRef}>
-              <button
-                type="button"
-                aria-label="导出格式"
-                aria-expanded={formatMenuOpen}
-                aria-haspopup="listbox"
-                className="resume-format-trigger"
-                data-tooltip="选择导出格式"
-                onClick={() => setFormatMenuOpen((open) => !open)}
-              >
-                {formatExportLabel(exportFormat)}
-              </button>
-              {formatMenuOpen ? (
-                <div className="resume-format-options" role="listbox" aria-label="导出格式">
-                  {RESUME_EXPORT_FORMATS.map((format) => (
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={format === exportFormat}
-                      className={format === exportFormat ? "is-selected" : ""}
-                      key={format}
-                      onClick={() => {
-                        setExportFormat(format);
-                        setFormatMenuOpen(false);
-                      }}
-                    >
-                      {formatExportLabel(format)}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-            </div>
+            {exportStatus ? <span className="resume-export-status">{exportStatus}</span> : null}
           </div>
 
           <div className="resume-page-controls" aria-label="页面切换">
@@ -225,66 +302,25 @@ export function ResumeSection({
               disabled={pages.length <= 1}
               onClick={() => setPageMode((mode) => (mode === "spread" ? "single" : "spread"))}
             >
-              ▥
+              {spreadMode ? "双页" : "单页"}
             </button>
-            <div className={marginMenuOpen ? "resume-margin-menu is-open" : "resume-margin-menu"} ref={marginMenuRef}>
-              <button
-                type="button"
-                className="resume-tool-button is-margin-tool"
-                aria-label="设置页边距"
-                aria-expanded={marginMenuOpen}
-                aria-haspopup="true"
-                data-tooltip={`页边距：${marginOption.label}`}
-                onClick={() => setMarginMenuOpen((open) => !open)}
-              >
-                ◫
-              </button>
-              <div className="resume-margin-options" role="group" aria-label="页边距">
-                {RESUME_MARGIN_OPTIONS.map((option) => (
-                  <button
-                    type="button"
-                    className={option.value === marginMode ? "is-selected" : ""}
-                    key={option.value}
-                    onClick={() => {
-                      setMarginMode(option.value);
-                      setMarginMenuOpen(false);
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button type="button" className="resume-tool-button is-edit-tool" aria-label="编辑简历" data-tooltip="生成定制简历" disabled={!selectedResume} onClick={() => setSideView("edit")}>✎</button>
-            <button type="button" className="resume-tool-button is-primary" aria-label="保存简历" data-tooltip={preview ? "保存当前预览" : "先生成预览"} disabled={!preview} onClick={onSavePreview}>✓</button>
-            <button type="button" className="resume-tool-button is-diagnosis-tool" aria-label="诊断简历" data-tooltip="查看简历诊断" onClick={() => setSideView("diagnosis")}>◎</button>
+            <button type="button" className="resume-tool-button is-edit-tool" aria-label="编辑简历" data-tooltip="编辑当前简历" disabled={!selectedResume} onClick={() => setSideView("edit")}>编辑</button>
+            <button
+              type="button"
+              className="resume-tool-button is-diagnosis-tool"
+              aria-label="诊断简历"
+              data-tooltip={selectedResume ? (latestDiagnosisReport ? "查看已有诊断报告" : "让 Agent 诊断并给出修改建议") : "请先选择简历"}
+              disabled={!selectedResume}
+              onClick={handleOpenDiagnosisPanel}
+            >
+              诊断
+            </button>
           </div>
         </div>
       </main>
 
       <aside className="resume-diagnosis-rail">
-        <div className="resume-side-card">
-          <div className="resume-side-tabs" role="tablist" aria-label="简历侧栏">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={sideView === "list"}
-              className={sideView === "list" ? "is-active" : ""}
-              onClick={() => setSideView("list")}
-            >
-              简历列表
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={sideView === "diagnosis"}
-              className={sideView === "diagnosis" ? "is-active" : ""}
-              onClick={() => setSideView("diagnosis")}
-            >
-              简历诊断
-            </button>
-          </div>
-
+        <div className={sideView === "edit" ? "resume-side-card is-edit-mode" : "resume-side-card"}>
           <div className="resume-context-card">
             {sideView === "list" ? (
               <ResumeFileList
@@ -299,11 +335,119 @@ export function ResumeSection({
             ) : null}
             {sideView === "diagnosis" ? (
               <>
-                <ResumeDiagnosis resume={selectedResumeSummary} document={selectedResume} job={diagnosisJob} />
-                {exportResult ? <p className="status-line">已导出 {exportResult.file} · {(exportResult.sizeBytes / 1024).toFixed(1)} KB</p> : null}
+                <ResumeDiagnosis
+                  diagnosisStatus={diagnosisStatus}
+                  diagnosisTask={agentTasks.find((task) => task.id === diagnosisTaskId) || null}
+                  document={selectedResume}
+                  events={diagnosisTaskId && selectedTaskId === diagnosisTaskId ? selectedTaskEvents : []}
+                  job={diagnosisJob}
+                  onRerun={() => void handleDiagnoseCurrentResume()}
+                  reports={selectedDiagnosisReports}
+                  resume={selectedResumeSummary}
+                  turns={diagnosisTaskId && selectedTaskId === diagnosisTaskId ? selectedTaskTurns : []}
+                />
+                {exportResult ? <p className="status-line">已导出 · {(exportResult.sizeBytes / 1024).toFixed(1)} KB</p> : null}
               </>
             ) : null}
+            {sideView === "export" ? (
+              <div className="resume-export-panel">
+                <div className="resume-context-head">
+                  <h2>导出简历</h2>
+                  <span>{selectedResume ? formatResumeDisplayTitle(selectedResume.title) : "未选择"}</span>
+                </div>
+                <div className="resume-export-section">
+                  <h3>文件格式</h3>
+                  <div className="resume-export-format-grid" role="radiogroup" aria-label="导出文件格式">
+                    {RESUME_EXPORT_FORMATS.map((format) => (
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={format === exportFormat}
+                        className={format === exportFormat ? "is-selected" : ""}
+                        key={format}
+                        onClick={() => setExportFormat(format)}
+                      >
+                        {formatExportLabel(format)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="resume-export-section">
+                  <h3>简历风格</h3>
+                  <div className="resume-export-style-list" role="radiogroup" aria-label="导出简历风格">
+                    {RESUME_EXPORT_STYLES.map((style) => (
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={style.value === exportStyle}
+                        className={style.value === exportStyle ? "is-selected" : ""}
+                        key={style.value}
+                        onClick={() => setExportStyle(style.value)}
+                      >
+                        <strong>{style.label}</strong>
+                        <span>{style.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="resume-export-confirm"
+                  disabled={!selectedResume || exportBusy}
+                  onClick={() => void handleExportCurrentResume(exportFormat)}
+                >
+                  {exportBusy ? "正在导出" : `导出 ${formatExportLabel(exportFormat)}`}
+                </button>
+                {exportStatus ? <p className="resume-export-note">{exportStatus}</p> : null}
+                {exportResult ? <p className="resume-export-note">最近导出 · {(exportResult.sizeBytes / 1024).toFixed(1)} KB</p> : null}
+              </div>
+            ) : null}
             {sideView === "edit" ? (
+              <div className="resume-source-editor">
+                <label className="resume-edit-field">
+                  <span>标题</span>
+                  <input
+                    value={editorTitle}
+                    placeholder="简历标题"
+                    onChange={(event) => {
+                      setEditorTitle(event.target.value);
+                      setEditorDirty(true);
+                    }}
+                  />
+                </label>
+                <label className="resume-edit-field resume-markdown-field">
+                  <span>Markdown 内容</span>
+                  <textarea
+                    value={editorMarkdown}
+                    spellCheck={false}
+                    onChange={(event) => {
+                      setEditorMarkdown(event.target.value);
+                      setEditorDirty(true);
+                    }}
+                  />
+                </label>
+                <div className="resume-editor-actions">
+                  <button type="button" disabled={!selectedResume || !editorDirty} onClick={() => void handleSaveEditedResume()}>
+                    保存编辑
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary"
+                    disabled={!selectedResume || !editorDirty}
+                    onClick={() => {
+                      setEditorTitle(selectedResume?.title || "");
+                      setEditorMarkdown(selectedResume?.markdown || "");
+                      setEditorDirty(false);
+                      setEditorStatus("");
+                    }}
+                  >
+                    撤销
+                  </button>
+                </div>
+                {editorStatus ? <p className="status-line">{editorStatus}</p> : null}
+              </div>
+            ) : null}
+            {sideView === "customize" ? (
               <div className="resume-edit-panel">
                 <div className="resume-edit-field">
                   <span>基础简历</span>

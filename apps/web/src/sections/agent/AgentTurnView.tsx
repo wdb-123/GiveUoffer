@@ -1,6 +1,7 @@
 import { AgentMarkdown } from "./AgentMarkdown";
 import { AgentJourneyLine } from "./AgentJourneyLine";
 import { useEffect, useMemo, useState } from "react";
+import { getWorkspaceFilePreview } from "../../api";
 import {
   extractTaskUserQuestion,
   findLastMessageIndex,
@@ -11,6 +12,20 @@ import {
 const streamedAssistantMessageIds = new Set<string>();
 const STREAMABLE_MESSAGE_AGE_MS = 45_000;
 const RUNNING_PROCESS_PLACEHOLDER_CREATED_AT = "1970-01-01T00:00:00.000Z";
+
+interface MessageAttachmentPreview {
+  kind: string;
+  fileName: string;
+  storedPath: string;
+  mimeType: string;
+  summary: string;
+}
+
+interface ProcessTimingMark {
+  phase: string;
+  durationMs: number;
+  detail: string;
+}
 
 export function AgentTurnView({
   turn,
@@ -44,10 +59,39 @@ export function AgentTurnView({
           />
         );
       })}
+      {finalAssistantIndex < 0 && processMessages.length ? (
+        <ProcessOnlyGroup
+          processMessages={processMessages}
+          onOpenFilePreview={onOpenFilePreview}
+        />
+      ) : null}
       {runningProcessLabel || runningProcessMessages.length ? (
         <RunningProcessPanel label={runningProcessLabel} messages={runningProcessMessages} />
       ) : null}
     </section>
+  );
+}
+
+function ProcessOnlyGroup({
+  processMessages,
+  onOpenFilePreview,
+}: {
+  processMessages: AgentChatMessage[];
+  onOpenFilePreview?: ((path: string) => void) | undefined;
+}) {
+  const visibleProcessMessages = getVisibleProcessMessages(processMessages);
+  const displayProcessMessages = visibleProcessMessages.length
+    ? visibleProcessMessages
+    : getInspectableProcessMessages(processMessages);
+  const timingMarks = getProcessTimingMarks(processMessages);
+  return (
+    <div className="agent-answer-group">
+      <ProcessLogPanel
+        messages={displayProcessMessages}
+        timingMarks={timingMarks}
+        onOpenFilePreview={onOpenFilePreview}
+      />
+    </div>
   );
 }
 
@@ -61,10 +105,11 @@ function AssistantAnswerGroup({
   onOpenFilePreview?: ((path: string) => void) | undefined;
 }) {
   const visibleProcessMessages = getVisibleProcessMessages(processMessages);
-  const inspectableProcessMessages = visibleProcessMessages.length
+  const timingMarks = getProcessTimingMarks(processMessages);
+  const displayProcessMessages = visibleProcessMessages.length
     ? visibleProcessMessages
     : getInspectableProcessMessages(processMessages);
-  if (!inspectableProcessMessages.length) {
+  if (!displayProcessMessages.length && !timingMarks.length) {
     return (
       <div className="agent-answer-group">
         <AgentBubble message={message} onOpenFilePreview={onOpenFilePreview} />
@@ -78,7 +123,11 @@ function AssistantAnswerGroup({
         <summary className="agent-response-meta is-toggle">
           <span>{message.durationLabel || "已处理"} ›</span>
         </summary>
-        <ProcessLogPanel messages={inspectableProcessMessages} onOpenFilePreview={onOpenFilePreview} />
+        <ProcessLogPanel
+          messages={displayProcessMessages}
+          timingMarks={timingMarks}
+          onOpenFilePreview={onOpenFilePreview}
+        />
       </details>
       <AgentBubble
         message={message}
@@ -110,25 +159,46 @@ function getInspectableProcessMessages(messages: AgentChatMessage[]): AgentChatM
 
 function ProcessLogPanel({
   messages,
+  timingMarks = [],
   onOpenFilePreview,
 }: {
   messages: AgentChatMessage[];
+  timingMarks?: ProcessTimingMark[];
   onOpenFilePreview?: ((path: string) => void) | undefined;
 }) {
+  const timingSummary = formatTimingSummary(timingMarks);
   return (
     <div className="agent-process-stream is-complete" aria-label="执行过程">
       <div className="agent-process-stream-head">
         <span className="agent-process-status-dot" aria-hidden="true" />
         <strong>执行过程</strong>
-        <small>{messages.length} 条日志</small>
+        <small>{[messages.length ? `${messages.length} 条日志` : "", timingSummary].filter(Boolean).join(" · ")}</small>
       </div>
+      {timingMarks.length ? <ProcessTimingSummary marks={timingMarks} /> : null}
       <div className="agent-process-list">
-        {messages.map((log) => (
+        {messages.length ? messages.map((log) => (
           <article className={`agent-process-item is-${log.role}`} key={log.id}>
             <AgentMarkdown text={formatProcessLogText(log.text)} onOpenFilePreview={onOpenFilePreview} />
           </article>
-        ))}
+        )) : (
+          <article className="agent-process-item is-system">
+            本轮没有工具调用或长流程日志。
+          </article>
+        )}
       </div>
+    </div>
+  );
+}
+
+function ProcessTimingSummary({ marks }: { marks: ProcessTimingMark[] }) {
+  return (
+    <div className="agent-process-timing" aria-label="耗时埋点">
+      {marks.map((mark) => (
+        <span className="agent-process-timing-chip" key={`${mark.phase}-${mark.durationMs}-${mark.detail}`}>
+          <strong>{formatTimingPhase(mark.phase)}</strong>
+          <small>{formatDurationMs(mark.durationMs)}</small>
+        </span>
+      ))}
     </div>
   );
 }
@@ -138,7 +208,8 @@ export function RunningProcessPanel({ label, messages }: { label: string; messag
   const inspectableProcessMessages = visibleProcessMessages.length
     ? visibleProcessMessages
     : getInspectableProcessMessages(messages);
-  const latestProcessMessages = inspectableProcessMessages.slice(-6);
+  const timingMarks = getProcessTimingMarks(messages);
+  const latestProcessMessages = inspectableProcessMessages.slice(-10);
   const currentStatus = formatCurrentProcessStatus(visibleProcessMessages)
     || formatCurrentProcessStatus(messages)
     || label
@@ -156,9 +227,10 @@ export function RunningProcessPanel({ label, messages }: { label: string; messag
       <div className="agent-process-stream-head">
         <span className="agent-process-status-dot" aria-hidden="true" />
         <strong>执行过程</strong>
-        <small>{processRows.length} 条日志</small>
+        <small>{[processRows.length ? `${processRows.length} 条日志` : "", timingMarks.length ? "实时耗时" : ""].filter(Boolean).join(" · ")}</small>
         <AgentJourneyLine className="agent-process-running-line" loop />
       </div>
+      {timingMarks.length ? <ProcessTimingSummary marks={timingMarks} /> : null}
       <div className="agent-process-list" aria-label="当前执行日志">
         {processRows.map((log) => (
           <article className={`agent-process-item is-${log.role}`} key={log.id}>
@@ -213,6 +285,7 @@ function formatCurrentProcessStatus(messages: AgentChatMessage[]): string {
 
 function isLowSignalRuntimeLog(text: string): boolean {
   return isPluginSyncWarning(text)
+    || text.startsWith("性能埋点：")
     || text.includes("codex_core_plugins::")
     || text.includes("codex_core_skills::")
     || text.includes("failed to load plugin")
@@ -221,6 +294,62 @@ function isLowSignalRuntimeLog(text: string): boolean {
     || text.includes("[paperclip] Using")
     || text.includes("/.paperclip/instances/")
     || text.includes("/.local/bin/codex");
+}
+
+function getProcessTimingMarks(messages: AgentChatMessage[]): ProcessTimingMark[] {
+  return messages
+    .map((message) => parseTimingMark(message.text))
+    .filter((mark): mark is ProcessTimingMark => Boolean(mark));
+}
+
+function parseTimingMark(text: string): ProcessTimingMark | null {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized.startsWith("性能埋点：")) return null;
+  const phase = normalized.match(/\bphase=([^\s]+)/u)?.[1] || "";
+  const durationText = normalized.match(/\bdurationMs=(\d+)/u)?.[1] || "";
+  const durationMs = Number(durationText);
+  if (!phase || !Number.isFinite(durationMs)) return null;
+  const detail = normalized
+    .replace(/^性能埋点：/u, "")
+    .replace(/\bphase=[^\s]+\s*/u, "")
+    .replace(/\bdurationMs=\d+\s*/u, "")
+    .trim();
+  return { phase, durationMs, detail };
+}
+
+function formatTimingSummary(marks: ProcessTimingMark[]): string {
+  if (!marks.length) return "";
+  const total = marks.find((mark) => mark.phase === "provider.total")
+    || marks.find((mark) => mark.phase === "local.fast_reply")
+    || marks.find((mark) => mark.phase === "task.pre_approval_total")
+    || marks.at(-1);
+  if (!total) return "";
+  const label = total.phase === "provider.total" ? "执行耗时" : "耗时";
+  return `${label} ${formatDurationMs(total.durationMs)}`;
+}
+
+function formatTimingPhase(phase: string): string {
+  const labels: Record<string, string> = {
+    "route.classify": "路由",
+    "route.provider_select": "Provider",
+    "route.total": "路由总计",
+    "task.create": "建任务",
+    "task.pre_approval_total": "启动前",
+    "approval.policy": "审批策略",
+    "approval.create": "审批创建",
+    "local.fast_reply": "本地快答",
+    "provider.load_adapter": "加载 Agent",
+    "provider.first_assistant_output": "首段回复",
+    "provider.iteration_execute": "执行",
+    "provider.total": "执行总计",
+    "tool.execute": "工具调用",
+  };
+  return labels[phase] || phase;
+}
+
+function formatDurationMs(durationMs: number): string {
+  if (durationMs < 1000) return `${Math.max(0, Math.round(durationMs))}ms`;
+  return `${(durationMs / 1000).toFixed(durationMs >= 10_000 ? 1 : 2).replace(/\.0+$/u, "")}s`;
 }
 
 function isRoutineExecutionLog(text: string): boolean {
@@ -287,7 +416,8 @@ function AgentBubble({
   hideDuration?: boolean;
   onOpenFilePreview?: ((path: string) => void) | undefined;
 }) {
-  const displayText = message.role === "user" ? extractTaskUserQuestion(message.text) : message.text;
+  const userDisplay = message.role === "user" ? parseUserMessageDisplay(message) : null;
+  const displayText = userDisplay ? userDisplay.text : message.text;
   const isProcessNote = message.role === "assistant" && isAssistantProcessNote(message.text);
   const shouldStream = message.role === "assistant"
     && !hideDuration
@@ -295,20 +425,174 @@ function AgentBubble({
     && !streamedAssistantMessageIds.has(message.id)
     && Date.now() - Date.parse(message.createdAt) < STREAMABLE_MESSAGE_AGE_MS;
   const { text: renderedText, streaming } = useStreamingText(message.id, displayText, shouldStream);
+  const hasUserAttachments = Boolean(userDisplay?.attachments.length);
+  const bubbleClassName = [
+    "agent-chat-bubble",
+    `is-${message.role}`,
+    isProcessNote ? "is-process-note" : "",
+    hasUserAttachments ? "has-attachments" : "",
+  ].filter(Boolean).join(" ");
   return (
-    <article className={`agent-chat-bubble is-${message.role}${isProcessNote ? " is-process-note" : ""}`}>
+    <article className={bubbleClassName}>
       {message.role === "assistant" && message.durationLabel && !hideDuration && !isProcessNote ? (
         <span className="agent-response-meta">{message.durationLabel} ›</span>
       ) : null}
-      {renderedText ? (
-        <AgentMarkdown
-          text={renderedText}
-          streaming={streaming}
+      {hasUserAttachments ? (
+        <UserAttachmentPreviews
+          attachments={userDisplay?.attachments || []}
           onOpenFilePreview={onOpenFilePreview}
         />
       ) : null}
+      {renderedText ? (
+        hasUserAttachments && message.role === "user" ? (
+          <div className="agent-user-text-bubble">
+            <AgentMarkdown
+              text={renderedText}
+              streaming={streaming}
+              onOpenFilePreview={onOpenFilePreview}
+            />
+          </div>
+        ) : (
+          <AgentMarkdown
+            text={renderedText}
+            streaming={streaming}
+            onOpenFilePreview={onOpenFilePreview}
+          />
+        )
+      ) : null}
     </article>
   );
+}
+
+function UserAttachmentPreviews({
+  attachments,
+  onOpenFilePreview,
+}: {
+  attachments: MessageAttachmentPreview[];
+  onOpenFilePreview?: ((path: string) => void) | undefined;
+}) {
+  return (
+    <div className="agent-message-attachments" aria-label="消息附件">
+      {attachments.map((attachment) => (
+        <UserAttachmentPreview
+          attachment={attachment}
+          key={`${attachment.storedPath}-${attachment.fileName}`}
+          onOpenFilePreview={onOpenFilePreview}
+        />
+      ))}
+    </div>
+  );
+}
+
+function UserAttachmentPreview({
+  attachment,
+  onOpenFilePreview,
+}: {
+  attachment: MessageAttachmentPreview;
+  onOpenFilePreview?: ((path: string) => void) | undefined;
+}) {
+  const [dataUrl, setDataUrl] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setDataUrl("");
+    if (attachment.kind !== "image") return undefined;
+    void getWorkspaceFilePreview(attachment.storedPath)
+      .then((preview) => {
+        if (!cancelled && preview.previewType === "image" && preview.dataUrl) {
+          setDataUrl(preview.dataUrl);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDataUrl("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [attachment.kind, attachment.storedPath]);
+
+  if (attachment.kind === "image") {
+    return (
+      <button
+        type="button"
+        className="agent-message-image-attachment"
+        aria-label={`查看图片附件 ${attachment.fileName}`}
+        onClick={() => onOpenFilePreview?.(attachment.storedPath)}
+      >
+        {dataUrl ? <img src={dataUrl} alt="" /> : <span />}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="agent-message-file-attachment"
+      onClick={() => onOpenFilePreview?.(attachment.storedPath)}
+    >
+      {attachment.fileName}
+    </button>
+  );
+}
+
+function parseUserMessageDisplay(message: AgentChatMessage): { text: string; attachments: MessageAttachmentPreview[] } {
+  const question = extractTaskUserQuestion(message.text);
+  const structuredAttachments = normalizeMessageAttachments(message);
+  const attachments = structuredAttachments.length ? structuredAttachments : parsePromptAttachments(question);
+  return {
+    text: stripAttachmentDisplayText(question, attachments),
+    attachments,
+  };
+}
+
+function normalizeMessageAttachments(message: AgentChatMessage): MessageAttachmentPreview[] {
+  return (message.attachments || []).map((attachment) => ({
+    kind: attachment.kind,
+    fileName: attachment.fileName,
+    storedPath: attachment.storedPath,
+    mimeType: attachment.mimeType,
+    summary: attachment.parsed.summary,
+  }));
+}
+
+function parsePromptAttachments(text: string): MessageAttachmentPreview[] {
+  const attachmentSection = text.match(/(?:^|\n)---\s*\nUser uploaded attachments:\s*\n([\s\S]*)$/u)?.[1] || "";
+  if (!attachmentSection.trim()) return [];
+
+  const blocks = attachmentSection
+    .split(/\n\s*\n(?=Attachment\s+\d+:)/u)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  return blocks.map((block): MessageAttachmentPreview | null => {
+    const fileName = block.match(/^Attachment\s+\d+:\s*(.+)$/mu)?.[1]?.trim() || "";
+    const kind = block.match(/^Kind:\s*(.+)$/mu)?.[1]?.trim() || "unknown";
+    const mimeType = block.match(/^MIME:\s*(.+)$/mu)?.[1]?.trim() || "";
+    const storedPath = block.match(/^Stored path:\s*(.+)$/mu)?.[1]?.trim() || "";
+    const summary = block.match(/^Summary:\s*(.+)$/mu)?.[1]?.trim() || "";
+    if (!fileName || !storedPath) return null;
+    return { fileName, kind, mimeType, storedPath, summary };
+  }).filter((attachment): attachment is MessageAttachmentPreview => Boolean(attachment));
+}
+
+function stripAttachmentDisplayText(text: string, attachments: MessageAttachmentPreview[]): string {
+  let cleaned = text
+    .replace(/\n*---\s*\nUser uploaded attachments:\s*[\s\S]*$/u, "")
+    .trim();
+  if (!attachments.length) return cleaned;
+
+  attachments.forEach((attachment) => {
+    const escapedName = escapeRegExp(attachment.fileName);
+    cleaned = cleaned
+      .replace(new RegExp(`\\n?\\[${escapeRegExp(attachment.kind)}\\]\\s+${escapedName}:.*`, "giu"), "")
+      .replace(new RegExp(`\\n?图片附件[:：]\\s*${escapedName}.*`, "giu"), "")
+      .trim();
+  });
+  return cleaned;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function useStreamingText(messageId: string, text: string, enabled: boolean): { text: string; streaming: boolean } {

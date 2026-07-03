@@ -166,7 +166,7 @@
 .applications-import-grid {
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  grid-template-columns: minmax(0, 1fr);
   max-width: none;
   width: 100%;
 }
@@ -180,13 +180,8 @@
   width: 100%;
 }
 
-.applications-mail-panel,
-.applications-result-panel {
-  min-height: 244px;
-}
-
+.applications-mail-panel { min-height: 244px; }
 .applications-mail-panel h2,
-.applications-result-panel h2,
 .applications-pipeline-panel h2 {
   color: #111827;
   font-size: 14px;
@@ -205,10 +200,59 @@
   padding: 14px;
 }
 
+.mailbox-read-button {
+  background: #eef6ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  padding: 0 13px;
+}
+
+.mailbox-read-button:hover { background: #dbeafe; border-color: #93c5fd; color: #1e40af; }
+.mailbox-read-button:disabled { background: #f1f5f9; border-color: #e2e8f0; color: #748094; }
+
 .applications-import-actions {
+  align-items: center;
   display: flex;
+  justify-content: flex-start;
   gap: 8px;
   margin-top: 10px;
+}
+
+.applications-parse-actions { align-items: center; display: flex; gap: 8px; }
+.applications-parse-actions button {
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: none;
+  margin-top: 0;
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+.applications-parse-actions button:not(.mailbox-read-button):not(.secondary) {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+  padding: 0 13px;
+}
+
+.applications-parse-actions button:not(.mailbox-read-button):not(.secondary):hover { background: #f8fafc; border-color: #94a3b8; }
+
+.applications-parse-actions button.secondary {
+  background: transparent;
+  border-color: transparent;
+  color: #64748b;
+  font-weight: 850;
+  padding: 0 10px;
+}
+
+.applications-parse-actions button.secondary:hover { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
+
+.applications-mailbox-status {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+  margin: 8px 0 0;
 }
 
 .applications-panel-title {
@@ -236,22 +280,24 @@
   color: #98a2b3;
 }
 
-.applications-result-box,
 .applications-empty-pipeline {
   background: #f8fafc;
   border: 1px dashed rgba(148, 163, 184, 0.78);
   border-radius: 8px;
   color: #667085;
   font-size: 12px;
-  margin-top: 20px;
-  min-height: 160px;
+  margin-top: 12px;
+  min-height: 0;
   padding: 16px;
 }
 
-.applications-result-box.has-result {
-  border-style: solid;
-  color: #334155;
-}
+.applications-result-box { color: #667085; font-size: 12px; margin-top: 10px; }
+.applications-inline-result-head { align-items: center; display: flex; justify-content: space-between; margin-bottom: 10px; }
+.applications-inline-result-head strong { color: #111827; font-size: 12px; font-weight: 900; }
+.applications-inline-result-head .text-button { background: transparent; border: 0; color: #667085; font-size: 12px; font-weight: 900; margin: 0; min-height: auto; padding: 0; }
+.applications-inline-result-head .text-button:disabled { color: #98a2b3; }
+
+.applications-result-box.has-result { color: #334155; }
 
 .applications-result-box p,
 .applications-empty-pipeline {
@@ -280,8 +326,141 @@
   margin: 0;
 }
 
+.mailbox-agent-progress {
+  color: #334155;
+  display: grid;
+  gap: 14px;
+}
+
+.mailbox-agent-head {
+  align-items: start;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 18px minmax(0, 1fr);
+}
+
+.mailbox-agent-head strong {
+  color: #111827;
+  display: block;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.mailbox-agent-head p {
+  color: #667085;
+  margin: 3px 0 0;
+}
+
+.mailbox-agent-spinner,
+.mailbox-agent-dot {
+  border-radius: 999px;
+  display: inline-block;
+  height: 12px;
+  margin-top: 2px;
+  width: 12px;
+}
+
+.mailbox-agent-spinner {
+  animation: mailbox-agent-spin 0.75s linear infinite;
+  border: 2px solid rgba(37, 99, 235, 0.18);
+  border-top-color: #2563eb;
+}
+
+.mailbox-agent-dot {
+  background: #2563eb;
+}
+
+.mailbox-agent-progress.is-completed .mailbox-agent-dot {
+  background: #16a34a;
+}
+
+.mailbox-agent-progress.is-failed .mailbox-agent-dot,
+.mailbox-agent-progress.is-cancelled .mailbox-agent-dot {
+  background: #dc2626;
+}
+
+.mailbox-agent-steps {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mailbox-agent-steps li {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 24px minmax(0, 1fr);
+  min-height: 34px;
+  padding: 7px 9px;
+}
+
+.mailbox-agent-steps span {
+  align-items: center;
+  background: #eef2f7;
+  border-radius: 999px;
+  color: #64748b;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 900;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+
+.mailbox-agent-steps p {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.mailbox-agent-steps li.is-active {
+  border-color: rgba(37, 99, 235, 0.4);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.mailbox-agent-steps li.is-active span {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.mailbox-agent-steps li.is-done span {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.mailbox-agent-log {
+  border-top: 1px solid rgba(226, 232, 240, 0.95);
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+}
+
+.mailbox-agent-log strong {
+  color: #111827;
+  font-size: 12px;
+}
+
+.mailbox-agent-log p {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+@keyframes mailbox-agent-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .applications-pipeline-panel {
-  min-height: 560px;
+  min-height: 0;
 }
 
 .applications-pipeline-panel .applications-panel-title {
@@ -290,48 +469,531 @@
 }
 
 .applications-pipeline-list {
-  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .applications-import-workspace .application-row {
-  padding: 18px 20px;
+  padding: 0;
 }
 
-.application-row {
+.applications-pipeline-list .application-row {
+  align-items: start;
   background: #ffffff;
-  border: 1px solid transparent;
-  border-top-color: var(--line);
-  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
-}
-
-.application-row:first-child {
-  border-top-color: transparent;
-}
-
-.application-row:hover {
-  border-color: rgba(148, 163, 184, 0.42);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
-  transform: translateY(-1px);
-}
-
-.application-row {
+  border: 1px solid #e4eaf2;
   border-radius: 8px;
-  padding: 14px;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+  display: block;
+  gap: 14px;
+  min-height: 100px;
+  padding: 12px 16px;
+  position: relative;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
-.application-row strong {
+.applications-pipeline-list .application-row:hover {
+  border-color: #cbd8e8;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+}
+
+.application-row-main {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding-right: 0;
+}
+
+.application-row-head {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.applications-pipeline-list .application-row-head strong {
   color: #111827;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.application-row-head em {
+  color: #334155;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 800;
   line-height: 1.35;
 }
 
-.application-row span {
+.application-row-event {
+  align-items: center;
+  color: #64748b;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 8px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.applications-pipeline-list .application-row p.application-row-event {
+  color: #64748b;
+  display: none;
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.applications-pipeline-list .application-row-event strong {
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.4;
+}
+
+.application-row-event span {
+  background: transparent;
+  border: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  text-transform: none;
+}
+
+.applications-pipeline-list .application-row p.application-row-note {
+  background: transparent;
+  border-left: 2px solid #94bfff;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.55;
+  margin: 0;
+  overflow: hidden;
+  padding: 2px 0 2px 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-stage-track {
+  --application-stage-line: #e2e8f0;
+  align-items: start;
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(var(--application-stage-count, 5), minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  position: relative;
+}
+
+.application-stage-track::before {
+  background: var(--application-stage-line);
+  content: "";
+  height: 2px;
+  left: 18px;
+  position: absolute;
+  right: 18px;
+  top: 7px;
+}
+
+.application-stage-track li {
+  align-items: center;
+  color: #94a3b8;
+  display: flex;
+  font-size: 9px;
+  font-weight: 850;
+  gap: 3px;
+  justify-content: center;
+  line-height: 1.15;
+  min-height: 24px;
+  min-width: 0;
+  position: relative;
+  white-space: nowrap;
+}
+
+.application-stage-track li button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 3px;
+  max-width: 100%;
+  min-height: 22px;
+  min-width: 0;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.application-stage-track li > span,
+.application-stage-track li button span {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  font-size: inherit;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-stage-track li button:hover span {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.application-stage-track li button:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid rgba(37, 99, 235, 0.42);
+  outline-offset: 3px;
+}
+
+.application-stage-track li::before {
+  background: #ffffff;
+  border: 2px solid var(--application-stage-line);
+  border-radius: 999px;
+  content: "";
+  flex: 0 0 auto;
+  height: 8px;
+  width: 8px;
+}
+
+.application-stage-track li.is-active {
+  color: #0f172a;
+}
+
+.application-stage-track li.is-active::before {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.application-stage-track li[data-state="offer"].is-active::before {
+  background: #059669;
+  border-color: #059669;
+}
+
+.application-event-detail {
+  background: #ffffff;
+  border: 1px solid #dbe5f2;
   border-radius: 8px;
-  min-width: 82px;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.07);
+  display: grid;
+  gap: 18px;
+  margin-top: 12px;
+  padding: 24px 28px 28px;
+}
+
+.application-email-detail {
+  gap: 10px;
+  padding: 14px 28px 20px;
+}
+
+.application-event-detail-head {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.application-event-detail-head > div {
+  min-width: 0;
+}
+
+.application-event-detail-head span {
+  color: #2563eb;
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.application-event-detail-head h3 {
+  color: #111827;
+  font-size: 20px;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.application-email-detail .application-event-detail-head {
+  align-items: center;
+}
+
+.application-email-detail .application-event-detail-head h3 {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.application-email-detail .application-event-detail-head .compact-button {
+  min-height: 38px;
+  min-width: 84px;
+  padding-inline: 14px;
+}
+
+.application-event-detail-head p {
+  color: #475569;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.4;
+  margin: 6px 0 0;
+}
+
+.application-event-detail-head .compact-button {
+  min-height: 46px;
+  min-width: 96px;
+  padding-inline: 18px;
+}
+
+.application-event-detail dl {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+}
+
+.application-event-detail dl > div {
+  display: grid;
+  align-items: start;
+  gap: 20px;
+  grid-template-columns: 88px minmax(0, 1fr);
+}
+
+.application-event-detail dt {
+  color: #64748b;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.application-event-detail dd {
+  color: #334155;
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1.5;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.application-event-detail dl > div.application-email-full {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1fr;
+}
+
+.application-email-full dt {
+  color: #111827;
+  font-size: 15px;
+}
+
+.application-email-full {
+  display: grid;
+  gap: 10px;
+}
+
+.application-email-full dd {
+  display: grid;
+  gap: 14px;
+}
+
+.application-email-meta {
+  align-items: center;
+  background: #f7f9fc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px 14px;
+  grid-template-columns: minmax(170px, 1.1fr) minmax(260px, 1.65fr) minmax(180px, 1.05fr) minmax(150px, 0.95fr);
+  min-height: 60px;
+  padding: 8px 14px;
+}
+
+.application-email-meta p {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: 44px minmax(0, 1fr);
+  margin: 0;
+  min-width: 0;
+}
+
+.application-email-meta p.is-subject {
+  grid-column: auto;
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.application-email-meta strong {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.application-email-meta span {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.45;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-email-attachments { align-items: center; color: #334155; display: flex; flex-wrap: wrap; gap: 6px 8px; font-size: 12px; }
+.application-email-attachments strong { color: #64748b; line-height: 1; }
+.application-email-attachments span { align-items: center; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; color: #166534; display: inline-flex; gap: 6px; max-width: 100%; min-height: 24px; padding: 3px 9px; }
+.application-email-attachments small { color: #64748b; font-size: 11px; font-weight: 700; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.application-email-full pre {
+  background: #ffffff;
+  border: 1px solid #dbe5f2;
+  border-radius: 8px;
+  color: #1f2937;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800; line-height: 1.55;
+  margin: 0;
+  max-height: 76px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 12px 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.application-stage-track li[data-state="failed"].is-active::before {
+  background: #e11d48;
+  border-color: #e11d48;
+}
+
+.application-stage-track small {
+  color: #64748b;
+  display: none;
+  font-size: 8px;
+  font-weight: 760;
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-stage-track li.is-active small {
+  display: inline;
+}
+
+.applications-pipeline-list .application-status-pill {
+  background: #eef5ff;
+  border: 1px solid #cfe0ff;
+  border-radius: 7px;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.1;
+  min-width: 72px;
+  padding: 6px 9px;
   text-align: center;
+  white-space: nowrap;
+}
+
+.applications-pipeline-list .application-status-pill.is-interview {
+  background: #eef8ff;
+  border-color: #bae6fd;
+  color: #0369a1;
+}
+
+.applications-pipeline-list .application-status-pill.is-rejected,
+.applications-pipeline-list .application-status-pill.is-discarded {
+  background: #fff1f2;
+  border-color: #fecdd3;
+  color: #be123c;
+}
+
+.applications-pipeline-list .application-status-pill.is-offer {
+  background: #ecfdf5;
+  border-color: #bbf7d0;
+  color: #047857;
+}
+
+.applications-pipeline-list .application-row > .application-status-pill.is-applied,
+.applications-pipeline-list .application-row > .application-status-pill.is-responded {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
+}
+
+.applications-pipeline-list .application-row .approval-actions {
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+  margin-top: 0;
+  position: absolute;
+  right: 16px;
+}
+
+.applications-pipeline-list .application-row .approval-actions button {
+  font-size: 12px;
+  min-height: 28px;
+  padding: 0 10px;
 }
 
 @media (max-width: 760px) {
   .applications-import-grid {
     grid-template-columns: 1fr;
+  }
+
+  .application-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .application-row-main {
+    padding-right: 0;
+  }
+
+  .applications-pipeline-list .application-row .approval-actions {
+    position: static;
+  }
+
+  .application-status-pill {
+    justify-self: start;
+  }
+
+  .application-event-detail {
+    padding: 18px;
+  }
+
+  .application-event-detail-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .application-event-detail-head .compact-button {
+    justify-self: start;
+  }
+
+  .application-event-detail dl > div {
+    gap: 6px;
+    grid-template-columns: 1fr;
+  }
+
+  .application-email-meta,
+  .application-email-meta p,
+  .application-email-meta p.is-subject {
+    grid-template-columns: 1fr;
+  }
+
+  .application-email-meta {
+    padding: 16px;
+  }
+
+  .application-email-full pre {
+    padding: 16px;
   }
 }

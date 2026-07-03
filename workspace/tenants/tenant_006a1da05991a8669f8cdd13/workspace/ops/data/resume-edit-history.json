@@ -1,0 +1,115 @@
+{
+  "updatedAt": "2026-06-03T00:49:23.630Z",
+  "edits": [
+    {
+      "id": "RE-mpwoas4p-1",
+      "file": "01-robotics-system-engineer.md",
+      "lineIndex": 24,
+      "before": "- 参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。",
+      "after": "- 参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与",
+      "renderBefore": "参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。",
+      "renderAfter": "参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与",
+      "changedAt": "2026-06-02T13:28:19.945Z",
+      "source": "rendered-preview"
+    },
+    {
+      "id": "RE-mpwoawng-1",
+      "file": "01-robotics-system-engineer.md",
+      "lineIndex": 24,
+      "before": "- 参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与",
+      "after": "- 参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的",
+      "renderBefore": "参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与",
+      "renderAfter": "参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的",
+      "changedAt": "2026-06-02T13:28:25.804Z",
+      "source": "rendered-preview"
+    },
+    {
+      "id": "RE-mpwoaxu1-1",
+      "file": "01-robotics-system-engineer.md",
+      "lineIndex": 24,
+      "before": "- 参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的",
+      "after": "- 参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的xie z",
+      "renderBefore": "参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的",
+      "renderAfter": "参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的xie z",
+      "changedAt": "2026-06-02T13:28:27.337Z",
+      "source": "rendered-preview"
+    },
+    {
+      "id": "RE-mpwoayul-1",
+      "file": "01-robotics-system-engineer.md",
+      "lineIndex": 24,
+      "before": "- 参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的xie z",
+      "after": "- 参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的协作",
+      "renderBefore": "参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的xie z",
+      "renderAfter": "参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的协作",
+      "changedAt": "2026-06-02T13:28:28.653Z",
+      "source": "rendered-preview"
+    },
+    {
+      "id": "RE-mpwob6z8-1",
+      "file": "01-robotics-system-engineer.md",
+      "lineIndex": 24,
+      "before": "- 参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的协作",
+      "after": "- 参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的协作解决掉关节的",
+      "renderBefore": "参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的协作",
+      "renderAfter": "参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的协作解决掉关节的",
+      "changedAt": "2026-06-02T13:28:39.188Z",
+      "source": "rendered-preview"
+    },
+    {
+      "id": "RE-mpwobbj8-1",
+      "file": "01-robotics-system-engineer.md",
+      "lineIndex": 24,
+      "before": "- 参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的协作解决掉关节的",
+      "after": "- 参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的协作解决掉关节的掉OP问题。",
+      "renderBefore": "参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的协作解决掉关节的",
+      "renderAfter": "参与多关节 EtherCAT 通信稳定性测试，围绕掉 OP、首次启动无法进入 OP、多电机 CSP 异常、0xA000 主站掉线等问题开展复现和定位。参与跨部门的协作解决掉关节的掉OP问题。",
+      "changedAt": "2026-06-02T13:28:45.092Z",
+      "source": "rendered-preview"
+    },
+    {
+      "id": "RE-mpwozcxd-1",
+      "file": "01-robotics-system-engineer.md",
+      "lineIndex": 31,
+      "before": "- 面向机器人关节客户建设统一 SDK 与示例工程，覆盖 EtherCAT、CANopen、CAN、ROS2、MoveIt、URDF 等接口。",
+      "after": "- 面向机器人关节客户建设统一 SDK 与示例工程，覆盖 EtherCAT、CANopen、CAN、ROS2、MoveIt、URDF 等接口。你好",
+      "renderBefore": "面向机器人关节客户建设统一 SDK 与示例工程，覆盖 EtherCAT、CANopen、CAN、ROS2、MoveIt、URDF 等接口。",
+      "renderAfter": "面向机器人关节客户建设统一 SDK 与示例工程，覆盖 EtherCAT、CANopen、CAN、ROS2、MoveIt、URDF 等接口。你好",
+      "changedAt": "2026-06-02T13:47:26.641Z",
+      "source": "rendered-preview"
+    },
+    {
+      "id": "RE-mpwozfcv-1",
+      "file": "01-robotics-system-engineer.md",
+      "lineIndex": 31,
+      "before": "- 面向机器人关节客户建设统一 SDK 与示例工程，覆盖 EtherCAT、CANopen、CAN、ROS2、MoveIt、URDF 等接口。你好",
+      "after": "- 面向机器人关节客户建设统一 SDK 与示例工程，覆盖 EtherCAT、CANopen、CAN、ROS2、MoveIt、URDF 等接口。",
+      "renderBefore": "面向机器人关节客户建设统一 SDK 与示例工程，覆盖 EtherCAT、CANopen、CAN、ROS2、MoveIt、URDF 等接口。你好",
+      "renderAfter": "面向机器人关节客户建设统一 SDK 与示例工程，覆盖 EtherCAT、CANopen、CAN、ROS2、MoveIt、URDF 等接口。",
+      "changedAt": "2026-06-02T13:47:29.791Z",
+      "source": "rendered-preview"
+    },
+    {
+      "id": "RE-mpxcm3dc-1",
+      "file": "01-robotics-system-engineer.md",
+      "lineIndex": 18,
+      "before": "- AI 辅助研发：Codex、Claude Code、Cursor、GPT、Manus，用于需求拆解、调试脚本、文档生成和问题复盘",
+      "after": "- ",
+      "renderBefore": "AI 辅助研发：Codex、Claude Code、Cursor、GPT、Manus，用于需求拆解、调试脚本、文档生成和问题复盘",
+      "renderAfter": "",
+      "changedAt": "2026-06-03T00:48:58.512Z",
+      "source": "rendered-preview"
+    },
+    {
+      "id": "RE-mpxcmmr2-1",
+      "file": "01-robotics-system-engineer.md",
+      "lineIndex": 18,
+      "before": "- ",
+      "after": "",
+      "renderBefore": "-",
+      "renderAfter": "",
+      "changedAt": "2026-06-03T00:49:23.630Z",
+      "source": "rendered-preview"
+    }
+  ]
+}

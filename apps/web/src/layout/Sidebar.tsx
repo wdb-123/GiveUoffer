@@ -3,6 +3,8 @@ import type { AppView, ViewId } from "../views";
 import type { LoginCredentials } from "../auth/LoginPage";
 import type { SidebarAgentConversations } from "./AppLayout";
 import { formatTaskName } from "../sections/agent/agentConversation";
+import { TenantMenu } from "./TenantMenu";
+import type { AuthSession } from "@ucareer/shared";
 
 interface SidebarProps {
   activeView: ViewId;
@@ -10,13 +12,15 @@ interface SidebarProps {
   agentConversations: SidebarAgentConversations | undefined;
   authMethod: LoginCredentials["method"];
   collapsed: boolean;
+  session: AuthSession;
+  viewBadges?: Partial<Record<ViewId, number | string>>;
   views: AppView[];
   onLogout(): void;
   onToggleCollapsed(): void;
   onViewChange(viewId: ViewId): void;
 }
 
-export function Sidebar({ activeView, accountEmail, agentConversations, authMethod, collapsed, views, onLogout, onToggleCollapsed, onViewChange }: SidebarProps) {
+export function Sidebar({ activeView, accountEmail, agentConversations, authMethod, collapsed, session, viewBadges, views, onLogout, onToggleCollapsed, onViewChange }: SidebarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [conversationExpanded, setConversationExpanded] = useState(true);
   const [deletingTaskId, setDeletingTaskId] = useState("");
@@ -26,7 +30,7 @@ export function Sidebar({ activeView, accountEmail, agentConversations, authMeth
   const accountLabel = authMethod === "google" ? "Google 登录" : "个人空间";
   const navViews = views.filter((view) => view.id !== "agent");
   const recentTasks = useMemo(
-    () => sortAgentTasksByActivity(agentConversations?.tasks || []).slice(0, 6),
+    () => sortAgentTasksByActivity(agentConversations?.tasks || []),
     [agentConversations?.tasks],
   );
 
@@ -112,6 +116,11 @@ export function Sidebar({ activeView, accountEmail, agentConversations, authMeth
               <span className="nav-item-icon" aria-hidden="true">{view.icon}</span>
               <span>{view.label}</span>
             </span>
+            {viewBadges?.[view.id] !== undefined ? (
+              <span className="nav-item-badge" aria-label={`${view.label}数量：${viewBadges[view.id]}`}>
+                {viewBadges[view.id]}
+              </span>
+            ) : null}
           </button>
         ))}
       </nav>
@@ -152,7 +161,11 @@ export function Sidebar({ activeView, accountEmail, agentConversations, authMeth
                     </button>
                     <button
                       type="button"
-                      className="nav-agent-delete"
+                      className={[
+                        "nav-agent-delete",
+                        confirmDeleteTaskId === task.id ? "is-confirming" : "",
+                        deletingTaskId === task.id ? "is-deleting" : "",
+                      ].filter(Boolean).join(" ")}
                       aria-label={confirmDeleteTaskId === task.id ? `确认删除对话：${formatTaskName(task.prompt)}` : `删除对话：${formatTaskName(task.prompt)}`}
                       disabled={Boolean(deletingTaskId)}
                       title={confirmDeleteTaskId === task.id ? "再次点击确认删除" : "删除对话"}
@@ -181,31 +194,37 @@ export function Sidebar({ activeView, accountEmail, agentConversations, authMeth
           aria-expanded={settingsOpen}
           onClick={() => setSettingsOpen((open) => !open)}
         >
-          <span className="tenant-settings-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" focusable="false">
-              <path d="M9.7 3.4 10.4 2h3.2l.7 1.4c.2.5.8.8 1.3.6l1.5-.5 2.2 2.2-.5 1.5c-.2.5.1 1.1.6 1.3l1.4.7v3.2l-1.4.7c-.5.2-.8.8-.6 1.3l.5 1.5-2.2 2.2-1.5-.5c-.5-.2-1.1.1-1.3.6l-.7 1.4h-3.2l-.7-1.4c-.2-.5-.8-.8-1.3-.6l-1.5.5-2.2-2.2.5-1.5c.2-.5-.1-1.1-.6-1.3L3 12.4V9.2l1.4-.7c.5-.2.8-.8.6-1.3l-.5-1.5 2.2-2.2 1.5.5c.7.2 1.3-.1 1.5-.6Z" />
-              <circle cx="12" cy="10.8" r="3.2" />
-            </svg>
+          <span className="tenant-settings-avatar" aria-hidden="true">
+            {accountInitial(session, accountEmail)}
           </span>
-          <span>设置</span>
+          <span className="tenant-settings-copy">
+            <strong>{session.account.displayName || accountEmail}</strong>
+            <small>{accountLabel}</small>
+          </span>
+          <span className="tenant-settings-chip">更新</span>
         </button>
         {settingsOpen ? (
-          <div className="tenant-menu" role="menu">
-            <div className="tenant-menu-header">
-              <strong>{accountEmail}</strong>
-              <span>{accountLabel}</span>
-            </div>
-            <div className="tenant-menu-group" role="presentation">
-              <button type="button" role="menuitem" onClick={onLogout}>
-                <span className="tenant-menu-icon" aria-hidden="true">↪</span>
-                <span>退出登录</span>
-              </button>
-            </div>
-          </div>
+          <TenantMenu
+            accountEmail={accountEmail}
+            onLogout={onLogout}
+            onOpenAdmin={() => {
+              onViewChange("admin");
+              setSettingsOpen(false);
+            }}
+            onOpenProfile={() => {
+              onViewChange("resumes");
+              setSettingsOpen(false);
+            }}
+          />
         ) : null}
       </section>
     </aside>
   );
+}
+
+function accountInitial(session: AuthSession, fallback: string): string {
+  const label = session.account.displayName || session.account.email || fallback || "?";
+  return label.trim().slice(0, 1).toUpperCase();
 }
 
 function sortAgentTasksByActivity<T extends { createdAt: string; updatedAt: string }>(tasks: T[]): T[] {

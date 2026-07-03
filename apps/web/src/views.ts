@@ -1,4 +1,4 @@
-export type ViewId = "resumes" | "experience" | "market" | "applications" | "evidence" | "agent";
+export type ViewId = "resumes" | "experience" | "market" | "applications" | "evidence" | "admin" | "agent";
 
 export interface AppView {
   id: ViewId;
@@ -13,4 +13,5 @@ export const views: AppView[] = [
   { id: "market", label: "岗位列表", icon: "⌕" },
   { id: "applications", label: "投递进度", icon: "↗" },
   { id: "evidence", label: "复盘中心", icon: "◎" },
+  { id: "admin", label: "管理员设置", icon: "▣" },
 ];

@@ -1,16 +1,23 @@
+import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { basename, extname, resolve } from "node:path";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, extname, join, resolve } from "node:path";
+import { promisify } from "node:util";
 import type { AgentAttachment, AgentAttachmentKind, ParsedAttachment, UploadAgentAttachmentRequest } from "@ucareer/shared";
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
 import { isInsideDir } from "../path-guards";
+import { workspaceDataPath } from "../workspace-paths";
 
+const execFileAsync = promisify(execFile);
 const maxUploadBytes = 12 * 1024 * 1024;
 const maxParsedTextChars = 24_000;
 const attachmentInboxFolder = "inbox";
+const defaultTesseractDataDir = "/opt/homebrew/share/tessdata";
 
 export function createAttachmentParserService(workspaceRoot: string) {
-  const attachmentsDir = resolve(workspaceRoot, "workspace/ops/imports/agent-attachments");
+  const attachmentsDir = workspaceDataPath(workspaceRoot, "agentAttachments");
   mkdirSync(attachmentsDir, { recursive: true });
 
   return {
@@ -87,14 +94,21 @@ async function parseAttachment(input: {
     return parsedText(input.kind, input.buffer.toString("utf8"), { fileName: input.fileName });
   }
   if (input.kind === "image") {
+    const ocr = await extractImageText(input);
     return {
       kind: "image",
-      text: "",
-      summary: `图片附件：${input.fileName}。当前入口层已安全保存图片；OCR/视觉理解将在后续视觉解析器中接入。`,
+      text: ocr.text,
+      summary: ocr.text
+        ? `图片 OCR：${summarizeText(ocr.text)}`
+        : `图片附件：${input.fileName}。${ocr.message}`,
       metadata: {
         fileName: input.fileName,
         mimeType: input.mimeType,
         sizeBytes: input.buffer.byteLength,
+        ocrEngine: "tesseract",
+        ocrStatus: ocr.status,
+        ocrLanguages: ocr.languages.join("+"),
+        ocrMessage: ocr.message,
       },
     };
   }
@@ -108,6 +122,89 @@ async function parseAttachment(input: {
       sizeBytes: input.buffer.byteLength,
     },
   };
+}
+
+async function extractImageText(input: { buffer: Buffer; fileName: string }): Promise<{
+  text: string;
+  status: "ok" | "empty" | "unavailable" | "failed";
+  message: string;
+  languages: string[];
+}> {
+  const tesseractPath = findTesseractPath();
+  if (!tesseractPath) {
+    return {
+      text: "",
+      status: "unavailable",
+      message: "本机未找到 tesseract，暂不能自动 OCR。可安装 tesseract 后重试。",
+      languages: [],
+    };
+  }
+
+  const workDir = await mkdtemp(join(tmpdir(), "ucareer-ocr-"));
+  const imagePath = join(workDir, sanitizeFileName(input.fileName) || "image.png");
+  const languages = resolveTesseractLanguages();
+  try {
+    await writeFile(imagePath, input.buffer);
+    const { stdout } = await execFileAsync(
+      tesseractPath,
+      [imagePath, "stdout", "-l", languages.join("+"), "--psm", "6"],
+      { timeout: 30_000, maxBuffer: 1024 * 1024 },
+    );
+    const text = normalizeOcrText(stdout).slice(0, maxParsedTextChars);
+    if (!text) {
+      return {
+        text: "",
+        status: "empty",
+        message: languages.some((language) => language.startsWith("chi_"))
+          ? "OCR 未识别出文字。请确认截图清晰度、字体大小和对比度。"
+          : "OCR 未识别出文字。当前仅启用 eng/snum 语言包；中文截图需要安装 chi_sim/chi_tra 语言包后重试。",
+        languages,
+      };
+    }
+    return {
+      text,
+      status: "ok",
+      message: "OCR 已完成。",
+      languages,
+    };
+  } catch (error) {
+    return {
+      text: "",
+      status: "failed",
+      message: error instanceof Error ? `OCR 失败：${error.message}` : "OCR 失败。",
+      languages,
+    };
+  } finally {
+    await rm(workDir, { recursive: true, force: true });
+  }
+}
+
+function normalizeOcrText(value: string): string {
+  return value
+    .replace(/\u0000/g, "")
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+function findTesseractPath(): string | null {
+  const candidates = [
+    process.env.TESSERACT_PATH,
+    "/opt/homebrew/bin/tesseract",
+    "/usr/local/bin/tesseract",
+    "/usr/bin/tesseract",
+    "tesseract",
+  ].filter(Boolean) as string[];
+  return candidates.find((candidate) => candidate.includes("/") ? existsSync(candidate) : true) || null;
+}
+
+function resolveTesseractLanguages(): string[] {
+  const dataDir = process.env.TESSDATA_PREFIX || defaultTesseractDataDir;
+  const candidates = ["chi_sim", "chi_tra", "eng", "snum"];
+  const available = candidates.filter((language) => existsSync(resolve(dataDir, `${language}.traineddata`)));
+  return available.length ? available : ["eng"];
 }
 
 function parsedText(kind: AgentAttachmentKind, rawText: string, metadata: ParsedAttachment["metadata"]): ParsedAttachment {

@@ -18,11 +18,14 @@
     "latex": "node scripts/cli/generate-latex.mjs",
     "daemon": "npm --workspace @ucareer/daemon run dev",
     "daemon:api": "npm --workspace @ucareer/daemon run dev",
+    "daemon:python": "PYTHONPATH=apps/py-daemon/src python3 -m ucareer_py_daemon",
+    "daemon:python:test": "PYTHONPATH=apps/py-daemon/src python3 -m unittest discover apps/py-daemon/tests",
     "dev:ucareer": "node scripts/dev/dev-ucareer.mjs",
     "api": "npm --workspace @ucareer/api run dev",
     "web": "npm --workspace @ucareer/web run dev",
     "web:build": "npm --workspace @ucareer/web run build",
     "web:responsive": "node scripts/dev/responsive-audit.mjs",
+    "workspace:audit": "node scripts/cli/audit-workspace-boundary.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "sync-check": "node scripts/cli/cv-sync-check.mjs",
     "liveness": "node scripts/cli/check-liveness.mjs",
@@ -33,6 +36,7 @@
     "analyze:china-market": "node scripts/research/analyze-market-clusters.mjs",
     "patterns": "node scripts/cli/analyze-patterns.mjs",
     "gemini:eval": "node scripts/cli/gemini-eval.mjs",
+    "test:unit": "node --import tsx --test apps/**/*.test.ts packages/**/*.test.ts",
     "test:all": "node scripts/cli/test-all.mjs"
   },
   "keywords": [

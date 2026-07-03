@@ -1,0 +1,92 @@
+{
+  "updatedAt": "2026-06-05T05:56:16.565Z",
+  "engine": "codex-llm",
+  "promptVersion": "experience-profile-v1",
+  "profile": {
+    "headline": "具备机器人关节软件、工业通信与企业级 RAG 知识系统经验的机器人软件 / AI 工程候选人",
+    "summary": "根据导入的项目事实卡片，用户经历集中在 eRob 机器人关节模组的软件接入、EtherCAT / CANopen 等工业通信稳定性、机器人多模态数据 Pipeline，以及售前售后知识问答 RAG 系统。已有材料显示其能力覆盖机器人底层通信、ROS2 / MoveIt / URDF、知识库治理、检索评测与工程化交付，但多个项目的具体角色、实现细节、证明材料和业务结果仍待补充。职业意向偏好为空，因此岗位筛选只能基于项目经历做初步推荐，不能推断城市、薪资、行业偏好或工作方式。",
+    "persona": [
+      "机器人关节模组软件与通信协议方向候选人",
+      "具备 EtherCAT、CANopen、CAN、CiA402、PDO / SDO 等工业通信相关项目背景",
+      "具备企业级 RAG / Agent 知识问答系统从 0 到 1 建设经历",
+      "关注工程稳定性、客户问题闭环和售前售后知识沉淀",
+      "具备机器人数据基建、数据清洗、质检、版本管理方向的延展潜力"
+    ],
+    "fitRoles": [
+      "机器人软件工程师",
+      "机器人控制 / 运动控制软件工程师",
+      "EtherCAT / 工业通信工程师",
+      "ROS2 / MoveIt 工程师",
+      "具身智能数据工程师",
+      "AI 应用工程师 / RAG 工程师",
+      "售前售后技术支持工程师（机器人 / 工业自动化方向）",
+      "开发者生态 / SDK 工程师"
+    ],
+    "resumeFocus": [
+      "突出 eRob 机器人关节通信 SDK 与开源生态建设经历",
+      "突出 EtherCAT、CANopen、CAN、CiA402、PDO / SDO、SOEM、IGH EtherCAT 等工业通信关键词",
+      "突出多关节 EtherCAT 稳定性测试、掉 OP、首次启动失败、多电机 CSP 异常等问题排查经验",
+      "突出 ZeroErr GPT / TechChat 企业级 RAG 系统的知识治理、检索、重排、Evidence API、评测集和失败样本回流方向",
+      "突出已知量化结果：SDK 周下载量 50+、月均下载量约 240、RAG 标准测试集约 1000 条、Top-10 召回率约 98.0%",
+      "突出机器人多模态数据集 Pipeline 中 ROS bag / MCAP、图像视频、轨迹、状态、动作、日志、质检和版本管理能力",
+      "避免写未证实的头衔，如项目负责人、核心开发、系统负责人，除非后续补充证据"
+    ],
+    "gaps": [
+      "缺少明确职业意向：目标岗位、目标行业、城市、远程 / 现场偏好、薪资范围和禁忌项均未提供",
+      "多个项目缺少用户真实角色确认，例如负责人、核心开发、参与者、开源维护或客户闭环角色",
+      "缺少 eRob SDK 的 GitHub 链接、文档链接、Demo 截图、下载量截图和客户反馈证明",
+      "缺少 EtherCAT 稳定性测试的主站、从站数量、控制周期、网卡、实时内核、错误码、日志和定位结论",
+      "缺少机器人多模态数据 Pipeline 的样本量、字段、质检规则、版本数量、报告样例和仓库证明",
+      "缺少 ZeroErr GPT / TechChat 的系统截图、架构图、评测报告、API 文档、部署记录和使用人群数据",
+      "缺少各项目的可公开程度说明，无法判断哪些内容可写入简历、哪些只能面试口述",
+      "缺少完整教育、工作经历、公司任职时间、职位名称和核心成果列表"
+    ],
+    "reasoning": [
+      "根据 eRob SDK 项目覆盖 EtherCAT、CANopen、CAN、ROS2、MoveIt、URDF、Demo 和开发者文档，判断用户适合机器人软件、工业通信和 SDK 工程岗位。",
+      "根据 eRob SDK 项目已记录周下载量 50+、月均下载量约 240，判断该项目具备可量化的开源或开发者使用证据，可作为简历重点。",
+      "根据 EtherCAT 掉 OP 项目涉及 SOEM、IGH EtherCAT、CiA402、PDO / SDO、DC Sync、SM Sync、Linux RT 和 1kHz 控制周期，判断用户具备多关节实时通信稳定性问题的项目接触经验。",
+      "根据 ZeroErr GPT / TechChat 项目从产品手册、通信协议、FAQ、售后经验、表格和图片资料构建统一知识入口，判断用户具备企业知识库治理和 RAG 应用工程经验。",
+      "根据 ZeroErr GPT / TechChat 项目记录标准测试集约 1000 条、Top-10 召回率约 98.0%，判断该项目已有较强的检索评测证据，可优先写入简历。",
+      "根据机器人多模态数据集 Pipeline Demo 覆盖 ROS bag / MCAP、图像视频、轨迹、状态、动作、日志、DVC、MinIO、Label Studio、CVAT、PyTorch Dataset / DataLoader，判断用户可延展到具身智能数据基建岗位。",
+      "根据项目文件中多处标注“待补充”，判断当前画像应保守表达为项目背景和方向能力，不能直接写成已担任负责人或已完成全部实现。",
+      "根据职业意向偏好为空，判断不能推断用户的城市、薪资、行业偏好、工作方式或禁忌项，只能给出基于经历的初步岗位适配。"
+    ],
+    "tags": [
+      "机器人软件",
+      "机器人关节模组",
+      "EtherCAT",
+      "CANopen",
+      "CAN",
+      "CiA402",
+      "PDO / SDO",
+      "SOEM",
+      "IGH EtherCAT",
+      "ROS2",
+      "MoveIt",
+      "URDF",
+      "RAG",
+      "FastAPI",
+      "向量检索",
+      "机器人数据集"
+    ],
+    "categories": [
+      "机器人与工业通信",
+      "AI 应用与知识工程",
+      "SDK 与开发者生态",
+      "稳定性测试与问题排查",
+      "机器人数据基建"
+    ],
+    "evidence": [
+      "eRob 机器人关节通信 SDK 覆盖 EtherCAT、CANopen、CAN、ROS2 / MoveIt / URDF 等方向。",
+      "eRob SDK 项目记录周下载量 50+、月均下载量约 240。",
+      "eRob SDK 项目可表达为沉淀设备初始化、CiA402 状态机、控制模式切换、PDO / SDO 通信和故障处理等可复用工程能力。",
+      "EtherCAT 稳定性测试项目围绕多关节场景中的偶发掉 OP、首次启动无法进入 OP、主站掉线、多电机 CSP 异常问题展开。",
+      "EtherCAT 稳定性测试涉及 SOEM / IGH 主站、DC 同步、SM 同步、CiA402 状态机、实时 Linux 和多从站调度。",
+      "ZeroErr GPT / TechChat 项目目标是将产品手册、通信协议、FAQ、售后经验、表格和图片资料治理为统一知识入口。",
+      "ZeroErr GPT / TechChat 项目记录标准测试集规模约 1000 条，Top-10 召回率约 98.0%。",
+      "ZeroErr GPT / TechChat 项目技术栈包括 Python / FastAPI、OpenAI-compatible API、向量检索、重排模型、OpenWebUI / Dify / LangChain、vLLM / Qwen / DeepSeek。",
+      "机器人多模态数据集 Pipeline Demo 覆盖机器人运行日志、状态、轨迹、图像 / 视频等数据的清洗、质检、版本管理与统计报告生成。",
+      "职业照资产已导入，可作为简历资料完整度参考，但不用于职业能力或敏感属性判断。"
+    ]
+  }
+}

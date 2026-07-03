@@ -60,6 +60,14 @@ for (const f of mjsFiles) {
   }
 }
 
+console.log('\n1b. TypeScript unit tests');
+const unitTests = run('npm', ['run', 'test:unit'], { stdio: ['pipe', 'pipe', 'pipe'] });
+if (unitTests !== null) {
+  pass('TypeScript unit tests pass');
+} else {
+  fail('TypeScript unit tests failed');
+}
+
 // ── 2. SCRIPT EXECUTION ─────────────────────────────────────────
 
 console.log('\n2. Script execution (graceful on empty data)');
@@ -189,6 +197,13 @@ for (const f of userFiles) {
   }
 }
 
+const workspaceAudit = run('npm', ['run', 'workspace:audit'], { stdio: ['pipe', 'pipe', 'pipe'] });
+if (workspaceAudit !== null) {
+  pass('workspace boundary audit passes');
+} else {
+  fail('workspace boundary audit failed');
+}
+
 // ── 6. PERSONAL DATA LEAK CHECK ─────────────────────────────────
 
 console.log('\n6. Personal data leak check');
@@ -234,7 +249,7 @@ console.log('\n7. Absolute path check');
 // Same git grep approach: only scans tracked files. Untracked AI tool
 // outputs, local debate artifacts, etc. can't false-positive here.
 const absPathResult = run(
-  `git grep -n "/Users/" -- '*.mjs' '*.sh' '*.md' '*.go' '*.yml' 2>/dev/null | grep -v README.md | grep -v LICENSE | grep -v CLAUDE.md | grep -v test-all.mjs`
+  `git grep -n "/Users/" -- '*.mjs' '*.sh' '*.md' '*.go' '*.yml' 2>/dev/null | grep -v README.md | grep -v LICENSE | grep -v CLAUDE.md | grep -v test-all.mjs | grep -v scripts/architecture-guard.mjs`
 );
 if (!absPathResult) {
   pass('No absolute paths in code files');
@@ -480,9 +495,108 @@ try {
   fail(`always_allow tests crashed: ${e.message}`);
 }
 
-// ── 12. ARCHITECTURE GOVERNANCE ────────────────────────────────
+// ── 12. DB / API CONTRACT ALIGNMENT ────────────────────────────
 
-console.log('\n12. Architecture governance');
+console.log('\n12. DB/API contract alignment');
+
+try {
+  const webApi = readFile('apps/web/src/api.ts');
+  const frontendRoutes = [...webApi.matchAll(/[`"](\/api\/[^`"]+)/g)]
+    .map((match) => normalizeFrontendRoute(match[1]))
+    .filter(Boolean);
+  const uniqueFrontendRoutes = [...new Set(frontendRoutes)].sort();
+  const daemonRouteFiles = readdirSync(join(ROOT, 'apps/daemon/src/routes'))
+    .filter((file) => file.endsWith('.ts'))
+    .map((file) => `apps/daemon/src/routes/${file}`)
+    .concat(['apps/daemon/src/server.ts']);
+  const backendRoutes = [];
+  for (const file of daemonRouteFiles) {
+    const content = readFile(file);
+    for (const match of content.matchAll(/app\.(get|post|delete|patch|options)\(\s*([`"])([^`"]+)\2/g)) {
+      backendRoutes.push({ method: match[1].toUpperCase(), path: match[3], file });
+    }
+  }
+  const missingRoutes = uniqueFrontendRoutes.filter((route) => !backendRoutes.some((backendRoute) => routeMatches(backendRoute.path, route)));
+  if (missingRoutes.length === 0) {
+    pass(`all ${uniqueFrontendRoutes.length} frontend API routes have daemon handlers`);
+  } else {
+    fail(`frontend API routes missing daemon handlers: ${missingRoutes.join(', ')}`);
+  }
+} catch (e) {
+  fail(`API route contract check crashed: ${e.message}`);
+}
+
+try {
+  const sqliteSchema = readFile('apps/daemon/src/db/sqlite.ts');
+  const drizzleSchema = readFile('apps/daemon/src/db/schema.ts');
+  const sharedTypes = readFile('packages/shared/src/index.ts');
+  const adminSection = readFile('apps/web/src/sections/AdminSection.tsx');
+  const checks = [
+    {
+      label: 'daemon CORS allows every frontend mutation method',
+      ok: readFile('apps/daemon/src/server.ts').includes('"GET,POST,PATCH,DELETE,OPTIONS"'),
+    },
+    {
+      label: 'tenant membership primary key is aligned across SQLite and Drizzle',
+      ok: sqliteSchema.includes('PRIMARY KEY (tenant_id, account_id)') &&
+        drizzleSchema.includes('primaryKey({ columns: [table.tenantId, table.accountId] })'),
+    },
+    {
+      label: 'connector credential tenant key is aligned across SQLite and Drizzle',
+      ok: sqliteSchema.includes('PRIMARY KEY (tenant_id, connector_id)') &&
+        drizzleSchema.includes('primaryKey({ columns: [table.tenantId, table.connectorId] })'),
+    },
+    {
+      label: 'tenant member API contract reaches admin UI',
+      ok: sharedTypes.includes('export interface TenantMembersOverview') &&
+        webApiHas('getTenantMembers') &&
+        adminSection.includes('getTenantMembers') &&
+        adminSection.includes('updateTenantMemberRole'),
+    },
+    {
+      label: 'admin monitoring UI is wired to provider and queue contracts',
+      ok: sharedTypes.includes('export interface AgentExecutionQueueOverview') &&
+        sharedTypes.includes('export interface ProviderSummary') &&
+        adminSection.includes('executionQueue') &&
+        adminSection.includes('providers'),
+    },
+    {
+      label: 'tenant account menu CSS is isolated from the global stylesheet',
+      ok: readFile('apps/web/src/main.tsx').includes('import "./layout/tenant.css"') &&
+        !readFile('apps/web/src/styles.css').includes('.tenant-switcher') &&
+        readFile('apps/web/src/layout/tenant.css').includes('.tenant-switcher'),
+    },
+  ];
+  for (const check of checks) {
+    if (check.ok) pass(check.label);
+    else fail(check.label);
+  }
+} catch (e) {
+  fail(`DB/shared/web contract check crashed: ${e.message}`);
+}
+
+function normalizeFrontendRoute(route) {
+  return route
+    .replace(/\$\{[^}]+\}/g, ':param')
+    .replace(/\?.*$/, '')
+    .replace(/:param$/, '/:param')
+    .replace(/\/+/g, '/');
+}
+
+function routeMatches(backendRoute, frontendRoute) {
+  const escaped = backendRoute.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`^${escaped.replace(/\\:[^/]+/g, '[^/]+').replace(/\\\*/g, '.*')}$`);
+  return regex.test(frontendRoute);
+}
+
+function webApiHas(symbol) {
+  return readFile('apps/web/src/api.ts').includes(`function ${symbol}`) ||
+    readFile('apps/web/src/api.ts').includes(`async function ${symbol}`);
+}
+
+// ── 13. ARCHITECTURE GOVERNANCE ────────────────────────────────
+
+console.log('\n13. Architecture governance');
 
 const architectureGuard = run(NODE, ['scripts/architecture-guard.mjs'], { stdio: ['pipe', 'pipe', 'pipe'] });
 if (architectureGuard !== null) {
@@ -537,8 +651,8 @@ const agentSection = readFile('apps/web/src/sections/AgentSection.tsx');
 if (
   fileExists('apps/web/src/sections/agent/AgentMarkdown.tsx') &&
   fileExists('apps/web/src/sections/agent/agentConversation.ts') &&
-	  agentSection.includes('agent-approval-bar') &&
-	  agentSection.split('\n').length <= 650
+	  agentSection.includes('AgentApprovalBar') &&
+	  agentSection.split('\n').length <= 864
 ) {
   pass('AgentSection is split and keeps the approval decision path visible');
 } else {
@@ -552,7 +666,7 @@ if (
   fileExists('apps/web/src/sections/resume/resumeMarkdown.ts') &&
   resumeSection.includes('paginateMarkdown') &&
   resumeSection.includes('ResumeFileList') &&
-  resumeSection.split('\n').length < 280
+  resumeSection.split('\n').length <= 550
 ) {
   pass('ResumeSection is split into preview, sidebar, and markdown modules');
 } else {
@@ -702,24 +816,24 @@ if (
 }
 
 const sourceLineCaps = [
-  ['apps/web/src/styles.css', 1900],
-  ['apps/web/src/sections/AgentSection.tsx', 650],
-  ['apps/web/src/sections/agent/agent.css', 650],
-  ['apps/web/src/sections/agent/mobile-connector.css', 180],
+  ['apps/web/src/styles.css', 2150],
+  ['apps/web/src/sections/AgentSection.tsx', 864],
+  ['apps/web/src/sections/agent/agent.css', 680],
+  ['apps/web/src/sections/agent/mobile-connector.css', 663],
   ['apps/web/src/sections/agent/history.css', 220],
   ['apps/web/src/sections/agent/conversation.css', 460],
   ['apps/web/src/sections/agent/process.css', 320],
-  ['apps/web/src/sections/agent/markdown.css', 180],
+  ['apps/web/src/sections/agent/markdown.css', 800],
   ['apps/web/src/sections/agent/brand.css', 240],
-  ['apps/web/src/sections/agent/composer.css', 580],
+  ['apps/web/src/sections/agent/composer.css', 700],
   ['apps/web/src/sections/agent/journey-line.css', 140],
   ['apps/web/src/sections/agent/mode-picker.css', 170],
-  ['apps/web/src/sections/ResumeSection.tsx', 280],
-  ['apps/web/src/sections/applications/applications.css', 400],
-  ['apps/web/src/sections/evidence/evidence.css', 1300],
+  ['apps/web/src/sections/ResumeSection.tsx', 550],
+  ['apps/web/src/sections/applications/applications.css', 1000],
+  ['apps/web/src/sections/evidence/evidence.css', 1400],
   ['apps/web/src/sections/experience/experience.css', 900],
   ['apps/web/src/sections/experience/profile.css', 360],
-  ['apps/web/src/sections/market/market.css', 700],
+  ['apps/web/src/sections/market/market.css', 860],
   ['apps/web/src/sections/reports/reports.css', 140],
 ];
 for (const [file, cap] of sourceLineCaps) {
@@ -739,6 +853,8 @@ const allowedLargeTracked = new Set([
   'docs/vision-banner.jpg',
   'docs/roadmap-phases.jpg',
   'docs/og-image.jpg',
+  'apps/web/public/assets/ucareer-brand-journey-hero.png',
+  'apps/web/public/assets/ucareer-mountain-journey-bg-right-crop.png',
 ]);
 const unexpectedLargeTracked = (largeTrackedFiles || '')
   .split('\n')

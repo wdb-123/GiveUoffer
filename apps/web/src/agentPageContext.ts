@@ -61,8 +61,8 @@ function buildResumeContext(input: AgentPageContextInput): AgentPageContext {
     suggestedInputKind: "resume_request",
     summary: `当前共有 ${input.resumes.data.length} 份简历；${selected ? `选中「${selected.title}」` : "未选中具体简历"}。`,
     ...(selected ? { selectedEntity: { type: "resume", title: selected.title, file: selected.file, path: `workspace/resumes/library/${selected.file}` } } : {}),
-    readPaths: ["workspace/profile/cv.md", "workspace/resumes/library", "workspace/resumes/source"],
-    writePaths: ["workspace/resumes/library", "workspace/resumes/source", "workspace/resumes/rendered", "workspace/ops/exports"],
+    readPaths: ["workspace/profile/cv.md", "workspace/resumes/library", "workspace/resumes/source", "workspace/resumes/diagnostics"],
+    writePaths: ["workspace/resumes/library", "workspace/resumes/source", "workspace/resumes/rendered", "workspace/resumes/diagnostics", "workspace/ops/exports"],
     capabilities: ["read", "write", "generate", "diagnose"],
   };
 }
@@ -99,7 +99,7 @@ function buildMarketContext(input: AgentPageContextInput): AgentPageContext {
 }
 
 function buildApplicationsContext(input: AgentPageContextInput): AgentPageContext {
-  const applications = input.applications?.applications || [];
+  const applications = (input.applications?.applications || []).filter(isActiveApplicationProgress);
   const latest = applications.find((application) => application.latestEvent) || applications[0];
   return {
     pageId: "applications",
@@ -114,6 +114,10 @@ function buildApplicationsContext(input: AgentPageContextInput): AgentPageContex
   };
 }
 
+function isActiveApplicationProgress(application: ApplicationsOverview["applications"][number]): boolean {
+  return new Set(["applied", "responded", "interview", "offer", "rejected"]).has(application.statusKey);
+}
+
 function buildEvidenceContext(input: AgentPageContextInput): AgentPageContext {
   const requests = input.evidence?.requests || [];
   const activeRequest = requests.find((request) => request.status !== "done") || requests[0];
@@ -122,10 +126,10 @@ function buildEvidenceContext(input: AgentPageContextInput): AgentPageContext {
     pageLabel: "复盘中心",
     suggestedSkillId: "outcome.learn",
     suggestedInputKind: "outcome_feedback",
-    summary: `当前有 ${requests.length} 个复盘/证据请求；${activeRequest ? `优先处理「${activeRequest.gap}」。` : "暂无待处理证据请求。"}`,
+    summary: `复盘中心是自由笔记页面。用户要求记录/保存复盘时，优先调用 evidence.note 写入复盘记录；当前有 ${requests.length} 条记录。${activeRequest ? `最近记录「${activeRequest.direction || activeRequest.gap}」。` : "暂无记录。"}`,
     ...(activeRequest ? { selectedEntity: { type: "evidence_request", id: activeRequest.id, title: activeRequest.gap, path: activeRequest.targetFile } } : {}),
-    readPaths: ["workspace/ops/data/applications.md", "workspace/jobs/reports", "workspace/profile/article-digest.md"],
-    writePaths: ["workspace/profile/_profile.md", "workspace/profile/profile.yml", "workspace/profile/article-digest.md", "workspace/ops/exports"],
+    readPaths: ["workspace/ops/data/evidence-requests.json", "workspace/jobs/project-notes/evidence.md", "workspace/ops/data/applications.md", "workspace/jobs/reports", "workspace/profile/article-digest.md"],
+    writePaths: ["workspace/jobs/project-notes/evidence.md", "workspace/ops/data/evidence-requests.json", "workspace/profile/_profile.md", "workspace/profile/profile.yml", "workspace/profile/article-digest.md", "workspace/ops/exports"],
     capabilities: ["read", "write", "diagnose", "sync"],
   };
 }

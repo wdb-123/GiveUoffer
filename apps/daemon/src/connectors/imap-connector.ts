@@ -1,6 +1,9 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { basename, join, relative } from "node:path";
 import { connect, type TLSSocket } from "node:tls";
 import type {
   ConnectorProtocolConfig,
+  EmailAttachmentSummary,
   EmailMessageSummary,
   ImportEmailMessagesRequest,
   ImportEmailMessagesResult,
@@ -97,6 +100,65 @@ export async function importQqEmailMessages(input: {
       importedAt: new Date().toISOString(),
       messages: sortMessagesByDate(messages),
     };
+  } finally {
+    session.close();
+  }
+}
+
+export async function importQqEmailAttachments(input: {
+  email: string;
+  authorizationCode: string;
+  mailbox: string;
+  uid: string;
+  outputDir: string;
+  workspaceRoot: string;
+}): Promise<EmailAttachmentSummary[]> {
+  const connector = getConnector(QQ_EMAIL_CONNECTOR_ID);
+  if (!connector?.protocol || connector.protocol.type !== "imap") {
+    throw new Error("QQ email connector is not configured for IMAP");
+  }
+
+  const email = normalizeEmail(input.email);
+  const authorizationCode = normalizeAuthorizationCode(input.authorizationCode);
+  const mailbox = normalizeMailbox(input.mailbox);
+  const uid = String(input.uid || "").trim();
+  if (!uid) throw new Error("邮件 UID 不能为空");
+
+  const session = await openImapSession(connector.protocol);
+  try {
+    await session.readGreeting();
+    const login = await session.command(`LOGIN ${quoteImapString(email)} ${quoteImapString(authorizationCode)}`);
+    if (!login.ok) throw new Error("QQ 邮箱 IMAP 登录失败，请重新检查授权码");
+
+    const select = await session.command(`SELECT ${quoteImapMailbox(mailbox)}`);
+    if (!select.ok) throw new Error(`无法打开 QQ 邮箱文件夹: ${mailbox}`);
+
+    const fetched = await session.command(`UID FETCH ${uid} (BODY.PEEK[])`);
+    await session.command("LOGOUT").catch(() => undefined);
+    if (!fetched.ok) throw new Error(`QQ 邮箱附件读取失败: ${uid}`);
+
+    const rawMessage = extractFullMessage(fetched.lines);
+    const parts = extractMimeAttachments(rawMessage);
+    if (!parts.length) return [];
+
+    await mkdir(input.outputDir, { recursive: true });
+    const written: EmailAttachmentSummary[] = [];
+    const usedFilenames = new Map<string, number>();
+    for (const [index, part] of parts.entries()) {
+      const filename = uniqueAttachmentFilename(
+        sanitizeAttachmentFilename(part.filename || `attachment-${index + 1}`),
+        usedFilenames,
+      );
+      const path = join(input.outputDir, filename);
+      await writeFile(path, part.content);
+      written.push({
+        filename,
+        contentType: part.contentType,
+        size: part.content.length,
+        path: normalizeWorkspacePath(relative(input.workspaceRoot, path)),
+      });
+    }
+    return written;
   } finally {
     session.close();
   }
@@ -209,7 +271,7 @@ async function openImapSession(config: ConnectorProtocolConfig): Promise<ImapSes
 
   socket.on("data", (chunk) => {
     for (const line of String(chunk).split(/\r?\n/)) {
-      if (line) lines.push(line);
+      lines.push(line);
     }
     pendingWake?.();
     pendingWake = undefined;
@@ -401,6 +463,150 @@ function parseFetchedMessage(input: { uid: string; mailbox: string; lines: strin
   };
 }
 
+function extractFullMessage(lines: string[]): string {
+  const joined = lines.join("\n");
+  const marker = /^.*FETCH\s+\(.*BODY\[\]\s+\{\d+\}\s*$/im;
+  const markerMatch = joined.match(marker);
+  const start = markerMatch?.index !== undefined ? joined.indexOf("\n", markerMatch.index) + 1 : joined.search(/\r?\n/);
+  const body = start > 0 ? joined.slice(start) : joined;
+  return body
+    .replace(/\n\)\s*$/i, "")
+    .replace(/\nuc\d+\s+OK[\s\S]*$/i, "")
+    .trim();
+}
+
+interface ParsedAttachmentPart {
+  filename: string;
+  contentType: string;
+  content: Buffer;
+}
+
+function extractMimeAttachments(rawMessage: string): ParsedAttachmentPart[] {
+  const parsed = parseMimeEntity(rawMessage);
+  return parsed.attachments.length ? parsed.attachments : extractAttachmentBlocksLoosely(rawMessage);
+}
+
+function parseMimeEntity(raw: string): { headers: Record<string, string>; attachments: ParsedAttachmentPart[] } {
+  const { headers, body } = splitMimeHeaders(raw);
+  const contentType = headers["content-type"] || "";
+  const boundary = readHeaderParameter(contentType, "boundary");
+  if (boundary) {
+    return {
+      headers,
+      attachments: splitMultipartBody(body, boundary).flatMap((part) => parseMimeEntity(part).attachments),
+    };
+  }
+
+  const disposition = headers["content-disposition"] || "";
+  const filename = decodeMimeHeader(
+    readHeaderParameter(disposition, "filename")
+      || readHeaderParameter(contentType, "name")
+      || "",
+  );
+  const isAttachment = /attachment/i.test(disposition) || Boolean(filename);
+  if (!isAttachment) return { headers, attachments: [] };
+  return {
+    headers,
+    attachments: [{
+      filename: filename || "attachment",
+      contentType: contentType.split(";")[0]?.trim() || "application/octet-stream",
+      content: decodeAttachmentBody(body, headers["content-transfer-encoding"] || ""),
+    }],
+  };
+}
+
+function splitMimeHeaders(raw: string): { headers: Record<string, string>; body: string } {
+  const normalized = raw.replace(/\r\n/g, "\n");
+  const splitAt = normalized.indexOf("\n\n");
+  const headerText = splitAt >= 0 ? normalized.slice(0, splitAt) : "";
+  const body = splitAt >= 0 ? normalized.slice(splitAt + 2) : normalized;
+  const unfolded = headerText.replace(/\n[ \t]+/g, " ");
+  const headers: Record<string, string> = {};
+  for (const line of unfolded.split("\n")) {
+    const index = line.indexOf(":");
+    if (index <= 0) continue;
+    headers[line.slice(0, index).trim().toLowerCase()] = line.slice(index + 1).trim();
+  }
+  return { headers, body };
+}
+
+function splitMultipartBody(body: string, boundary: string): string[] {
+  const delimiter = `--${boundary}`;
+  return body
+    .split(delimiter)
+    .slice(1)
+    .map((part) => part.replace(/^\s*\n/, "").replace(/\n--\s*$/, "").trim())
+    .filter((part) => part && part !== "--");
+}
+
+function extractAttachmentBlocksLoosely(rawMessage: string): ParsedAttachmentPart[] {
+  return rawMessage
+    .replace(/\r\n/g, "\n")
+    .split(/\n--[^\n]+/g)
+    .flatMap((block) => {
+      if (!/content-disposition:\s*attachment/i.test(block)) return [];
+      const { headers, body } = splitMimeHeaders(block.trim());
+      const contentType = headers["content-type"] || "";
+      const disposition = headers["content-disposition"] || "";
+      const filename = decodeMimeHeader(
+        readHeaderParameter(disposition, "filename")
+          || readHeaderParameter(contentType, "name")
+          || "attachment",
+      );
+      return [{
+        filename,
+        contentType: contentType.split(";")[0]?.trim() || "application/octet-stream",
+        content: decodeAttachmentBody(body, headers["content-transfer-encoding"] || ""),
+      }];
+    });
+}
+
+function readHeaderParameter(value: string, parameter: string): string {
+  const pattern = new RegExp(`${parameter}\\*?=(?:"([^"]+)"|([^;]+))`, "i");
+  const match = value.match(pattern);
+  const raw = (match?.[1] || match?.[2] || "").trim();
+  const rfc5987 = raw.match(/^([^']*)''(.+)$/);
+  if (rfc5987?.[2]) return decodeURIComponentSafe(rfc5987[2]);
+  return raw;
+}
+
+function decodeAttachmentBody(value: string, encoding: string): Buffer {
+  const normalizedEncoding = encoding.trim().toLowerCase();
+  if (normalizedEncoding === "base64") {
+    return Buffer.from(value.replace(/\s+/g, ""), "base64");
+  }
+  if (normalizedEncoding === "quoted-printable") {
+    return Buffer.from(decodeQuotedPrintableUtf8(value), "utf8");
+  }
+  return Buffer.from(value.replace(/\n\)\s*$/g, ""), "utf8");
+}
+
+function sanitizeAttachmentFilename(value: string): string {
+  const name = basename(decodeURIComponentSafe(value).replace(/[\\/:*?"<>|\u0000-\u001F]/g, "_")).trim();
+  return name || "attachment";
+}
+
+function uniqueAttachmentFilename(filename: string, used: Map<string, number>): string {
+  const count = used.get(filename) || 0;
+  used.set(filename, count + 1);
+  if (!count) return filename;
+  const dot = filename.lastIndexOf(".");
+  if (dot > 0) return `${filename.slice(0, dot)}-${count + 1}${filename.slice(dot)}`;
+  return `${filename}-${count + 1}`;
+}
+
+function normalizeWorkspacePath(value: string): string {
+  return value.replace(/\\/g, "/");
+}
+
+function decodeURIComponentSafe(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 function sortMessagesByDate(messages: EmailMessageSummary[]): EmailMessageSummary[] {
   return [...messages].sort((left, right) => {
     const rightTime = Date.parse(right.date);
@@ -425,13 +631,64 @@ function extractBodySnippet(raw: string): string {
 }
 
 function cleanSnippet(value: string, maxLength = 800): string {
-  return decodeMimeHeader(value)
+  return decodeBodyText(decodeMimeHeader(value))
     .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_match, code) => String.fromCharCode(Number(code)))
     .replace(/=\r?\n/g, "")
-    .replace(/=([A-Fa-f0-9]{2})/g, (_, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
+    .replace(/=([A-Fa-f0-9]{2})/g, (_match, hex) => Buffer.from([Number.parseInt(hex, 16)]).toString("utf8"))
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, maxLength);
+}
+
+function decodeBodyText(value: string): string {
+  const text = String(value || "").trim();
+  const decodedBase64 = decodeLikelyBase64Body(text);
+  if (decodedBase64) return decodedBase64;
+  return decodeQuotedPrintableUtf8(text);
+}
+
+function decodeLikelyBase64Body(value: string): string {
+  const compact = value
+    .replace(/^Content-[^\n]+\n?/gim, "")
+    .replace(/--[^\s]+/g, " ")
+    .replace(/\s+/g, "");
+  if (compact.length < 80 || compact.length % 4 === 1) return "";
+  if (!/^[A-Za-z0-9+/=]+$/.test(compact)) return "";
+  try {
+    const decoded = Buffer.from(compact, "base64").toString("utf8");
+    if (!decoded || decoded.length < 20) return "";
+    if (!/[<>\u4e00-\u9fa5A-Za-z]{12,}/.test(decoded)) return "";
+    return decoded;
+  } catch {
+    return "";
+  }
+}
+
+function decodeQuotedPrintableUtf8(value: string): string {
+  if (!/=([A-Fa-f0-9]{2})/.test(value)) return value;
+  const bytes: number[] = [];
+  const output: string[] = [];
+  const flush = () => {
+    if (!bytes.length) return;
+    output.push(Buffer.from(bytes).toString("utf8"));
+    bytes.length = 0;
+  };
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === "=" && /[A-Fa-f0-9]{2}/.test(value.slice(index + 1, index + 3))) {
+      bytes.push(Number.parseInt(value.slice(index + 1, index + 3), 16));
+      index += 2;
+      continue;
+    }
+    flush();
+    output.push(value[index] || "");
+  }
+  flush();
+  return output.join("");
 }
 
 function decodeMimeHeader(value: string): string {

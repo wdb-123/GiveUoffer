@@ -1,5 +1,6 @@
 import type {
   AgentEvent,
+  AgentExecutionQueueOverview,
   AgentAttachment,
   AgentPageContext,
   AgentTask,
@@ -19,6 +20,7 @@ import type {
   RecruitmentMarket,
   ReportDocument,
   ReportsOverview,
+  ResumeDiagnosisReport,
   ResumeDocument,
   ResumeExportFormat,
   ResumeSummary,
@@ -26,7 +28,9 @@ import type {
   JobSearchResult,
   JobSearchSource,
   WorkflowRunDetail,
+  AuthSession,
 } from "@ucareer/shared";
+import { AdminSection } from "../sections/AdminSection";
 import { AgentSection } from "../sections/AgentSection";
 import { ApplicationsSection, type ApplicationEventFormInput } from "../sections/ApplicationsSection";
 import { EvidenceSection } from "../sections/EvidenceSection";
@@ -34,13 +38,24 @@ import { ExperienceSection } from "../sections/ExperienceSection";
 import { MarketSection } from "../sections/MarketSection";
 import { ResumeSection } from "../sections/ResumeSection";
 import type { AppView, ViewId } from "../views";
+import {
+  buildMailboxProgressContext,
+  buildMailboxProgressPrompt,
+  buildMarketReportContext,
+  buildMarketReportPrompt,
+  buildResumeDiagnosisContext,
+  buildResumeDiagnosisPrompt,
+} from "./pageAgentPrompts";
 
 export interface ViewRendererProps {
   activeView: ViewId;
+  session: AuthSession;
   views: AppView[];
+  onSessionChange(session: AuthSession): void;
   onViewChange(viewId: ViewId): void;
   agent: {
     approvals: ApprovalRequest[];
+    executionQueue: AgentExecutionQueueOverview | null;
     installStatus: Record<string, ProviderInstallStatus>;
     prompt: string;
     providers: ProviderSummary[];
@@ -53,7 +68,7 @@ export interface ViewRendererProps {
     onCheckProvider(providerId: string): void;
     onCancelTask(taskId?: string): void | Promise<void>;
     onCreateLocalCommand(command: string, args: string): void;
-    onCreateTask(promptOverride?: string, permissionMode?: CreateAgentTaskRequest["permissionMode"], attachments?: AgentAttachment[], pageContext?: AgentPageContext): void | Promise<void>;
+    onCreateTask(promptOverride?: string, permissionMode?: CreateAgentTaskRequest["permissionMode"], attachments?: AgentAttachment[], pageContext?: AgentPageContext): string | Promise<string>;
     onDecideApproval(approvalId: string, decision: ApprovalDecisionRequest["decision"]): void;
     onPromptChange(value: string): void;
     onProviderChange(value: string): void;
@@ -78,6 +93,7 @@ export interface ViewRendererProps {
   evidence: {
     data: EvidenceRequestsOverview | null;
     onFulfillEvidence(requestId: string, content: string): void;
+    onSaveEvidenceNote(content: string): void;
   };
   experience: {
     data: ExperienceOverview | null;
@@ -95,6 +111,7 @@ export interface ViewRendererProps {
     onSearch(input: JobSearchRequest): void;
   };
   onImportMarketJob(input: ImportJobRequest): Promise<void> | void;
+  onDeleteMarketJob(jobId: string): Promise<void> | void;
   profile: CareerProfileOverview | null;
   reports: {
     data: ReportsOverview | null;
@@ -104,12 +121,14 @@ export interface ViewRendererProps {
   };
   resumes: {
     data: ResumeSummary[];
+    diagnostics: ResumeDiagnosisReport[];
     exportResult: ExportResumeResult | null;
     preview: GenerateResumePreviewResult | null;
     selectedResume: ResumeDocument | null;
-    onExportResume(file: string, format: ResumeExportFormat): void;
+    onExportResume(file: string, format: ResumeExportFormat, style?: import("@ucareer/shared").ResumeExportStyle): Promise<void> | void;
     onGeneratePreview(baseFile: string, targetJobId: string): void;
     onSavePreview(): void;
+    onSaveResume(file: string, title: string, markdown: string): void;
     onSelectResume(file: string): void;
   };
 }
@@ -143,9 +162,26 @@ export function ViewRenderer(props: ViewRendererProps) {
     );
   }
 
+  if (props.activeView === "admin") {
+    return (
+      <AdminSection
+        executionQueue={props.agent.executionQueue}
+        installStatus={props.agent.installStatus}
+        providers={props.agent.providers}
+        session={props.session}
+        tasks={props.agent.tasks}
+        onSessionChange={props.onSessionChange}
+      />
+    );
+  }
+
   if (props.activeView === "evidence") {
     return (
-      <EvidenceSection evidenceRequests={props.evidence.data} onFulfillEvidence={props.evidence.onFulfillEvidence} />
+      <EvidenceSection
+        evidenceRequests={props.evidence.data}
+        onFulfillEvidence={props.evidence.onFulfillEvidence}
+        onSaveEvidenceNote={props.evidence.onSaveEvidenceNote}
+      />
     );
   }
   if (props.activeView === "experience") {
@@ -157,9 +193,11 @@ export function ViewRenderer(props: ViewRendererProps) {
     return (
       <ApplicationsSection
         applications={props.applications.data}
+        agentTasks={props.agent.tasks}
+        selectedTaskEvents={props.agent.selectedTaskEvents}
+        selectedTaskId={props.agent.selectedTaskId}
         onCreateEvent={props.applications.onCreateEvent}
-        onDeleteLatestEvent={props.applications.onDeleteLatestEvent}
-        onUpdateLatestEvent={props.applications.onUpdateLatestEvent}
+        onFindInterviewEmails={() => props.agent.onCreateTask(buildMailboxProgressPrompt(), undefined, undefined, buildMailboxProgressContext())}
       />
     );
   }
@@ -169,22 +207,8 @@ export function ViewRenderer(props: ViewRendererProps) {
         market={props.market}
         jobSearch={props.jobSearch}
         onImportJob={props.onImportMarketJob}
-        onGenerateReport={(job) => props.agent.onCreateTask(buildMarketReportPrompt(job), undefined, undefined, {
-          pageId: "market",
-          pageLabel: "岗位列表",
-          suggestedSkillId: "job.evaluate",
-          suggestedInputKind: "job_description",
-          summary: `从岗位列表为「${job.company || "待复核公司"} - ${job.role || "待复核岗位"}」生成评估报告。`,
-          selectedEntity: {
-            type: "market_job",
-            id: job.id,
-            title: `${job.company || "待复核公司"} - ${job.role || "待复核岗位"}`,
-            ...(job.url ? { path: job.url } : {}),
-          },
-          readPaths: ["workspace/jobs/jds", "workspace/jobs/reports", "workspace/ops/data/applications.md"],
-          writePaths: ["workspace/jobs/jds", "workspace/jobs/reports", "workspace/ops/batch/tracker-additions", "workspace/ops/data/applications.md"],
-          capabilities: ["read", "write", "generate", "diagnose", "import"],
-        })}
+        onDeleteJob={props.onDeleteMarketJob}
+        onGenerateReport={(job) => props.agent.onCreateTask(buildMarketReportPrompt(job), undefined, undefined, buildMarketReportContext(job))}
         onClearReport={props.reports.onClearReport}
         onSelectReport={props.reports.onSelectReport}
         reports={props.reports.data}
@@ -195,37 +219,26 @@ export function ViewRenderer(props: ViewRendererProps) {
   return (
     <ResumeSection
       jobs={props.market?.jobs || []}
+      diagnostics={props.resumes.diagnostics}
       exportResult={props.resumes.exportResult}
+      agentTasks={props.agent.tasks}
       onExportResume={props.resumes.onExportResume}
+      onDiagnoseResume={(file, targetJobId) => props.agent.onCreateTask(buildResumeDiagnosisPrompt({
+        file,
+        targetJobId,
+        selectedResume: props.resumes.selectedResume,
+        jobs: props.market?.jobs || [],
+      }), undefined, undefined, buildResumeDiagnosisContext(props.resumes.selectedResume))}
       onGeneratePreview={props.resumes.onGeneratePreview}
       onSavePreview={props.resumes.onSavePreview}
+      onSaveResume={props.resumes.onSaveResume}
       onSelectResume={props.resumes.onSelectResume}
       preview={props.resumes.preview}
       resumes={props.resumes.data}
+      selectedTaskEvents={props.agent.selectedTaskEvents}
+      selectedTaskId={props.agent.selectedTaskId}
+      selectedTaskTurns={props.agent.selectedTaskTurns}
       selectedResume={props.resumes.selectedResume}
     />
   );
-}
-
-function buildMarketReportPrompt(job: RecruitmentMarket["jobs"][number]): string {
-  return `请为这个岗位生成一份评估报告，并按 Ucareer 报告规范写入 workspace/jobs/reports/，必要时更新岗位/投递相关记录。不要提交任何外部申请。
-
-岗位信息：
-- ID：${job.id || "未提供"}
-- 公司：${job.company || "待复核"}
-- 岗位：${job.role || "待复核岗位"}
-- 链接：${job.url || "未提供"}
-- 地点：${job.location || "未披露"}
-- 薪资：${job.salary || "未披露"}
-- 来源：${job.source || job.platform || "来源未知"}
-- 方向：${job.direction || "未分类"}
-- 当前评分：${typeof job.matchScore === "number" ? job.matchScore.toFixed(1) : "未评分"}
-- 关键词：${job.keywords?.join("、") || "无"}
-- 匹配理由：${job.fitReason || "未记录"}
-- 证据缺口：${job.evidenceGap || "未记录"}
-
-要求：
-1. 先验证岗位链接是否仍有效；无法确认时在报告里标注。
-2. 按匹配度、薪资/职级、方向、风险、证据缺口给出结论。
-3. 报告生成后告诉我报告文件名和是否建议投递。`;
 }

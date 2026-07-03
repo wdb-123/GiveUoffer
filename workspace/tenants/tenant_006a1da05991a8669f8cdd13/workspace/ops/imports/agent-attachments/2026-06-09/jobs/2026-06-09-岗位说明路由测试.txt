@@ -1,0 +1,1 @@
+岗位 JD：Senior AI Engineer。Responsibilities: build agent workflow, requirements include TypeScript backend and multi tenant architecture.

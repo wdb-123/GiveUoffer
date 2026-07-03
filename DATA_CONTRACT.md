@@ -12,21 +12,26 @@ These files contain your personal data, customizations, and work product. Update
 | `workspace/profile/profile.yml` | Your identity, targets, comp range |
 | `workspace/profile/_profile.md` | Your archetypes, narrative, negotiation scripts |
 | `workspace/profile/article-digest.md` | Your proof points from portfolio |
+| `workspace/profile/headshots/*` | Your personal headshots and resume avatar crops |
+| `workspace/profile/intentions/*` | Your personal search intentions and target notes |
 | `workspace/jobs/interview-prep/story-bank.md` | Your accumulated STAR+R stories |
 | `workspace/profile/portals.yml` | Your customized company list |
-| `workspace/ops/data/applications.md` | Your application tracker |
-| `workspace/ops/data/application-progress.md` | Your applied jobs and application progress board |
-| `workspace/ops/data/pipeline.md` | Your URL inbox |
-| `workspace/ops/data/scan-history.tsv` | Your scan history |
-| `workspace/ops/data/follow-ups.md` | Your follow-up history |
+| `workspace/ops/data/*` | Your local operational state: applications, progress, market jobs, evidence, parser output, resume versions and related JSON/Markdown/JSONL files |
+| `workspace/ops/batch/*` | Your batch-processing queues, logs and tracker additions |
 | `workspace/ops/imports/*` | Your locally imported files and parsed attachment copies |
 | `workspace/ops/exports/*` | Your generated exports for local handoff |
-| `workspace/resumes/*` | Your resume library, source files and rendered resume variants |
+| `workspace/resumes/library/*` | Your canonical direction resume library and direction clues |
+| `workspace/resumes/source/*` | Your source resume documents, such as DOCX variants |
+| `workspace/resumes/rendered/*` | Your rendered resume output files |
+| `workspace/resumes/diagnostics/*` | Your generated resume diagnosis reports and improvement plans |
+| `workspace/resumes/quicklook/*` | Your local resume preview images |
+| `workspace/resumes/tools/*` | Your personal resume document helpers that operate on headshots and source DOCX files |
 | `workspace/jobs/research/*` | Your company, market and role research notes |
-| `workspace/jobs/examples/*` | Your local examples and project-specific sample assets |
+| `workspace/jobs/project-notes/*` | Your raw project fact cards and project evidence intake notes |
 | `workspace/profile/writing-samples/*` | Your personal writing samples for style calibration (except `workspace/profile/writing-samples/README.md`, which is system-owned documentation delivered by updates) |
 | `workspace/jobs/reports/*` | Your evaluation reports |
 | `workspace/jobs/jds/*` | Your saved job descriptions |
+| `workspace/tenants/*/workspace/*` | Tenant-scoped user data for multi-account Web/API sessions, using the same logical workspace layout inside each tenant |
 
 ## System Layer (product source)
 
@@ -56,12 +61,32 @@ These files contain product logic, scripts, templates, and instructions.
 | `CLAUDE.md` | Agent instructions |
 | `AGENTS.md` | Codex instructions |
 | `*.mjs` | Utility scripts |
+| `workspace/jobs/examples/*` | Versioned sample assets and example documents shipped with the product |
 | `workspace/ops/templates/*` | Base templates |
 | `workspace/ops/templates/fonts/*` | Self-hosted resume template fonts |
+| `workspace/README.md` | Workspace boundary documentation |
+| `workspace/profile/profile.example.yml` | Example profile used for onboarding |
 | `.claude/skills/*` | Skill definitions |
 | `docs/*` | Documentation |
 | `DATA_CONTRACT.md` | This file |
 | `workspace/profile/writing-samples/README.md` | System-owned onboarding documentation for the writing-samples directory |
+
+## Workspace Boundary
+
+Only these first-level entries belong under `workspace/`:
+
+- `workspace/profile/`
+- `workspace/resumes/`
+- `workspace/jobs/`
+- `workspace/ops/`
+- `workspace/tenants/`
+- `workspace/README.md`
+
+Runtime state belongs in `.ucareer/`, not `workspace/`. Tenant-owned career assets belong under `workspace/tenants/{tenantId}/workspace/` when accessed through authenticated multi-tenant Web/API sessions.
+Product code belongs outside `workspace/`, except explicitly local personal helpers such as `workspace/resumes/tools/*`.
+Generated handoff files belong in `workspace/ops/exports/`; imported source material belongs in `workspace/ops/imports/`.
+
+Run `npm run workspace:audit` after structural changes to catch misplaced files and OS artifacts.
 
 ## The Rule
 

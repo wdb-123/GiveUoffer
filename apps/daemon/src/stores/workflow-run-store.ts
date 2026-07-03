@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import type {
   EntityId,
@@ -23,6 +23,7 @@ export interface WorkflowRunStore {
 }
 
 export interface CreateWorkflowRunInput {
+  tenantId?: EntityId;
   workflow: WorkflowDefinition;
   skillId?: EntityId;
   sourceText?: string;
@@ -37,9 +38,10 @@ export interface UpdateWorkflowStepRunInput {
   approvalId?: EntityId;
 }
 
-export function createSqliteWorkflowRunStore(path: string): WorkflowRunStore {
+export function createSqliteWorkflowRunStore(path: string, options: { tenantId?: string } = {}): WorkflowRunStore {
   const sqlite = openDaemonDatabase(path);
   const db = drizzle(sqlite);
+  const tenantId = options.tenantId;
 
   return {
     createRun(input) {
@@ -47,6 +49,7 @@ export function createSqliteWorkflowRunStore(path: string): WorkflowRunStore {
       const firstStep = input.workflow.steps[0];
       const run: WorkflowRun = {
         id: randomUUID(),
+        ...(tenantId ? { tenantId } : {}),
         workflowId: input.workflow.id,
         ...(input.skillId ? { skillId: input.skillId } : {}),
         ...(firstStep ? { currentStepId: firstStep.id } : {}),
@@ -63,6 +66,7 @@ export function createSqliteWorkflowRunStore(path: string): WorkflowRunStore {
       for (const step of input.workflow.steps) {
         const stepRun: WorkflowStepRun = {
           id: randomUUID(),
+          ...(tenantId ? { tenantId } : {}),
           workflowRunId: run.id,
           stepId: step.id,
           status: step.id === firstStep?.id ? "queued" : "queued",
@@ -77,11 +81,17 @@ export function createSqliteWorkflowRunStore(path: string): WorkflowRunStore {
     },
 
     listRuns() {
-      return db.select().from(workflowRuns).orderBy(desc(workflowRuns.updatedAt)).all().map(fromRunRow);
+      return db.select().from(workflowRuns)
+        .where(tenantFilter(workflowRuns.tenantId))
+        .orderBy(desc(workflowRuns.updatedAt))
+        .all()
+        .map(fromRunRow);
     },
 
     getRun(runId) {
-      const row = db.select().from(workflowRuns).where(eq(workflowRuns.id, runId)).get();
+      const row = db.select().from(workflowRuns)
+        .where(and(eq(workflowRuns.id, runId), tenantFilter(workflowRuns.tenantId)))
+        .get();
       return row ? fromRunRow(row) : undefined;
     },
 
@@ -91,7 +101,7 @@ export function createSqliteWorkflowRunStore(path: string): WorkflowRunStore {
       const updated: WorkflowRun = { ...run, taskId, updatedAt: new Date().toISOString() };
       db.update(workflowRuns)
         .set({ taskId, updatedAt: updated.updatedAt })
-        .where(eq(workflowRuns.id, runId))
+        .where(and(eq(workflowRuns.id, runId), tenantFilter(workflowRuns.tenantId)))
         .run();
       writeSyncEvent("workflow_run", runId, "task_attached", updated);
       return updated;
@@ -112,21 +122,24 @@ export function createSqliteWorkflowRunStore(path: string): WorkflowRunStore {
           currentStepId: updated.currentStepId ?? null,
           updatedAt: updated.updatedAt,
         })
-        .where(eq(workflowRuns.id, runId))
+        .where(and(eq(workflowRuns.id, runId), tenantFilter(workflowRuns.tenantId)))
         .run();
       writeSyncEvent("workflow_run", runId, "status_updated", updated);
       return updated;
     },
 
     listStepRuns(runId) {
-      return db.select().from(workflowStepRuns).where(eq(workflowStepRuns.workflowRunId, runId)).all().map(fromStepRunRow);
+      return db.select().from(workflowStepRuns)
+        .where(and(eq(workflowStepRuns.workflowRunId, runId), tenantFilter(workflowStepRuns.tenantId)))
+        .all()
+        .map(fromStepRunRow);
     },
 
     updateStepRun(input) {
       const stepRun = db
         .select()
         .from(workflowStepRuns)
-        .where(eq(workflowStepRuns.workflowRunId, input.workflowRunId))
+        .where(and(eq(workflowStepRuns.workflowRunId, input.workflowRunId), tenantFilter(workflowStepRuns.tenantId)))
         .all()
         .map(fromStepRunRow)
         .find((item) => item.stepId === input.stepId);
@@ -145,7 +158,7 @@ export function createSqliteWorkflowRunStore(path: string): WorkflowRunStore {
           approvalId: updated.approvalId ?? null,
           updatedAt: updated.updatedAt,
         })
-        .where(eq(workflowStepRuns.id, updated.id))
+        .where(and(eq(workflowStepRuns.id, updated.id), tenantFilter(workflowStepRuns.tenantId)))
         .run();
       writeSyncEvent("workflow_step_run", updated.id, "status_updated", updated);
       return updated;
@@ -155,6 +168,7 @@ export function createSqliteWorkflowRunStore(path: string): WorkflowRunStore {
   function writeSyncEvent(entityType: string, entityId: string, eventType: string, payload: unknown): void {
     db.insert(syncEvents)
       .values({
+        tenantId: tenantId ?? null,
         entityType,
         entityId,
         eventType,
@@ -164,11 +178,16 @@ export function createSqliteWorkflowRunStore(path: string): WorkflowRunStore {
       })
       .run();
   }
+
+  function tenantFilter(column: any) {
+    return tenantId ? eq(column, tenantId) : undefined;
+  }
 }
 
 function toRunRow(run: WorkflowRun) {
   return {
     id: run.id,
+    tenantId: run.tenantId ?? null,
     workflowId: run.workflowId,
     skillId: run.skillId ?? null,
     taskId: run.taskId ?? null,
@@ -185,6 +204,7 @@ function fromRunRow(row: typeof workflowRuns.$inferSelect): WorkflowRun {
   const routeDecision = row.routeDecision ? (JSON.parse(row.routeDecision) as RouteDecision) : undefined;
   return {
     id: row.id,
+    ...(row.tenantId ? { tenantId: row.tenantId } : {}),
     workflowId: row.workflowId,
     ...(row.skillId ? { skillId: row.skillId } : {}),
     ...(row.taskId ? { taskId: row.taskId } : {}),
@@ -200,6 +220,7 @@ function fromRunRow(row: typeof workflowRuns.$inferSelect): WorkflowRun {
 function toStepRunRow(stepRun: WorkflowStepRun) {
   return {
     id: stepRun.id,
+    tenantId: stepRun.tenantId ?? null,
     workflowRunId: stepRun.workflowRunId,
     stepId: stepRun.stepId,
     status: stepRun.status,
@@ -213,6 +234,7 @@ function toStepRunRow(stepRun: WorkflowStepRun) {
 function fromStepRunRow(row: typeof workflowStepRuns.$inferSelect): WorkflowStepRun {
   return {
     id: row.id,
+    ...(row.tenantId ? { tenantId: row.tenantId } : {}),
     workflowRunId: row.workflowRunId,
     stepId: row.stepId,
     status: row.status as WorkflowStepRun["status"],

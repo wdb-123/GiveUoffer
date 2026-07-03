@@ -84,10 +84,13 @@ async function readUcareerSessionToken() {
 }
 
 async function runBridgeTask(task, context) {
-  if (task.type !== "boss_search") {
-    return { ok: false, message: `Unsupported Chrome bridge task: ${task.type}` };
+  if (task.type === "boss_search") {
+    return runBossSearchTask(task.payload || {}, context);
   }
-  return runBossSearchTask(task.payload || {}, context);
+  if (task.type === "boss_current_detail") {
+    return runBossCurrentDetailTask(task.payload || {}, context);
+  }
+  return { ok: false, message: `Unsupported Chrome bridge task: ${task.type}` };
 }
 
 async function runBossSearchTask(payload, context) {
@@ -149,6 +152,60 @@ async function runBossSearchTask(payload, context) {
   };
 }
 
+async function runBossCurrentDetailTask(payload, context) {
+  const dryRun = Boolean(payload.dryRun);
+  const tab = await findBossCurrentTab(payload.url);
+  if (!tab?.id) {
+    return {
+      ok: false,
+      added: 0,
+      stats: { queries: 0, candidatesSeen: 0, duplicatesSkipped: 0, failedQueries: 1 },
+      discovered: [],
+      message: "没有找到已打开的 Boss/Zhipin 标签页。请在 Chrome 打开并选中目标岗位后重试。",
+    };
+  }
+
+  try {
+    await waitForTabLoaded(tab.id);
+    await delay(700);
+    const snapshot = await extractBossCurrentDetail(tab.id);
+    if (!snapshot) {
+      return {
+        ok: false,
+        added: 0,
+        stats: { queries: 0, candidatesSeen: 0, duplicatesSkipped: 0, failedQueries: 1 },
+        discovered: [],
+        message: "当前 Boss 页面没有读取到可导入的选中岗位详情。请先在列表中点开一个岗位，让右侧/详情区域出现 JD 后重试。",
+      };
+    }
+
+    const discovered = [];
+    if (dryRun) {
+      discovered.push(snapshotToMarketJob(snapshot));
+    } else {
+      const imported = await importSnapshot({ ...snapshot, source: "ucareer-chrome-bridge-boss-current" }, context);
+      if (imported) discovered.push(imported);
+    }
+    return {
+      ok: true,
+      added: discovered.length,
+      stats: { queries: 0, candidatesSeen: 1, duplicatesSkipped: discovered.length ? 0 : 1, failedQueries: 0 },
+      discovered,
+      message: discovered.length
+        ? `Ucareer Chrome 扩展已读取当前 Boss 选中岗位并${dryRun ? "预览" : "导入"}。`
+        : "当前 Boss 选中岗位已存在或导入结果为空。",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      added: 0,
+      stats: { queries: 0, candidatesSeen: 0, duplicatesSkipped: 0, failedQueries: 1 },
+      discovered: [],
+      message: error instanceof Error ? error.message : "读取当前 Boss 选中岗位失败。",
+    };
+  }
+}
+
 async function collectBossDetails(tabId, max) {
   const [injected] = await chrome.scripting.executeScript({
     target: { tabId },
@@ -156,6 +213,14 @@ async function collectBossDetails(tabId, max) {
     args: [max],
   });
   return Array.isArray(injected?.result) ? injected.result : [];
+}
+
+async function extractBossCurrentDetail(tabId) {
+  const [injected] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: injectedExtractBossCurrentDetail,
+  });
+  return injected?.result || null;
 }
 
 async function importSnapshot(snapshot, context) {
@@ -168,12 +233,50 @@ async function importSnapshot(snapshot, context) {
     body: JSON.stringify({
       url: snapshot.url,
       description: snapshot.description,
-      source: "ucareer-chrome-bridge-boss-detail",
+      source: snapshot.source || "ucareer-chrome-bridge-boss-detail",
     }),
   });
   const payload = await response.json().catch(() => null);
   if (!payload?.ok) return null;
   return payload.data?.job || null;
+}
+
+async function findBossCurrentTab(url) {
+  const normalizedUrl = normalizeUrl(url);
+  const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const activeBoss = activeTabs.find((tab) => isBossTab(tab) && (!normalizedUrl || sameOriginPath(tab.url, normalizedUrl) || /\/web\/geek\/jobs/.test(String(tab.url || ""))));
+  if (activeBoss) return activeBoss;
+
+  const bossTabs = await chrome.tabs.query({
+    url: [
+      "https://www.zhipin.com/*",
+      "https://*.zhipin.com/*",
+    ],
+  });
+  if (normalizedUrl) {
+    const exact = bossTabs.find((tab) => normalizeUrl(tab.url) === normalizedUrl);
+    if (exact) return exact;
+  }
+  return bossTabs[0] || null;
+}
+
+function isBossTab(tab) {
+  try {
+    const url = new URL(String(tab?.url || ""));
+    return /(^|\.)zhipin\.com$/i.test(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function sameOriginPath(left, right) {
+  try {
+    const a = new URL(left);
+    const b = new URL(right);
+    return a.origin === b.origin && a.pathname === b.pathname;
+  } catch {
+    return false;
+  }
 }
 
 function snapshotToMarketJob(snapshot) {
@@ -243,8 +346,23 @@ function bossCityCode(value) {
 }
 
 async function injectedCollectBossDetails(max) {
+  const normalizeBossPrivateUseDigits = (text) => {
+    const digitMap = {
+      "\ue031": "0",
+      "\ue032": "1",
+      "\ue033": "2",
+      "\ue034": "3",
+      "\ue035": "4",
+      "\ue036": "5",
+      "\ue037": "6",
+      "\ue038": "7",
+      "\ue039": "8",
+      "\ue03a": "9",
+    };
+    return String(text || "").replace(/[\ue031-\ue03a]/g, (char) => digitMap[char] || char);
+  };
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const normalizeText = (text) => String(text || "")
+  const normalizeText = (text) => normalizeBossPrivateUseDigits(text)
     .replace(/\u00a0/g, " ")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
@@ -306,4 +424,112 @@ async function injectedCollectBossDetails(max) {
     });
   }
   return out;
+}
+
+function injectedExtractBossCurrentDetail() {
+  const normalizeBossPrivateUseDigits = (text) => {
+    const digitMap = {
+      "\ue031": "0",
+      "\ue032": "1",
+      "\ue033": "2",
+      "\ue034": "3",
+      "\ue035": "4",
+      "\ue036": "5",
+      "\ue037": "6",
+      "\ue038": "7",
+      "\ue039": "8",
+      "\ue03a": "9",
+    };
+    return String(text || "").replace(/[\ue031-\ue03a]/g, (char) => digitMap[char] || char);
+  };
+  const normalizeText = (text) => normalizeBossPrivateUseDigits(text)
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  const firstText = (selectors) => selectors
+    .map((selector) => normalizeText(document.querySelector(selector)?.textContent || ""))
+    .find(Boolean) || "";
+  const firstTextIn = (root, selectors) => selectors
+    .map((selector) => normalizeText(root.querySelector(selector)?.textContent || ""))
+    .find(Boolean) || "";
+  const absoluteUrl = (href) => {
+    try {
+      return new URL(href, location.href).toString();
+    } catch {
+      return "";
+    }
+  };
+  const isBoss = /(^|\.)zhipin\.com$/i.test(location.hostname);
+  if (!isBoss) return null;
+
+  const detailNodes = [
+    ".job-detail",
+    ".job-detail-box",
+    ".job-sec",
+    ".detail-content",
+    ".job-detail-container",
+    ".job-primary.detail-box",
+    ".job-detail-section",
+  ].map((selector) => document.querySelector(selector)).filter(Boolean);
+  const detailText = detailNodes
+    .map((node) => normalizeText(node.textContent || ""))
+    .filter((text) => text.length > 80)
+    .sort((a, b) => b.length - a.length)[0] || "";
+  const bodyText = normalizeText(document.body?.innerText || "");
+  const descriptionText = detailText || (/职位描述|岗位职责|职位详情|任职要求|岗位要求|工作职责/.test(bodyText) ? bodyText : "");
+  if (!/职位描述|岗位职责|职位详情|任职要求|岗位要求|工作职责/.test(descriptionText)) return null;
+
+  const role = firstText([".job-name", ".name", "h1", ".job-title"]);
+  const salary = firstText([".salary", ".job-salary", ".red"]);
+  const company = firstText([".company-info .name", ".company-name", ".job-company", ".company-title"]);
+  const locationText = firstText([".location-address", ".job-address", ".address", ".job-location"]);
+  const selectedCard = findSelectedBossCard(role, salary);
+  const cardRole = selectedCard ? firstTextIn(selectedCard, [".job-name", ".job-title", ".name", "a"]) : "";
+  const cardSalary = selectedCard ? firstTextIn(selectedCard, [".salary", ".job-salary", ".red"]) : "";
+  const cardCompany = selectedCard ? firstTextIn(selectedCard, [".company-name", ".boss-name", ".job-card-right .name"]) : "";
+  const cardAnchor = selectedCard?.querySelector('a[href*="/job_detail/"], a[href*="job_detail"]');
+  const firstDetailAnchor = document.querySelector('a[href*="/job_detail/"], a[href*="job_detail"]');
+  const canonical = document.querySelector('link[rel="canonical"]')?.href || "";
+  const jobUrl = absoluteUrl(cardAnchor?.getAttribute("href") || "")
+    || absoluteUrl(firstDetailAnchor?.getAttribute("href") || "")
+    || (/\/job_detail\//.test(location.href) ? location.href : "")
+    || canonical
+    || location.href;
+
+  const finalRole = role || cardRole;
+  const finalSalary = salary || cardSalary;
+  const finalCompany = company || cardCompany;
+  return {
+    url: jobUrl,
+    title: document.title || finalRole,
+    role: finalRole,
+    company: finalCompany,
+    salary: finalSalary,
+    location: locationText,
+    description: [
+      finalRole ? `职位：${finalRole}` : "",
+      finalCompany ? `公司：${finalCompany}` : "",
+      finalSalary ? `薪资：${finalSalary}` : "",
+      locationText ? `地点：${locationText}` : "",
+      descriptionText,
+    ].filter(Boolean).join("\n").slice(0, 24000),
+  };
+
+  function findSelectedBossCard(title, pay) {
+    const cards = Array.from(document.querySelectorAll(".job-card-wrapper, .job-list-box li, .job-card-body, li[class*='job-card'], .rec-job-list li, .job-list li"))
+      .filter((card) => normalizeText(card.textContent || "").length > 20);
+    const active = cards.find((card) => /\b(active|selected|cur|current|focus)\b/i.test(String(card.className || "")));
+    if (active) return active;
+    const titleText = normalizeText(title);
+    const payText = normalizeText(pay);
+    if (titleText) {
+      const matched = cards.find((card) => {
+        const text = normalizeText(card.textContent || "");
+        return text.includes(titleText) && (!payText || text.includes(payText));
+      });
+      if (matched) return matched;
+    }
+    return cards[0] || null;
+  }
 }

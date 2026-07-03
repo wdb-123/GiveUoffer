@@ -6,16 +6,22 @@ export interface ChromeBossSearchPayload {
   city: string;
   queries: string[];
   max: number;
+  withDetails?: boolean;
+  dryRun: boolean;
+}
+
+export interface ChromeBossCurrentDetailPayload {
+  url?: string;
   dryRun: boolean;
 }
 
 export interface ChromeBridgeTask {
   id: string;
-  type: "boss_search";
+  type: "boss_search" | "boss_current_detail";
   status: ChromeBridgeTaskStatus;
   createdAt: string;
   updatedAt: string;
-  payload: ChromeBossSearchPayload;
+  payload: ChromeBossSearchPayload | ChromeBossCurrentDetailPayload;
   result?: ChromeBridgeResult;
 }
 
@@ -40,6 +46,7 @@ type PendingWaiter = {
 
 export interface ChromeBridgeService {
   runBossSearch(input: ChromeBossSearchPayload, timeoutMs?: number): Promise<ChromeBridgeResult>;
+  runBossCurrentDetail(input: ChromeBossCurrentDetailPayload, timeoutMs?: number): Promise<ChromeBridgeResult>;
   nextTask(): ChromeBridgeTask | null;
   completeTask(id: string, result: ChromeBridgeResult): ChromeBridgeTask;
 }
@@ -50,39 +57,36 @@ export function createChromeBridgeService(): ChromeBridgeService {
 
   return {
     runBossSearch(input, timeoutMs = 180_000) {
-      const now = new Date().toISOString();
-      const task: ChromeBridgeTask = {
-        id: `chrome_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
-        type: "boss_search",
-        status: "pending",
-        createdAt: now,
-        updatedAt: now,
-        payload: input,
-      };
-      tasks.set(task.id, task);
-      pruneOldTasks(tasks);
+      const task = enqueueTask(tasks, "boss_search", input);
+      return waitForTask(task, waiters, () => ({
+        ok: false,
+        added: 0,
+        stats: {
+          queries: input.queries.length,
+          candidatesSeen: 0,
+          duplicatesSkipped: 0,
+          failedQueries: input.queries.length,
+        },
+        queries: input.queries,
+        discovered: [],
+        message: "等待 Ucareer Chrome 扩展执行 Boss 搜索超时。请确认扩展已加载、已连接本地 Ucareer，并保持 Chrome 运行。",
+      }), (id, result) => this.completeTask(id, result), timeoutMs);
+    },
 
-      return new Promise((resolve) => {
-        const timer = setTimeout(() => {
-          const failed: ChromeBridgeResult = {
-            ok: false,
-            added: 0,
-            stats: {
-              queries: input.queries.length,
-              candidatesSeen: 0,
-              duplicatesSkipped: 0,
-              failedQueries: input.queries.length,
-            },
-            queries: input.queries,
-            discovered: [],
-            message: "等待 Ucareer Chrome 扩展执行 Boss 搜索超时。请确认扩展已加载、已连接本地 Ucareer，并保持 Chrome 运行。",
-          };
-          waiters.delete(task.id);
-          this.completeTask(task.id, failed);
-          resolve(failed);
-        }, timeoutMs);
-        waiters.set(task.id, { resolve, timer });
-      });
+    runBossCurrentDetail(input, timeoutMs = 120_000) {
+      const task = enqueueTask(tasks, "boss_current_detail", input);
+      return waitForTask(task, waiters, () => ({
+        ok: false,
+        added: 0,
+        stats: {
+          queries: 0,
+          candidatesSeen: 0,
+          duplicatesSkipped: 0,
+          failedQueries: 1,
+        },
+        discovered: [],
+        message: "等待 Ucareer Chrome 扩展读取当前 Boss 选中岗位超时。请确认扩展已加载、已连接本地 Ucareer，并保持 Boss 当前岗位页面打开。",
+      }), (id, result) => this.completeTask(id, result), timeoutMs);
     },
 
     nextTask() {
@@ -112,6 +116,43 @@ export function createChromeBridgeService(): ChromeBridgeService {
       return task;
     },
   };
+}
+
+function enqueueTask(
+  tasks: Map<string, ChromeBridgeTask>,
+  type: ChromeBridgeTask["type"],
+  payload: ChromeBridgeTask["payload"],
+): ChromeBridgeTask {
+  const now = new Date().toISOString();
+  const task: ChromeBridgeTask = {
+    id: `chrome_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+    type,
+    status: "pending",
+    createdAt: now,
+    updatedAt: now,
+    payload,
+  };
+  tasks.set(task.id, task);
+  pruneOldTasks(tasks);
+  return task;
+}
+
+function waitForTask(
+  task: ChromeBridgeTask,
+  waiters: Map<string, PendingWaiter>,
+  onTimeout: () => ChromeBridgeResult,
+  completeTask: (id: string, result: ChromeBridgeResult) => void,
+  timeoutMs: number,
+): Promise<ChromeBridgeResult> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      const failed = onTimeout();
+      waiters.delete(task.id);
+      completeTask(task.id, failed);
+      resolve(failed);
+    }, timeoutMs);
+    waiters.set(task.id, { resolve, timer });
+  });
 }
 
 function pruneOldTasks(tasks: Map<string, ChromeBridgeTask>): void {

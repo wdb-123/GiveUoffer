@@ -1,283 +1,203 @@
-import { spawn } from "node:child_process";
-import process from "node:process";
-import { join } from "node:path";
-import type { MarketJob, JobSearchRequest, JobSearchResult, JobSearchSource, JobSearchSourceId } from "@ucareer/shared";
+import type { JobSearchRequest, JobSearchResult, JobSearchSource, JobSearchSourceId } from "@ucareer/shared";
 import type { ChromeBridgeService } from "./chrome-bridge-service";
+import {
+  combineJobSearchResults,
+  createAllSourcesEntry,
+  createJobSearchProviders,
+  normalizeJobSearchRequest,
+  providerToSource,
+  type JobSearchProvider,
+} from "./jobsearch-providers";
 
-const DEFAULT_QUERIES = ["机器人系统工程师", "ROS2 机器人", "机器人软件 SDK", "具身智能 数据", "AI工具链 Agent RAG"];
-const DEFAULT_CITY = "深圳";
-const DEFAULT_MAX = 12;
-const COMMAND_TIMEOUT_MS = 60_000;
-const CODEX_CHROME_COMMAND_TIMEOUT_MS = 360_000;
-
-type RadarCommand = { label: string; args: string[]; timeoutMs?: number };
+const ALL_SOURCE_ORDER: JobSearchSourceId[] = ["codex-chrome", "boss-agent", "china-crawler"];
 
 export interface JobSearchService {
   listSources(): Promise<JobSearchSource[]>;
   search(input: JobSearchRequest): Promise<JobSearchResult>;
+  importCurrentJob(input?: { url?: string; dryRun?: boolean }): Promise<JobSearchResult>;
 }
 
 export function createJobSearchService(workspaceRoot: string, chromeBridgeService?: ChromeBridgeService): JobSearchService {
+  const providers = createJobSearchProviders();
+  const providerMap = new Map(providers.map((provider) => [provider.id, provider]));
+
   return {
     async listSources() {
-      return [
-        {
-          id: "codex-chrome",
-          label: "Codex Chrome",
-          description: "通过 Ucareer Chrome 扩展 bridge 读取已登录 Boss 页面，把具体岗位详情写入岗位市场。",
-          available: true,
-          requiresAuth: true,
-          defaultCity: DEFAULT_CITY,
-        },
-        {
-          id: "boss-agent",
-          label: "Boss Agent",
-          description: "通过本地 boss-agent-cli 只读搜索 Boss / 智联岗位。",
-          available: true,
-          requiresAuth: true,
-          defaultCity: DEFAULT_CITY,
-        },
-        {
-          id: "china-crawler",
-          label: "中国平台爬虫",
-          description: "用 Playwright 只读访问 Boss、智联、猎聘、51Job 等搜索页。",
-          available: true,
-          requiresAuth: false,
-          defaultCity: DEFAULT_CITY,
-        },
-        {
-          id: "portals",
-          label: "官网门户扫描",
-          description: "读取 workspace/profile/portals.yml 并扫描公司官网/ATS。",
-          available: false,
-          requiresAuth: false,
-        },
-        {
-          id: "all",
-          label: "全部可用来源",
-          description: "依次运行 Boss Agent 和中国平台爬虫。",
-          available: true,
-          requiresAuth: true,
-          defaultCity: DEFAULT_CITY,
-        },
-      ];
+      const context = createProviderContext(workspaceRoot, chromeBridgeService);
+      const concreteSources = await Promise.all(providers.map((provider) => providerToSource(provider, context)));
+      return [...concreteSources, createAllSourcesEntry(providers)];
     },
 
     async search(input) {
-      const request = normalizeSearchRequest(input);
+      const request = normalizeJobSearchRequest(input);
       const runId = `jobsearch_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const startedAt = new Date().toISOString();
-      const commands = buildCommands(workspaceRoot, request);
-      const results: JobSearchResult[] = [];
+      const context = { runId, startedAt, request, ...createProviderContext(workspaceRoot, chromeBridgeService) };
+      const selectedProviders = await resolveProviders(request.source, providerMap, context);
 
-      if (request.source === "codex-chrome" && chromeBridgeService) {
-        const result = await chromeBridgeService.runBossSearch({
-          city: request.city,
-          queries: request.queries,
-          max: request.max,
-          dryRun: request.dryRun,
-        }, CODEX_CHROME_COMMAND_TIMEOUT_MS);
+      if (request.source !== "all") {
+        const provider = selectedProviders[0];
+        if (!provider) throw new Error(`未知岗位搜索来源：${request.source}`);
+        const result = await provider.search(context);
+        if (request.source !== "codex-chrome" || !shouldFallbackFromCodexChrome(result)) return result;
+
+        const fallbackProviders = await resolveFallbackProviders(providerMap, context);
+        if (!fallbackProviders.length) return result;
+
+        const results = [result];
+        for (const fallbackProvider of fallbackProviders) {
+          const fallbackResult = await fallbackProvider.search(context);
+          results.push(fallbackResult);
+          if (!shouldFallbackFromCodexChrome(fallbackResult)) break;
+        }
+        const combined = combineJobSearchResults(runId, startedAt, "all", results);
         return {
-          runId,
-          source: request.source,
-          status: result.ok ? "completed" : "failed",
-          startedAt,
-          completedAt: new Date().toISOString(),
-          added: numberFrom(result.added, result.discovered?.length || 0),
-          candidatesSeen: numberFrom(result.stats?.candidatesSeen, result.discovered?.length || 0),
-          duplicatesSkipped: numberFrom(result.stats?.duplicatesSkipped, 0),
-          failedQueries: numberFrom(result.stats?.failedQueries, result.ok ? 0 : request.queries.length),
-          jobs: normalizeJobs(result.discovered),
-          ...(result.message ? { message: trimMessage(result.message) } : {}),
+          ...combined,
+          message: [
+            "Codex Chrome 没有读到当前招聘页面里的可导入岗位，已自动切换到备用搜索来源。",
+            combined.message,
+          ].filter(Boolean).join(" "),
         };
       }
 
-      for (const command of commands) {
-        results.push(await runRadarCommand(runId, startedAt, request.source, command));
+      const results = [];
+      for (const provider of selectedProviders) {
+        results.push(await provider.search(context));
+      }
+      return combineJobSearchResults(runId, startedAt, request.source, results);
+    },
+
+    async importCurrentJob(input = {}) {
+      const runId = `jobimport_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const startedAt = new Date().toISOString();
+      if (!chromeBridgeService) {
+        return {
+          runId,
+          source: "codex-chrome",
+          status: "failed",
+          startedAt,
+          completedAt: new Date().toISOString(),
+          added: 0,
+          candidatesSeen: 0,
+          duplicatesSkipped: 0,
+          failedQueries: 1,
+          jobs: [],
+          message: "当前后端没有启用 Ucareer Chrome bridge，无法读取当前浏览器选中岗位。",
+        };
       }
 
-      return combineResults(runId, startedAt, request.source, results);
+      const result = await chromeBridgeService.runBossCurrentDetail({
+        ...(input.url ? { url: input.url } : {}),
+        dryRun: Boolean(input.dryRun),
+      }, 45_000);
+      if ((!result.ok || !result.discovered?.length) && input.url) {
+        const fallbackRequest = parseBossSearchUrl(input.url);
+        if (fallbackRequest) {
+          const fallback = await chromeBridgeService.runBossSearch({
+            ...fallbackRequest,
+            max: 1,
+            dryRun: Boolean(input.dryRun),
+          }, 180_000);
+          return {
+            runId,
+            source: "codex-chrome",
+            status: fallback.ok ? "completed" : "failed",
+            startedAt,
+            completedAt: new Date().toISOString(),
+            added: Number(fallback.added || fallback.discovered?.length || 0),
+            candidatesSeen: Number(fallback.stats?.candidatesSeen || fallback.discovered?.length || 0),
+            duplicatesSkipped: Number(fallback.stats?.duplicatesSkipped || 0),
+            failedQueries: Number(fallback.stats?.failedQueries || (fallback.ok ? 0 : 1)),
+            jobs: Array.isArray(fallback.discovered) ? fallback.discovered : [],
+            message: [
+              "当前 Boss 选中岗位读取不可用，已按粘贴 URL 的 query/city 只导入搜索结果中的 1 条岗位。",
+              fallback.message ? normalizeCurrentJobImportMessage(fallback.message) : "",
+            ].filter(Boolean).join(" "),
+          };
+        }
+      }
+      return {
+        runId,
+        source: "codex-chrome",
+        status: result.ok ? "completed" : "failed",
+        startedAt,
+        completedAt: new Date().toISOString(),
+        added: Number(result.added || result.discovered?.length || 0),
+        candidatesSeen: Number(result.stats?.candidatesSeen || result.discovered?.length || 0),
+        duplicatesSkipped: Number(result.stats?.duplicatesSkipped || 0),
+        failedQueries: Number(result.stats?.failedQueries || (result.ok ? 0 : 1)),
+        jobs: Array.isArray(result.discovered) ? result.discovered : [],
+        ...(result.message ? { message: normalizeCurrentJobImportMessage(result.message) } : {}),
+      };
     },
   };
 }
 
-function normalizeSearchRequest(input: JobSearchRequest): Required<Pick<JobSearchRequest, "source" | "city" | "queries" | "max" | "minMatchScore" | "withDetails" | "dryRun">> {
-  const max = Number(input.max || DEFAULT_MAX);
-  return {
-    source: input.source || "boss-agent",
-    city: String(input.city || DEFAULT_CITY).trim() || DEFAULT_CITY,
-    queries: Array.isArray(input.queries) && input.queries.length
-      ? input.queries.map((query) => String(query).trim()).filter(Boolean)
-      : DEFAULT_QUERIES,
-    max: Number.isFinite(max) ? Math.max(1, Math.min(50, Math.floor(max))) : DEFAULT_MAX,
-    minMatchScore: Number(input.minMatchScore || 0),
-    withDetails: Boolean(input.withDetails),
-    dryRun: Boolean(input.dryRun),
-  };
+function shouldFallbackFromCodexChrome(result: JobSearchResult): boolean {
+  return result.status === "failed" || (
+    result.added === 0
+    && result.candidatesSeen === 0
+    && result.jobs.length === 0
+  );
 }
 
-function buildCommands(workspaceRoot: string, request: ReturnType<typeof normalizeSearchRequest>): RadarCommand[] {
-  if (request.source === "portals") {
-    throw new Error("官网门户扫描还没有接入 jobsearch，请先使用 Boss Agent 或中国平台爬虫。");
+function normalizeCurrentJobImportMessage(message: string): string {
+  if (/Unsupported Chrome bridge task:\s*boss_current_detail/i.test(message)) {
+    return "Ucareer Chrome 扩展后台仍是旧版本，尚不支持读取当前 Boss 选中岗位。请到 chrome://extensions 找到 Ucareer Job Importer，点击刷新/重新加载扩展后再试。";
   }
-  if (request.source === "codex-chrome") {
-    const args = [join(workspaceRoot, "scripts/research/codex-chrome-boss-radar.mjs"), "--max", String(request.max), "--city", request.city];
-    if (request.dryRun) args.push("--dry-run");
-    request.queries.forEach((query) => args.push("--query", query));
-    return [{ label: "Codex Chrome Boss", args, timeoutMs: CODEX_CHROME_COMMAND_TIMEOUT_MS }];
-  }
-
-  const sources: Exclude<JobSearchSourceId, "codex-chrome" | "all" | "portals">[] = request.source === "all"
-    ? ["boss-agent", "china-crawler"]
-    : [request.source];
-
-  return sources.map((source) => {
-    if (source === "boss-agent") {
-      const args = [join(workspaceRoot, "scripts/research/boss-agent-radar.mjs"), "--max", String(request.max), "--city", request.city];
-      if (request.withDetails) args.push("--details");
-      if (request.dryRun) args.push("--dry-run");
-      request.queries.forEach((query) => args.push("--query", query));
-      return { label: "Boss Agent", args };
-    }
-    const args = [join(workspaceRoot, "scripts/research/china-job-crawler.mjs"), `--max=${request.max}`];
-    if (request.dryRun) args.push("--dry-run");
-    return { label: "中国平台爬虫", args };
-  });
+  return message;
 }
 
-async function runRadarCommand(
-  runId: string,
-  startedAt: string,
-  source: JobSearchSourceId,
-  command: RadarCommand,
-): Promise<JobSearchResult> {
-  const output = await spawnNode(command.args, command.timeoutMs);
-  if (!output.ok) {
-    return {
-      runId,
-      source,
-      status: "failed",
-      startedAt,
-      completedAt: new Date().toISOString(),
-      added: 0,
-      candidatesSeen: 0,
-      duplicatesSkipped: 0,
-      failedQueries: 1,
-      jobs: [],
-      message: `${command.label} 运行失败：${trimMessage(output.stderr || output.stdout)}`,
-    };
-  }
-
-  const envelope = parseJsonEnvelope(output.stdout);
-  if (!envelope) {
-    return {
-      runId,
-      source,
-      status: "failed",
-      startedAt,
-      completedAt: new Date().toISOString(),
-      added: 0,
-      candidatesSeen: 0,
-      duplicatesSkipped: 0,
-      failedQueries: 1,
-      jobs: [],
-      message: `${command.label} 没有返回可解析 JSON。`,
-    };
-  }
-
-  const stats = typeof envelope.stats === "object" && envelope.stats ? envelope.stats as Record<string, unknown> : {};
-  const jobs = normalizeJobs(envelope.discovered);
-  return {
-    runId,
-    source,
-    status: envelope.ok === false ? "failed" : "completed",
-    startedAt,
-    completedAt: new Date().toISOString(),
-    added: numberFrom(envelope.added, jobs.length),
-    candidatesSeen: numberFrom(stats.candidatesSeen, jobs.length),
-    duplicatesSkipped: numberFrom(stats.duplicatesSkipped, 0),
-    failedQueries: numberFrom(stats.failedQueries, envelope.ok === false ? 1 : 0),
-    jobs,
-    ...(envelope.reason || envelope.message ? { message: trimMessage(envelope.reason || envelope.message) } : {}),
-  };
-}
-
-function spawnNode(args: string[], timeoutMs = COMMAND_TIMEOUT_MS): Promise<{ ok: boolean; stdout: string; stderr: string }> {
-  return new Promise((resolve) => {
-    const child = spawn(process.execPath, args, {
-      cwd: process.cwd(),
-      env: process.env,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    let stdout = "";
-    let stderr = "";
-    const timeout = setTimeout(() => {
-      child.kill("SIGTERM");
-      stderr = `${stderr}\njobsearch command timed out`.trim();
-    }, timeoutMs);
-    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
-    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
-    child.on("error", (error) => {
-      clearTimeout(timeout);
-      resolve({ ok: false, stdout, stderr: `${stderr}\n${error.message}`.trim() });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timeout);
-      resolve({ ok: code === 0, stdout, stderr });
-    });
-  });
-}
-
-function parseJsonEnvelope(text: string): Record<string, unknown> | null {
-  const trimmed = text.trim();
-  if (!trimmed) return null;
+function parseBossSearchUrl(value: string): { city: string; queries: string[] } | null {
   try {
-    return JSON.parse(trimmed) as Record<string, unknown>;
+    const url = new URL(value);
+    if (!/(^|\.)zhipin\.com$/i.test(url.hostname) || url.pathname !== "/web/geek/jobs") return null;
+    const query = (url.searchParams.get("query") || "").trim();
+    const city = (url.searchParams.get("city") || "").trim() || "深圳";
+    if (!query) return null;
+    return { city, queries: [query] };
   } catch {
-    const first = trimmed.indexOf("{");
-    const last = trimmed.lastIndexOf("}");
-    if (first >= 0 && last > first) {
-      try {
-        return JSON.parse(trimmed.slice(first, last + 1)) as Record<string, unknown>;
-      } catch {
-        return null;
-      }
-    }
     return null;
   }
 }
 
-function combineResults(runId: string, startedAt: string, source: JobSearchSourceId, results: JobSearchResult[]): JobSearchResult {
-  const jobs = results.flatMap((result) => result.jobs);
-  const failed = results.filter((result) => result.status === "failed");
+function createProviderContext(workspaceRoot: string, chromeBridgeService?: ChromeBridgeService) {
   return {
-    runId,
-    source,
-    status: failed.length === results.length ? "failed" : "completed",
-    startedAt,
-    completedAt: new Date().toISOString(),
-    added: sum(results, "added"),
-    candidatesSeen: sum(results, "candidatesSeen"),
-    duplicatesSkipped: sum(results, "duplicatesSkipped"),
-    failedQueries: sum(results, "failedQueries"),
-    jobs,
-    ...(failed.length ? { message: failed.map((result) => result.message).filter(Boolean).join("；") } : {}),
+    workspaceRoot,
+    ...(chromeBridgeService ? { chromeBridgeService } : {}),
   };
 }
 
-function normalizeJobs(value: unknown): MarketJob[] {
-  return Array.isArray(value) ? value.filter((job): job is MarketJob => Boolean(job && typeof job === "object")) : [];
+async function resolveProviders(
+  source: JobSearchSourceId,
+  providerMap: Map<JobSearchProvider["id"], JobSearchProvider>,
+  context: Parameters<JobSearchProvider["isAvailable"]>[0],
+): Promise<JobSearchProvider[]> {
+  if (source !== "all") {
+    const provider = providerMap.get(source);
+    if (!provider) return [];
+    return [provider];
+  }
+
+  const resolved: JobSearchProvider[] = [];
+  for (const sourceId of ALL_SOURCE_ORDER) {
+    const provider = providerMap.get(sourceId as JobSearchProvider["id"]);
+    if (!provider) continue;
+    if (await provider.isAvailable(context)) resolved.push(provider);
+  }
+  return resolved;
 }
 
-function sum(results: JobSearchResult[], key: "added" | "candidatesSeen" | "duplicatesSkipped" | "failedQueries"): number {
-  return results.reduce((total, result) => total + result[key], 0);
-}
-
-function numberFrom(value: unknown, fallback: number): number {
-  const next = Number(value);
-  return Number.isFinite(next) ? next : fallback;
-}
-
-function trimMessage(value: unknown): string {
-  return String(value || "").replace(/\s+/g, " ").trim().slice(0, 1000);
+async function resolveFallbackProviders(
+  providerMap: Map<JobSearchProvider["id"], JobSearchProvider>,
+  context: Parameters<JobSearchProvider["isAvailable"]>[0],
+): Promise<JobSearchProvider[]> {
+  const resolved: JobSearchProvider[] = [];
+  for (const sourceId of ALL_SOURCE_ORDER) {
+    if (sourceId === "codex-chrome") continue;
+    const provider = providerMap.get(sourceId as JobSearchProvider["id"]);
+    if (!provider) continue;
+    if (await provider.isAvailable(context)) resolved.push(provider);
+  }
+  return resolved;
 }

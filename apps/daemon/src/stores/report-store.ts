@@ -3,6 +3,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { ReportDocument, ReportsOverview, ReportSummary } from "@ucareer/shared";
 import { isInsideDir } from "../path-guards";
+import { workspaceDataPath } from "../workspace-paths";
 
 export interface ReportStore {
   listReports(): Promise<ReportsOverview>;
@@ -10,11 +11,11 @@ export interface ReportStore {
 }
 
 export function createReportStore(workspaceRoot: string): ReportStore {
-  const reportsDir = join(workspaceRoot, "workspace/jobs/reports");
+  const reportsDir = workspaceDataPath(workspaceRoot, "reports");
 
   return {
     async listReports() {
-      const files = (await readdir(reportsDir)).filter(isReportMarkdownFile).sort();
+      const files = (await readDirectorySafe(reportsDir)).filter(isReportMarkdownFile).sort();
       const reports = await Promise.all(files.map(async (file) => {
         const markdown = await readFile(join(reportsDir, file), "utf8");
         return parseReportSummary(file, markdown);
@@ -40,6 +41,15 @@ export function createReportStore(workspaceRoot: string): ReportStore {
       };
     },
   };
+}
+
+async function readDirectorySafe(path: string): Promise<string[]> {
+  try {
+    return await readdir(path);
+  } catch (error) {
+    if (isNodeError(error) && error.code === "ENOENT") return [];
+    throw error;
+  }
 }
 
 function isReportMarkdownFile(file: string): boolean {
@@ -79,4 +89,8 @@ function buildExcerpt(markdown: string): string {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }

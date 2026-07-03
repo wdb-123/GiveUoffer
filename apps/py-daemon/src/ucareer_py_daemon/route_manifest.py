@@ -1,0 +1,60 @@
+from __future__ import annotations
+
+ROUTE_GROUPS: list[dict[str, object]] = [
+    {
+        "domain": "health",
+        "nodeModule": "apps/daemon/src/server.ts",
+        "pythonStatus": "implemented",
+        "routes": ["GET /health", "GET /api/backend/architecture", "GET /api/python-daemon/routes"],
+    },
+    {
+        "domain": "auth-tenants",
+        "nodeModule": "apps/daemon/src/routes/auth-routes.ts",
+        "pythonStatus": "pending",
+        "routes": [
+            "POST /api/auth/login",
+            "POST /api/auth/create-account",
+            "GET /api/auth/session",
+            "POST /api/auth/logout",
+            "POST /api/tenants",
+            "POST /api/auth/switch-tenant",
+            "GET /api/tenant-members",
+            "POST /api/tenant-members",
+            "PATCH /api/tenant-members/:accountId",
+            "DELETE /api/tenant-members/:accountId",
+        ],
+    },
+    {
+        "domain": "billing",
+        "nodeModule": "apps/daemon/src/routes/billing-routes.ts",
+        "pythonStatus": "pending",
+        "routes": ["GET /api/billing/plans", "GET /api/billing/tenant", "PATCH /api/billing/tenant/plan"],
+    },
+    {
+        "domain": "agent-execution",
+        "nodeModule": "apps/daemon/src/routes/agent-routes.ts",
+        "pythonStatus": "pending",
+        "routes": [
+            "GET /api/providers",
+            "POST /api/providers/:providerId/check",
+            "GET /api/agent-tasks",
+            "POST /api/agent-tasks",
+            "GET /api/agent-tasks/:taskId/events/stream",
+            "POST /api/approvals/:approvalId/decision",
+        ],
+    },
+    {
+        "domain": "workspace-data",
+        "nodeModule": "apps/daemon/src/routes/*-routes.ts",
+        "pythonStatus": "pending",
+        "routes": [
+            "GET /api/profile-overview",
+            "GET /api/resumes",
+            "GET /api/applications",
+            "GET /api/experience-overview",
+            "GET /api/reports",
+            "GET /api/recruitment-market",
+        ],
+    },
+]
+

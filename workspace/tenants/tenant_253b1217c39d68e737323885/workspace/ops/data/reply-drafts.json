@@ -1,0 +1,40 @@
+{
+  "updatedAt": "2026-06-03T07:04:38.534Z",
+  "guardrails": [
+    "只自动生成草稿，不自动发送。",
+    "发送、打招呼、投递和联系方式交换必须由本人确认。",
+    "命中平台风控或涉及隐私信息时，回到平台官网手动处理。"
+  ],
+  "drafts": [
+    {
+      "id": "RD-mpxq17cz",
+      "source": "Boss 直聘",
+      "company": "测试",
+      "role": "测试岗位",
+      "intent": "interested",
+      "tone": "professional",
+      "salary": "35K-45K",
+      "recruiterMessage": "你好",
+      "draft": "您好，感谢联系，我对测试的测试岗位岗位有兴趣。我这边主要做机器人系统、关节通信、EtherCAT/CANopen、ROS2/MoveIt 和现场问题闭环，也有用 AI 工具做研发提效、文档和问题复盘的经验。如果方便的话，请您发一下完整 JD、薪资范围、工作地点和面试流程，我看完后可以进一步确认匹配度。",
+      "status": "copied",
+      "createdAt": "2026-06-03T07:04:38.531Z",
+      "updatedAt": "2026-06-03T07:04:38.534Z",
+      "safetyNote": "草稿已生成；发送前需要本人确认，不会自动触达招聘方。"
+    },
+    {
+      "id": "RD-mpxq0fvo",
+      "source": "Boss 直聘",
+      "company": "A",
+      "role": "B",
+      "intent": "interested",
+      "tone": "professional",
+      "salary": "35K-45K",
+      "recruiterMessage": "谢谢",
+      "draft": "您好，感谢联系，我对A的B岗位有兴趣。我这边主要做机器人系统、关节通信、EtherCAT/CANopen、ROS2/MoveIt 和现场问题闭环，也有用 AI 工具做研发提效、文档和问题复盘的经验。如果方便的话，请您发一下完整 JD、薪资范围、工作地点和面试流程，我看完后可以进一步确认匹配度。",
+      "status": "draft",
+      "createdAt": "2026-06-03T07:04:02.916Z",
+      "updatedAt": "2026-06-03T07:04:02.916Z",
+      "safetyNote": "草稿已生成；发送前需要本人确认，不会自动触达招聘方。"
+    }
+  ]
+}

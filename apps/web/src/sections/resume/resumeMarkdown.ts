@@ -21,11 +21,25 @@ export function paginateMarkdown(markdown: string): ResumeBlock[][] {
   const pages: ResumeBlock[][] = [];
   let current: ResumeBlock[] = [];
   let weight = 0;
-  const pageWeightLimit = 46;
-  for (const block of blocks) {
+  const pageWeightLimit = 82;
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index];
+    if (!block) continue;
     const nextWeight = blockWeight(block);
+    const followingBlock = blocks[index + 1];
     const previousBlock = current[current.length - 1];
     const keepsHeadingWithBody = previousBlock?.type === "h2" && block.type === "ul";
+    const wouldLeaveHeadingAtPageEnd =
+      current.length > 0 &&
+      (block.type === "h2" || block.type === "h3") &&
+      followingBlock &&
+      weight + nextWeight <= pageWeightLimit &&
+      weight + nextWeight + blockWeight(followingBlock) > pageWeightLimit;
+    if (wouldLeaveHeadingAtPageEnd) {
+      pages.push(current);
+      current = [];
+      weight = 0;
+    }
     if (previousBlock?.type === "h3" && block.type === "ul" && weight + nextWeight > pageWeightLimit && current.length > 1) {
       current.pop();
       pages.push(current);

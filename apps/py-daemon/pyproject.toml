@@ -1,0 +1,13 @@
+[project]
+name = "ucareer-py-daemon"
+version = "0.1.0"
+description = "Python migration target for the Ucareer local daemon"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
