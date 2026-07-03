@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Iterator
 
 
 @dataclass(frozen=True)
@@ -29,9 +31,86 @@ def probe_database(path: Path) -> DatabaseProbe:
     return DatabaseProbe(str(path), True, tables, account_count, tenant_count)
 
 
+@contextmanager
+def connect_database(path: Path) -> Iterator[sqlite3.Connection]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    ensure_core_schema(conn)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def ensure_core_schema(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS tenants (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          slug TEXT NOT NULL UNIQUE,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS accounts (
+          id TEXT PRIMARY KEY,
+          email TEXT NOT NULL UNIQUE,
+          display_name TEXT NOT NULL,
+          password_hash TEXT NOT NULL,
+          password_salt TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS tenant_memberships (
+          tenant_id TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          role TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (tenant_id, account_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_tenant_memberships_account_id
+          ON tenant_memberships (account_id);
+
+        CREATE TABLE IF NOT EXISTS auth_sessions (
+          token TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          active_tenant_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          expires_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_auth_sessions_account_id
+          ON auth_sessions (account_id);
+
+        CREATE TABLE IF NOT EXISTS tenant_billing (
+          tenant_id TEXT PRIMARY KEY,
+          plan_id TEXT NOT NULL,
+          monthly_token_limit INTEGER NOT NULL,
+          monthly_price_cents INTEGER NOT NULL,
+          currency TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS tenant_token_usage_monthly (
+          tenant_id TEXT NOT NULL,
+          month TEXT NOT NULL,
+          input_tokens INTEGER NOT NULL DEFAULT 0,
+          cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+          output_tokens INTEGER NOT NULL DEFAULT 0,
+          total_tokens INTEGER NOT NULL DEFAULT 0,
+          task_count INTEGER NOT NULL DEFAULT 0,
+          last_used_at TEXT,
+          PRIMARY KEY (tenant_id, month)
+        );
+        """
+    )
+    conn.commit()
+
+
 def _count_if_table_exists(conn: sqlite3.Connection, tables: list[str], table: str) -> int | None:
     if table not in tables:
         return None
     value = conn.execute(f"select count(*) from {table}").fetchone()[0]
     return int(value)
-

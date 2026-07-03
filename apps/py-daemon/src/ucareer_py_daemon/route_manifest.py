@@ -10,7 +10,7 @@ ROUTE_GROUPS: list[dict[str, object]] = [
     {
         "domain": "auth-tenants",
         "nodeModule": "apps/daemon/src/routes/auth-routes.ts",
-        "pythonStatus": "pending",
+        "pythonStatus": "implemented",
         "routes": [
             "POST /api/auth/login",
             "POST /api/auth/create-account",
@@ -27,7 +27,7 @@ ROUTE_GROUPS: list[dict[str, object]] = [
     {
         "domain": "billing",
         "nodeModule": "apps/daemon/src/routes/billing-routes.ts",
-        "pythonStatus": "pending",
+        "pythonStatus": "implemented",
         "routes": ["GET /api/billing/plans", "GET /api/billing/tenant", "PATCH /api/billing/tenant/plan"],
     },
     {
@@ -57,4 +57,3 @@ ROUTE_GROUPS: list[dict[str, object]] = [
         ],
     },
 ]
-

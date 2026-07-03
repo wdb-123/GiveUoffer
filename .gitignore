@@ -9,6 +9,7 @@ workspace/ops/data/application-events.jsonl
 workspace/ops/data/pipeline.md
 workspace/ops/data/scan-history.tsv
 workspace/ops/data/*.json
+workspace/ops/data/*.jsonl
 workspace/ops/data/*.md
 workspace/ops/data/recruitment-market.json.jobs.d/*.json
 workspace/ops/data/parser-output/**/*.json
@@ -40,6 +41,7 @@ workspace/ops/batch/tracker-additions/**/*.tsv
 !workspace/ops/batch/tracker-additions/.gitkeep
 workspace/jobs/jds/*
 !workspace/jobs/jds/.gitkeep
+workspace/tenants/**
 
 # Writing samples (user's personal files — never committed)
 workspace/profile/writing-samples/*
@@ -67,6 +69,7 @@ apps/web/dist/
 *.mov
 *.mp4
 *.swp
+__pycache__/
 
 # Claude Code local
 .claude/settings.local.json
