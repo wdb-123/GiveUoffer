@@ -1,8 +1,7 @@
 # Ucareer Python Daemon
 
-This is the migration target for the local Ucareer backend. The existing
-TypeScript daemon remains the production service while domains are moved over
-incrementally.
+This is the default local Ucareer backend. The legacy TypeScript daemon is kept
+as `npm run daemon:node` while remaining adapter code is retired.
 
 ## Run
 
@@ -13,7 +12,7 @@ npm run daemon:python
 Default URL:
 
 ```text
-http://127.0.0.1:54322
+http://127.0.0.1:54321
 ```
 
 Environment:
@@ -21,7 +20,7 @@ Environment:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `UCAREER_PY_HOST` | `127.0.0.1` | Bind host |
-| `UCAREER_PY_PORT` | `54322` | Bind port |
+| `UCAREER_PY_PORT` | `54321` | Bind port |
 | `UCAREER_WORKSPACE_ROOT` | repo root | Shared workspace root |
 | `UCAREER_DAEMON_DB` | `.ucareer/daemon.sqlite` | Shared local daemon SQLite |
 
@@ -39,6 +38,5 @@ or:
 { "ok": false, "error": { "code": "error_code", "message": "..." } }
 ```
 
-Route behavior should be migrated domain by domain. The frontend should only be
-pointed at the Python daemon after that route group has parity tests.
-
+Route behavior is covered by parity tests in `apps/py-daemon/tests`. New backend
+work should land in Python first.

@@ -22,8 +22,7 @@ def load_settings() -> Settings:
     daemon_db_path = Path(os.environ.get("UCAREER_DAEMON_DB", workspace_root / ".ucareer" / "daemon.sqlite")).resolve()
     return Settings(
         host=os.environ.get("UCAREER_PY_HOST", "127.0.0.1"),
-        port=int(os.environ.get("UCAREER_PY_PORT", "54322")),
+        port=int(os.environ.get("UCAREER_PY_PORT", "54321")),
         workspace_root=workspace_root,
         daemon_db_path=daemon_db_path,
     )
-

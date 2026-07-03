@@ -16,7 +16,7 @@ const commands = [
   {
     name: "daemon",
     command: "npm",
-    args: ["--workspace", "@ucareer/daemon", "run", "dev"],
+    args: ["run", "daemon:python"],
   },
 ];
 

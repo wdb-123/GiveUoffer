@@ -55,6 +55,17 @@ class PythonDaemonContractTest(unittest.TestCase):
         self.assertIn("routeGroups", data)
         self.assertTrue(any(group["domain"] == "auth-tenants" for group in data["routeGroups"]))
 
+    def test_root_dev_scripts_start_python_daemon_by_default(self) -> None:
+        repo_root = Path(__file__).resolve().parents[3]
+        package = json.loads((repo_root / "package.json").read_text(encoding="utf-8"))
+        scripts = package["scripts"]
+
+        self.assertEqual(scripts["daemon"], "npm run daemon:python")
+        self.assertEqual(scripts["daemon:api"], "npm run daemon:python")
+        self.assertIn("python3 -m ucareer_py_daemon", scripts["daemon:python"])
+        self.assertIn("@ucareer/daemon", scripts["daemon:node"])
+        self.assertIn('args: ["run", "daemon:python"]', (repo_root / "scripts" / "dev" / "dev-ucareer.mjs").read_text(encoding="utf-8"))
+
     def test_provider_routes_match_frontend_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = Settings(
