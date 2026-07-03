@@ -12,6 +12,7 @@ from typing import Any
 from .db import connect_database
 from .providers import get_provider_definition, list_providers
 from .routing import preview_agent_route
+from .workspace_stores import ApplicationStore
 
 
 @dataclass
@@ -435,7 +436,8 @@ class AgentStore:
         if task.get("status") not in {"queued", "waiting_approval", "running"}:
             return
         provider = _provider_by_id(str(task.get("providerId") or ""))
-        command_spec = _provider_execution_command(provider, task) if provider else None
+        prompt = str(task.get("prompt") or "")
+        command_spec = _provider_execution_command(provider, task, prompt) if provider else None
         if not provider or not command_spec:
             self._append_error_event(task_id, f"Provider {task.get('providerId')} does not support Python structured execution", str(task.get("providerId") or "provider"))
             self.update_task_status(task_id, "failed")
@@ -443,6 +445,45 @@ class AgentStore:
 
         cwd = self._resolve_workspace_path(command_spec["cwd"])
         cwd.mkdir(parents=True, exist_ok=True)
+
+        for iteration in range(4):
+            command_spec = _provider_execution_command(provider, task, prompt)
+            if not command_spec:
+                self._append_error_event(task_id, f"Provider {provider['id']} does not support Python structured execution", str(provider["id"]))
+                self.update_task_status(task_id, "failed")
+                return
+            completed, assistant_output = self._run_provider_iteration(task, command_spec)
+            if completed is None:
+                return
+            if completed.returncode != 0:
+                self.update_task_status(task_id, "failed")
+                return
+            tool_call = _parse_agent_tool_call(assistant_output)
+            if not tool_call or iteration >= 3:
+                self.update_task_status(task_id, "completed")
+                return
+            try:
+                tool_result = _execute_agent_tool(self.tenant_workspace_root, tool_call)
+            except Exception as cause:
+                failure = str(cause)
+                self._append_error_event(task_id, failure, str(provider["id"]))
+                with connect_database(self.db_path) as conn:
+                    self._append_event(conn, task_id, {"type": "message", "role": "assistant", "text": failure, "createdAt": _now_iso()})
+                    conn.commit()
+                self.update_task_status(task_id, "failed")
+                return
+            tool_result_text = json.dumps(tool_result, ensure_ascii=False, indent=2)
+            with connect_database(self.db_path) as conn:
+                now = _now_iso()
+                self._append_event(conn, task_id, {"type": "message", "role": "system", "text": f"Tool call requested: {json.dumps(tool_call, ensure_ascii=False)}", "createdAt": now})
+                self._append_event(conn, task_id, {"type": "message", "role": "system", "text": f"UC_TOOL_RESULT {tool_result_text}", "createdAt": now})
+                conn.commit()
+            prompt = f"{prompt}\n\n---\nUC_TOOL_RESULT for {tool_call['tool']}:\n{tool_result_text}\n\n如果工具结果已经满足用户需求，请给出简洁结论；如果还需要写入或更新，请继续输出 UC_TOOL_CALL。"
+
+    def _run_provider_iteration(self, task: dict[str, Any], command_spec: dict[str, Any]) -> tuple[subprocess.CompletedProcess[str] | None, str]:
+        task_id = str(task["id"])
+        provider_id = str(task.get("providerId") or "provider")
+        cwd = self._resolve_workspace_path(command_spec["cwd"])
         command = str(command_spec["command"])
         args = [str(arg) for arg in command_spec["args"]]
         command_text = " ".join([command, *args])
@@ -453,17 +494,11 @@ class AgentStore:
         self.update_task_status(task_id, "running")
 
         try:
-            completed = subprocess.run(
-                [command, *args],
-                cwd=str(cwd),
-                capture_output=True,
-                text=True,
-                check=False,
-            )
+            completed = subprocess.run([command, *args], cwd=str(cwd), capture_output=True, text=True, check=False)
         except OSError as cause:
-            self._append_error_event(task_id, str(cause), str(task.get("providerId") or "provider"))
+            self._append_error_event(task_id, str(cause), provider_id)
             self.update_task_status(task_id, "failed")
-            return
+            return None, ""
 
         finished_at = _now_iso()
         assistant_output = (completed.stdout or "").strip()
@@ -473,19 +508,9 @@ class AgentStore:
                 self._append_event(conn, task_id, {"type": "message", "role": "assistant", "text": assistant_output, "createdAt": finished_at})
             if system_output:
                 self._append_event(conn, task_id, {"type": "message", "role": "system", "text": system_output, "createdAt": finished_at})
-            self._append_event(
-                conn,
-                task_id,
-                {
-                    "type": "command",
-                    "command": command_text,
-                    "cwd": str(cwd),
-                    "status": "done" if completed.returncode == 0 else "failed",
-                    "createdAt": finished_at,
-                },
-            )
+            self._append_event(conn, task_id, {"type": "command", "command": command_text, "cwd": str(cwd), "status": "done" if completed.returncode == 0 else "failed", "createdAt": finished_at})
             conn.commit()
-        self.update_task_status(task_id, "completed" if completed.returncode == 0 else "failed")
+        return completed, assistant_output
 
     def list_workflow_runs(self) -> list[dict[str, Any]]:
         with connect_database(self.db_path) as conn:
@@ -729,7 +754,7 @@ def _provider_by_id(provider_id: str) -> dict[str, Any] | None:
     return next((provider for provider in list_providers() if provider["id"] == provider_id), None)
 
 
-def _provider_execution_command(provider: dict[str, Any] | None, task: dict[str, Any]) -> dict[str, Any] | None:
+def _provider_execution_command(provider: dict[str, Any] | None, task: dict[str, Any], prompt: str) -> dict[str, Any] | None:
     if not provider:
         return None
     provider = get_provider_definition(str(provider["id"])) or provider
@@ -737,7 +762,6 @@ def _provider_execution_command(provider: dict[str, Any] | None, task: dict[str,
         return None
     provider_id = str(provider["id"])
     command = str(provider.get("command") or provider_id)
-    prompt = str(task.get("prompt") or "")
     cwd = str(task.get("workspacePath") or ".")
     if provider_id == "codex":
         return {"command": command, "args": ["exec", prompt], "cwd": cwd}
@@ -930,6 +954,38 @@ def _parse_local_command_approval(command: str) -> dict[str, Any] | None:
         "args": [str(arg) for arg in parsed.get("args", [])] if isinstance(parsed.get("args"), list) else [],
         "cwd": cwd,
     }
+
+
+def _parse_agent_tool_call(output: str) -> dict[str, Any] | None:
+    matches = list(re.finditer(r"UC_TOOL_CALL\s+({[^\n\r]+})", output))
+    raw = matches[-1].group(1) if matches else ""
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("tool"), str):
+        return None
+    return {
+        "tool": parsed["tool"],
+        "input": parsed.get("input") if isinstance(parsed.get("input"), dict) else {},
+    }
+
+
+def _execute_agent_tool(tenant_workspace_root: Path, call: dict[str, Any]) -> dict[str, Any]:
+    tool = str(call.get("tool") or "")
+    payload = call.get("input") if isinstance(call.get("input"), dict) else {}
+    applications = ApplicationStore(tenant_workspace_root)
+    if tool == "applications.list":
+        return {"tool": tool, **applications.list_applications()}
+    if tool == "applications.create_event":
+        return {"tool": tool, "event": applications.create_application_event(payload)}
+    if tool == "applications.update_event":
+        return {"tool": tool, "event": applications.update_application_event(payload)}
+    if tool == "applications.delete_event":
+        return {"tool": tool, "deletedEventId": applications.delete_application_event(payload)}
+    raise ValueError(f"Unsupported tool: {tool}")
 
 
 def _drop_empty(value: dict[str, Any]) -> dict[str, Any]:

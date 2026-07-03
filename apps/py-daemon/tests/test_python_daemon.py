@@ -1024,6 +1024,77 @@ class PythonDaemonContractTest(unittest.TestCase):
                 output_text = "\n".join(str(event.get("text") or "") for event in events["data"])
                 self.assertIn("provider-ok:exec", output_text)
 
+    def test_provider_tool_loop_writes_application_event_from_python_daemon(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_codex = root / "fake-codex-tool"
+            fake_codex.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, sys\n"
+                "prompt = sys.argv[2] if len(sys.argv) > 2 else ''\n"
+                "if 'UC_TOOL_RESULT for applications.create_event' in prompt:\n"
+                "    print('已写入投递进度')\n"
+                "else:\n"
+                "    print('UC_TOOL_CALL ' + json.dumps({\n"
+                "      'tool': 'applications.create_event',\n"
+                "      'input': {\n"
+                "        'company': '无界智航',\n"
+                "        'role': '机器人解决方案工程师',\n"
+                "        'event': 'offer',\n"
+                "        'source': 'agent_test',\n"
+                "        'note': 'Python tool loop 写入'\n"
+                "      }\n"
+                "    }, ensure_ascii=False))\n",
+                encoding="utf-8",
+            )
+            fake_codex.chmod(0o755)
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=root,
+                daemon_db_path=root / ".ucareer" / "daemon.sqlite",
+            )
+            with mock.patch.dict("os.environ", {"CODEX_BIN": str(fake_codex)}):
+                client = TestClient(create_app(settings))
+                created = client.post(
+                    "/api/auth/create-account",
+                    json={
+                        "email": "tool-loop@example.com",
+                        "password": "Password123",
+                        "displayName": "Tool Loop",
+                        "tenantName": "Tool Loop Workspace",
+                    },
+                ).json()
+                self.assertTrue(created["ok"])
+                headers = {"x-ucareer-session": created["data"]["token"]}
+
+                created_task = client.post(
+                    "/api/agent-tasks",
+                    headers=headers,
+                    json={"providerId": "codex", "prompt": "帮我把无界智航 offer 写入投递进度"},
+                ).json()
+                self.assertTrue(created_task["ok"])
+                task_id = created_task["data"]["task"]["id"]
+                approval_id = created_task["data"]["approval"]["id"]
+
+                decision = client.post(f"/api/approvals/{approval_id}/decision", headers=headers, json={"decision": "allow_once"}).json()
+                self.assertTrue(decision["ok"])
+
+                task = client.get(f"/api/agent-tasks/{task_id}", headers=headers).json()
+                self.assertTrue(task["ok"])
+                self.assertEqual(task["data"]["status"], "completed")
+                events = client.get(f"/api/agent-tasks/{task_id}/events", headers=headers).json()
+                self.assertTrue(events["ok"])
+                output_text = "\n".join(str(event.get("text") or "") for event in events["data"])
+                self.assertIn("UC_TOOL_RESULT", output_text)
+                self.assertIn("已写入投递进度", output_text)
+
+                applications = client.get("/api/applications", headers=headers).json()
+                self.assertTrue(applications["ok"])
+                written = applications["data"]["applications"][0]
+                self.assertEqual(written["company"], "无界智航")
+                self.assertEqual(written["statusKey"], "offer")
+
     def test_jobsearch_routes_run_from_python_daemon_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
