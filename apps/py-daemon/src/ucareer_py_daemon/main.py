@@ -11,6 +11,7 @@ from .agent_store import AgentStore
 from .attachments import AttachmentStore
 from .auth import AuthStore
 from .billing import BillingStore
+from .chrome_bridge import ChromeBridgeService
 from .config import Settings, load_settings
 from .connectors import ConnectorCredentialStore, get_connector, import_qq_email_attachments, import_qq_email_messages, list_connectors, test_qq_email_connection
 from .db import probe_database
@@ -31,6 +32,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Ucareer Python Daemon", version="0.1.0")
     auth_store = AuthStore(settings.daemon_db_path)
     billing_store = BillingStore(settings.daemon_db_path)
+    chrome_bridge_service = ChromeBridgeService()
 
     app.add_middleware(
         CORSMiddleware,
@@ -321,7 +323,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             auth_store,
             settings,
             "workspace.write",
-            lambda root: JobSearchService(root).search(payload),
+            lambda root: JobSearchService(root, chrome_bridge_service).search(payload),
+        )
+
+    @app.get("/api/chrome-bridge/tasks/next")
+    async def chrome_bridge_next_task(request: Request) -> dict[str, object]:
+        return _handle_permission(
+            request,
+            auth_store,
+            "workspace.write",
+            lambda _session: chrome_bridge_service.next_task(),
+        )
+
+    @app.post("/api/chrome-bridge/tasks/{task_id}/result")
+    async def chrome_bridge_task_result(request: Request, task_id: str, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_permission(
+            request,
+            auth_store,
+            "workspace.write",
+            lambda _session: chrome_bridge_service.complete_task(task_id, payload or {"ok": False}),
         )
 
     @app.get("/api/profile-overview")

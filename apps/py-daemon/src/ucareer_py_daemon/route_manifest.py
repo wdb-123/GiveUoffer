@@ -94,6 +94,12 @@ ROUTE_GROUPS: list[dict[str, object]] = [
         "routes": ["GET /api/search/jobsearch/sources", "POST /api/search/jobsearch"],
     },
     {
+        "domain": "chrome-bridge",
+        "nodeModule": "apps/daemon/src/routes/chrome-bridge-routes.ts",
+        "pythonStatus": "implemented",
+        "routes": ["GET /api/chrome-bridge/tasks/next", "POST /api/chrome-bridge/tasks/:taskId/result"],
+    },
+    {
         "domain": "workspace-data",
         "nodeModule": "apps/daemon/src/routes/*-routes.ts",
         "pythonStatus": "partial-readonly",

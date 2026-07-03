@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .chrome_bridge import ChromeBridgeService
+
 DEFAULT_JOB_SEARCH_QUERIES = ["机器人系统工程师", "ROS2 机器人", "机器人软件 SDK", "具身智能 数据", "AI工具链 Agent RAG"]
 DEFAULT_JOB_SEARCH_CITY = "深圳"
 DEFAULT_MAX = 12
@@ -20,6 +22,7 @@ CODEX_CHROME_TIMEOUT_SECONDS = 360
 @dataclass
 class JobSearchService:
     workspace_root: Path
+    chrome_bridge: ChromeBridgeService | None = None
 
     def list_sources(self) -> list[dict[str, Any]]:
         providers = _provider_definitions()
@@ -46,12 +49,12 @@ class JobSearchService:
             return _empty_result(run_id, request["source"], started_at, "没有可用的岗位搜索来源。")
 
         if request["source"] != "all":
-            result = _run_provider(self.workspace_root, providers[0], request, run_id, started_at)
+            result = _run_provider(self.workspace_root, providers[0], request, run_id, started_at, self.chrome_bridge)
             if request["source"] != "codex-chrome" or not _should_fallback_from_codex_chrome(result):
                 return result
             fallback_results = [result]
             for provider in _resolve_fallback_providers():
-                fallback = _run_provider(self.workspace_root, provider, request, run_id, started_at)
+                fallback = _run_provider(self.workspace_root, provider, request, run_id, started_at, self.chrome_bridge)
                 fallback_results.append(fallback)
                 if not _should_fallback_from_codex_chrome(fallback):
                     break
@@ -65,7 +68,7 @@ class JobSearchService:
             run_id,
             started_at,
             request["source"],
-            [_run_provider(self.workspace_root, provider, request, run_id, started_at) for provider in providers],
+            [_run_provider(self.workspace_root, provider, request, run_id, started_at, self.chrome_bridge) for provider in providers],
         )
 
 
@@ -161,11 +164,30 @@ def _resolve_fallback_providers() -> list[dict[str, Any]]:
     return [provider for provider_id in order for provider in providers if provider["id"] == provider_id and provider["available"]]
 
 
-def _run_provider(workspace_root: Path, provider: dict[str, Any], request: dict[str, Any], run_id: str, started_at: str) -> dict[str, Any]:
+def _run_provider(
+    workspace_root: Path,
+    provider: dict[str, Any],
+    request: dict[str, Any],
+    run_id: str,
+    started_at: str,
+    chrome_bridge: ChromeBridgeService | None = None,
+) -> dict[str, Any]:
     if provider["id"] == "portals":
         return _empty_result(run_id, provider["id"], started_at, "官网门户扫描还没有接入 jobsearch provider，请先使用其他可用来源。")
     if not provider.get("available"):
         return _empty_result(run_id, provider["id"], started_at, f"{provider['label']} 当前不可用。")
+    if provider["id"] == "codex-chrome" and chrome_bridge:
+        result = chrome_bridge.run_boss_search(
+            {
+                "city": request["city"],
+                "queries": request["queries"],
+                "max": request["max"],
+                "withDetails": request["withDetails"],
+                "dryRun": request["dryRun"],
+            },
+            int(provider.get("timeout") or CODEX_CHROME_TIMEOUT_SECONDS),
+        )
+        return _bridge_result_to_jobsearch_result(result, run_id, provider["id"], started_at, request)
     script = _resolve_project_script(workspace_root, str(provider.get("script") or ""))
     if not script.exists():
         return _empty_result(run_id, provider["id"], started_at, f"{provider['label']} 脚本不存在：{provider.get('script')}")
@@ -190,6 +212,30 @@ def _run_provider(workspace_root: Path, provider: dict[str, Any], request: dict[
         "failedQueries": _number(stats.get("failedQueries"), 1 if envelope.get("ok") is False else 0),
         "jobs": jobs,
         **({"message": _trim_message(envelope.get("reason") or envelope.get("message"))} if envelope.get("reason") or envelope.get("message") else {}),
+    }
+
+
+def _bridge_result_to_jobsearch_result(
+    result: dict[str, Any],
+    run_id: str,
+    source: str,
+    started_at: str,
+    request: dict[str, Any],
+) -> dict[str, Any]:
+    stats = result.get("stats") if isinstance(result.get("stats"), dict) else {}
+    jobs = _normalize_jobs(result.get("discovered"))
+    return {
+        "runId": run_id,
+        "source": source,
+        "status": "completed" if result.get("ok") else "failed",
+        "startedAt": started_at,
+        "completedAt": _now_iso(),
+        "added": _number(result.get("added"), len(jobs)),
+        "candidatesSeen": _number(stats.get("candidatesSeen"), len(jobs)),
+        "duplicatesSkipped": _number(stats.get("duplicatesSkipped"), 0),
+        "failedQueries": _number(stats.get("failedQueries"), 0 if result.get("ok") else len(request.get("queries") or [])),
+        "jobs": jobs,
+        **({"message": _trim_message(result.get("message"))} if result.get("message") else {}),
     }
 
 

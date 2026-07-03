@@ -6,6 +6,7 @@ import tempfile
 import threading
 import unittest
 import json
+import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -913,6 +914,73 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertTrue(portal_result["ok"])
             self.assertEqual(portal_result["data"]["status"], "failed")
             self.assertEqual(portal_result["data"]["failedQueries"], 1)
+
+    def test_chrome_bridge_routes_back_codex_chrome_jobsearch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=root,
+                daemon_db_path=root / ".ucareer" / "daemon.sqlite",
+            )
+            client = TestClient(create_app(settings))
+            created = client.post(
+                "/api/auth/create-account",
+                json={
+                    "email": "chrome@example.com",
+                    "password": "Password123",
+                    "displayName": "Chrome",
+                    "tenantName": "Chrome Workspace",
+                },
+            ).json()
+            self.assertTrue(created["ok"])
+            headers = {"x-ucareer-session": created["data"]["token"]}
+            search_result: dict[str, object] = {}
+
+            def run_search() -> None:
+                search_result.update(client.post(
+                    "/api/search/jobsearch",
+                    headers=headers,
+                    json={"source": "codex-chrome", "city": "深圳", "queries": ["机器人"], "max": 1, "dryRun": True},
+                ).json())
+
+            thread = threading.Thread(target=run_search)
+            thread.start()
+            task = None
+            for _ in range(40):
+                next_task = client.get("/api/chrome-bridge/tasks/next", headers=headers).json()
+                self.assertTrue(next_task["ok"])
+                if next_task["data"]:
+                    task = next_task["data"]
+                    break
+                time.sleep(0.05)
+
+            self.assertIsNotNone(task)
+            self.assertEqual(task["type"], "boss_search")
+            self.assertEqual(task["status"], "running")
+            self.assertEqual(task["payload"]["queries"], ["机器人"])
+
+            completed = client.post(
+                f"/api/chrome-bridge/tasks/{task['id']}/result",
+                headers=headers,
+                json={
+                    "ok": True,
+                    "added": 1,
+                    "stats": {"queries": 1, "candidatesSeen": 1, "duplicatesSkipped": 0, "failedQueries": 0},
+                    "queries": ["机器人"],
+                    "discovered": [{"id": "MJ-CHROME", "company": "Chrome Corp", "role": "机器人软件工程师", "url": "https://example.com/chrome"}],
+                },
+            ).json()
+            self.assertTrue(completed["ok"])
+            self.assertEqual(completed["data"]["status"], "completed")
+
+            thread.join(timeout=5)
+            self.assertFalse(thread.is_alive())
+            self.assertTrue(search_result["ok"])
+            self.assertEqual(search_result["data"]["source"], "codex-chrome")
+            self.assertEqual(search_result["data"]["status"], "completed")
+            self.assertEqual(search_result["data"]["jobs"][0]["company"], "Chrome Corp")
 
     def _write_tenant_workspace_fixture(self, root: Path) -> None:
         (root / "profile").mkdir(parents=True)
