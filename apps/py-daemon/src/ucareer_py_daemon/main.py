@@ -12,6 +12,7 @@ from .billing import BillingStore
 from .config import Settings, load_settings
 from .db import probe_database
 from .envelope import error, ok
+from .providers import check_provider, list_providers
 from .route_manifest import ROUTE_GROUPS
 from .workspace import tenant_workspace_root
 from .workspace_stores import ApplicationStore, EvidenceStore, ExperienceStore, MarketStore, ProfileStore, ReportStore, ResumeStore, WorkspaceFileStore
@@ -120,6 +121,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "tenant.manage",
             lambda session: billing_store.update_tenant_plan(session["activeTenant"]["id"], str(payload.get("planId") or "")),
         )
+
+    @app.get("/api/providers")
+    async def providers() -> dict[str, object]:
+        return ok(list_providers())
+
+    @app.post("/api/providers/{provider_id}/check")
+    async def provider_check(provider_id: str) -> dict[str, object]:
+        status = check_provider(provider_id)
+        if not status:
+            return error("provider_not_found", f"Provider not found: {provider_id}")
+        return ok(status)
 
     @app.get("/api/profile-overview")
     async def profile_overview(request: Request) -> dict[str, object]:

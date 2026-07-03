@@ -48,6 +48,26 @@ class PythonDaemonContractTest(unittest.TestCase):
         self.assertIn("routeGroups", data)
         self.assertTrue(any(group["domain"] == "auth-tenants" for group in data["routeGroups"]))
 
+    def test_provider_routes_match_frontend_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=Path(tmp),
+                daemon_db_path=Path(tmp) / ".ucareer" / "daemon.sqlite",
+            )
+            client = TestClient(create_app(settings))
+
+            providers = client.get("/api/providers").json()
+            self.assertTrue(providers["ok"])
+            self.assertEqual(providers["data"][0]["id"], "codex")
+            self.assertEqual(providers["data"][0]["contextWindow"]["tokens"], 400000)
+            self.assertTrue(providers["data"][0]["capabilities"]["structuredRunner"])
+
+            missing = client.post("/api/providers/missing-provider/check").json()
+            self.assertFalse(missing["ok"])
+            self.assertEqual(missing["error"]["code"], "provider_not_found")
+
     def test_auth_tenant_and_billing_routes_use_shared_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = Settings(
