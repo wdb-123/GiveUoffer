@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from ucareer_py_daemon.config import Settings
 from ucareer_py_daemon.db import connect_database
+from ucareer_py_daemon.jobsearch import JobSearchService
 from ucareer_py_daemon.main import create_app
 
 
@@ -1249,6 +1250,79 @@ class PythonDaemonContractTest(unittest.TestCase):
                 self.assertIn("mailbox and jobsearch done", output_text)
                 mailbox_mock.assert_called_once()
 
+    def test_provider_tool_loop_handles_current_job_import_tool(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_codex = root / "fake-codex-current-job"
+            fake_codex.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, sys\n"
+                "prompt = sys.argv[2] if len(sys.argv) > 2 else ''\n"
+                "if 'UC_TOOL_RESULT for jobsearch.import_current_job' in prompt:\n"
+                "    print('current job imported')\n"
+                "else:\n"
+                "    print('UC_TOOL_CALL ' + json.dumps({'tool': 'jobsearch.import_current_job', 'input': {'url': 'https://www.zhipin.com/web/geek/jobs?query=机器人&city=101280600', 'dryRun': True}}, ensure_ascii=False))\n",
+                encoding="utf-8",
+            )
+            fake_codex.chmod(0o755)
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=root,
+                daemon_db_path=root / ".ucareer" / "daemon.sqlite",
+            )
+            fake_import = {
+                "runId": "jobimport_test",
+                "source": "codex-chrome",
+                "status": "completed",
+                "startedAt": "2026-07-03T00:00:00Z",
+                "completedAt": "2026-07-03T00:00:01Z",
+                "added": 1,
+                "candidatesSeen": 1,
+                "duplicatesSkipped": 0,
+                "failedQueries": 0,
+                "jobs": [{"id": "MJ-CURRENT", "company": "无界智航", "role": "机器人解决方案工程师", "url": "https://example.test/job"}],
+                "message": "ok",
+            }
+            with (
+                mock.patch.dict("os.environ", {"CODEX_BIN": str(fake_codex)}),
+                mock.patch("ucareer_py_daemon.agent_store.JobSearchService.import_current_job", return_value=fake_import) as import_mock,
+            ):
+                client = TestClient(create_app(settings))
+                created = client.post(
+                    "/api/auth/create-account",
+                    json={
+                        "email": "current-job@example.com",
+                        "password": "Password123",
+                        "displayName": "Current Job",
+                        "tenantName": "Current Job",
+                    },
+                ).json()
+                self.assertTrue(created["ok"])
+                headers = {"x-ucareer-session": created["data"]["token"]}
+
+                created_task = client.post(
+                    "/api/agent-tasks",
+                    headers=headers,
+                    json={"providerId": "codex", "prompt": "读取当前 Boss 岗位"},
+                ).json()
+                self.assertTrue(created_task["ok"])
+                task_id = created_task["data"]["task"]["id"]
+                approval_id = created_task["data"]["approval"]["id"]
+                decision = client.post(f"/api/approvals/{approval_id}/decision", headers=headers, json={"decision": "allow_once"}).json()
+                self.assertTrue(decision["ok"])
+
+                task = client.get(f"/api/agent-tasks/{task_id}", headers=headers).json()
+                self.assertTrue(task["ok"])
+                self.assertEqual(task["data"]["status"], "completed")
+                events = client.get(f"/api/agent-tasks/{task_id}/events", headers=headers).json()
+                output_text = "\n".join(str(event.get("text") or "") for event in events["data"])
+                self.assertIn('"tool": "jobsearch.import_current_job"', output_text)
+                self.assertIn('"connectorLabel": "Ucareer Chrome"', output_text)
+                self.assertIn("无界智航", output_text)
+                self.assertIn("current job imported", output_text)
+                import_mock.assert_called_once()
+
     def test_jobsearch_routes_run_from_python_daemon_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1302,6 +1376,51 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertTrue(portal_result["ok"])
             self.assertEqual(portal_result["data"]["status"], "failed")
             self.assertEqual(portal_result["data"]["failedQueries"], 1)
+
+    def test_jobsearch_import_current_job_uses_chrome_bridge_contract(self) -> None:
+        class FakeChromeBridge:
+            def __init__(self) -> None:
+                self.current_payload: dict[str, object] | None = None
+                self.search_payload: dict[str, object] | None = None
+
+            def run_boss_current_detail(self, payload: dict[str, object], timeout_seconds: float = 120) -> dict[str, object]:
+                self.current_payload = {**payload, "timeoutSeconds": timeout_seconds}
+                return {
+                    "ok": False,
+                    "added": 0,
+                    "stats": {"candidatesSeen": 0, "duplicatesSkipped": 0, "failedQueries": 1},
+                    "discovered": [],
+                    "message": "Unsupported Chrome bridge task: boss_current_detail",
+                }
+
+            def run_boss_search(self, payload: dict[str, object], timeout_seconds: float = 180) -> dict[str, object]:
+                self.search_payload = {**payload, "timeoutSeconds": timeout_seconds}
+                return {
+                    "ok": True,
+                    "added": 1,
+                    "stats": {"candidatesSeen": 1, "duplicatesSkipped": 0, "failedQueries": 0},
+                    "discovered": [{"id": "MJ-FALLBACK", "company": "Fallback Corp", "role": "机器人系统工程师", "url": "https://example.test/fallback"}],
+                    "message": "fallback ok",
+                }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bridge = FakeChromeBridge()
+            result = JobSearchService(Path(tmp), bridge).import_current_job({
+                "url": "https://www.zhipin.com/web/geek/jobs?query=%E6%9C%BA%E5%99%A8%E4%BA%BA&city=101280600",
+                "dryRun": True,
+                "timeoutSeconds": 7,
+                "fallbackTimeoutSeconds": 9,
+            })
+
+        self.assertEqual(result["source"], "codex-chrome")
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["jobs"][0]["company"], "Fallback Corp")
+        self.assertIn("当前 Boss 选中岗位读取不可用", result["message"])
+        self.assertEqual(bridge.current_payload["timeoutSeconds"], 7)
+        self.assertEqual(bridge.search_payload["queries"], ["机器人"])
+        self.assertEqual(bridge.search_payload["city"], "101280600")
+        self.assertEqual(bridge.search_payload["max"], 1)
+        self.assertTrue(bridge.search_payload["dryRun"])
 
     def test_chrome_bridge_routes_back_codex_chrome_jobsearch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -17,6 +17,8 @@ DEFAULT_JOB_SEARCH_CITY = "深圳"
 DEFAULT_MAX = 12
 COMMAND_TIMEOUT_SECONDS = 60
 CODEX_CHROME_TIMEOUT_SECONDS = 360
+CURRENT_JOB_IMPORT_TIMEOUT_SECONDS = 45
+CURRENT_JOB_IMPORT_FALLBACK_TIMEOUT_SECONDS = 180
 
 
 @dataclass
@@ -70,6 +72,42 @@ class JobSearchService:
             request["source"],
             [_run_provider(self.workspace_root, provider, request, run_id, started_at, self.chrome_bridge) for provider in providers],
         )
+
+    def import_current_job(self, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        payload = payload or {}
+        run_id = f"jobimport_{int(time.time() * 1000):x}_{uuid.uuid4().hex[:6]}"
+        started_at = _now_iso()
+        if not self.chrome_bridge:
+            return _empty_result(run_id, "codex-chrome", started_at, "当前后端没有启用 Ucareer Chrome bridge，无法读取当前浏览器选中岗位。")
+
+        url = str(payload.get("url") or "").strip()
+        dry_run = bool(payload.get("dryRun"))
+        result = self.chrome_bridge.run_boss_current_detail(
+            _drop_empty({"url": url, "dryRun": dry_run}),
+            _bounded_timeout(payload.get("timeoutSeconds"), CURRENT_JOB_IMPORT_TIMEOUT_SECONDS, 5, 120),
+        )
+        if (not result.get("ok") or not result.get("discovered")) and url:
+            fallback_request = _parse_boss_search_url(url)
+            if fallback_request:
+                fallback = self.chrome_bridge.run_boss_search(
+                    {**fallback_request, "max": 1, "dryRun": dry_run},
+                    _bounded_timeout(payload.get("fallbackTimeoutSeconds"), CURRENT_JOB_IMPORT_FALLBACK_TIMEOUT_SECONDS, 5, 240),
+                )
+                converted = _bridge_result_to_jobsearch_result(fallback, run_id, "codex-chrome", started_at, {"queries": fallback_request["queries"]})
+                converted["message"] = " ".join(
+                    item
+                    for item in [
+                        "当前 Boss 选中岗位读取不可用，已按粘贴 URL 的 query/city 只导入搜索结果中的 1 条岗位。",
+                        _normalize_current_job_import_message(str(fallback.get("message") or "")),
+                    ]
+                    if item
+                )
+                return converted
+
+        converted = _bridge_result_to_jobsearch_result(result, run_id, "codex-chrome", started_at, {"queries": []})
+        if result.get("message"):
+            converted["message"] = _normalize_current_job_import_message(str(result.get("message") or ""))
+        return converted
 
 
 def _provider_definitions() -> list[dict[str, Any]]:
@@ -361,3 +399,42 @@ def _trim_message(value: Any) -> str:
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _drop_empty(value: dict[str, Any]) -> dict[str, Any]:
+    return {key: item for key, item in value.items() if item not in (None, "", [])}
+
+
+def _bounded_timeout(value: Any, fallback: int, minimum: int, maximum: int) -> int:
+    try:
+        timeout = int(value)
+    except (TypeError, ValueError):
+        timeout = fallback
+    return max(minimum, min(maximum, timeout))
+
+
+def _normalize_current_job_import_message(message: str) -> str:
+    if re_search_unsupported_current_detail(message):
+        return "Ucareer Chrome 扩展后台仍是旧版本，尚不支持读取当前 Boss 选中岗位。请到 chrome://extensions 找到 Ucareer Job Importer，点击刷新/重新加载扩展后再试。"
+    return _trim_message(message)
+
+
+def re_search_unsupported_current_detail(message: str) -> bool:
+    return "unsupported chrome bridge task:" in message.lower() and "boss_current_detail" in message.lower()
+
+
+def _parse_boss_search_url(value: str) -> dict[str, Any] | None:
+    from urllib.parse import parse_qs, urlparse
+
+    try:
+        parsed = urlparse(value)
+    except ValueError:
+        return None
+    if not parsed.hostname or not parsed.hostname.lower().endswith("zhipin.com") or parsed.path != "/web/geek/jobs":
+        return None
+    query_params = parse_qs(parsed.query)
+    query = str((query_params.get("query") or [""])[0]).strip()
+    if not query:
+        return None
+    city = str((query_params.get("city") or ["深圳"])[0]).strip() or "深圳"
+    return {"city": city, "queries": [query]}

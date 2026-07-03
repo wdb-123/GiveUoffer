@@ -615,7 +615,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/agent-tasks")
     async def agent_tasks(request: Request) -> dict[str, object]:
-        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_tasks())
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_tasks(), chrome_bridge_service)
 
     @app.post("/api/agent-tasks")
     async def create_agent_task(request: Request, payload: dict[str, Any]) -> dict[str, object]:
@@ -625,11 +625,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings,
             "agent.run",
             lambda store, session: _create_agent_task_with_quota(billing_store, session["activeTenant"]["id"], store, payload),
+            chrome_bridge_service,
         )
 
     @app.post("/api/local-commands")
     async def create_local_command(request: Request, payload: dict[str, Any]) -> dict[str, object]:
-        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.create_local_command(payload))
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.create_local_command(payload), chrome_bridge_service)
 
     @app.get("/api/agent-execution-queue")
     async def agent_execution_queue(request: Request) -> dict[str, object]:
@@ -639,30 +640,31 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings,
             "agent.run",
             lambda store, session: store.queue_overview(session["activeTenant"]["name"]),
+            chrome_bridge_service,
         )
 
     @app.get("/api/agent-tasks/{task_id}")
     async def agent_task(request: Request, task_id: str) -> dict[str, object]:
-        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: _require_found(store.get_task(task_id), "Task not found"))
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: _require_found(store.get_task(task_id), "Task not found"), chrome_bridge_service)
 
     @app.delete("/api/agent-tasks/{task_id}")
     async def delete_agent_task(request: Request, task_id: str) -> dict[str, object]:
-        result = _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.delete_task(task_id))
+        result = _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.delete_task(task_id), chrome_bridge_service)
         if not result.get("ok") and result.get("error", {}).get("code") == "forbidden" and "Cannot delete" in str(result.get("error", {}).get("message", "")):
             return error("task_busy", "Cannot delete a task while it is queued, running, or waiting for approval")
         return result
 
     @app.post("/api/agent-tasks/{task_id}/cancel")
     async def cancel_agent_task(request: Request, task_id: str) -> dict[str, object]:
-        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.cancel_task(task_id))
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.cancel_task(task_id), chrome_bridge_service)
 
     @app.get("/api/agent-tasks/{task_id}/events")
     async def agent_task_events(request: Request, task_id: str) -> dict[str, object]:
-        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_events(task_id))
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_events(task_id), chrome_bridge_service)
 
     @app.get("/api/agent-tasks/{task_id}/turns")
     async def agent_task_turns(request: Request, task_id: str) -> dict[str, object]:
-        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_turns(task_id))
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_turns(task_id), chrome_bridge_service)
 
     @app.get("/api/agent-tasks/{task_id}/events/stream")
     async def agent_task_event_stream(request: Request, task_id: str, once: int = 0):
@@ -671,7 +673,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if "agent.run" not in session.get("permissions", []):
                 raise PermissionError("Permission required: agent.run")
             root = tenant_workspace_root(settings.workspace_root, session["activeTenant"]["id"])
-            store = AgentStore(settings.daemon_db_path, session["activeTenant"]["id"], root)
+            store = AgentStore(settings.daemon_db_path, session["activeTenant"]["id"], root, chrome_bridge_service)
             if not store.get_task(task_id):
                 return error("task_not_found", f"Task not found: {task_id}")
         except LookupError as cause:
@@ -723,7 +725,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/api/approvals")
     async def approvals(request: Request) -> dict[str, object]:
-        return _handle_agent_store(request, auth_store, settings, "agent.approve", lambda store: store.list_approvals())
+        return _handle_agent_store(request, auth_store, settings, "agent.approve", lambda store: store.list_approvals(), chrome_bridge_service)
 
     @app.post("/api/approvals/{approval_id}/decision")
     async def approval_decision(request: Request, approval_id: str, payload: dict[str, Any], background_tasks: BackgroundTasks) -> dict[str, object]:
@@ -733,11 +735,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 background_tasks.add_task(store.run_approved_followup, followup)
             return record
 
-        return _handle_agent_store(request, auth_store, settings, "agent.approve", decide)
+        return _handle_agent_store(request, auth_store, settings, "agent.approve", decide, chrome_bridge_service)
 
     @app.get("/api/workflow-runs")
     async def workflow_runs(request: Request) -> dict[str, object]:
-        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_workflow_runs())
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_workflow_runs(), chrome_bridge_service)
 
     @app.get("/api/workflow-runs/{run_id}")
     async def workflow_run(request: Request, run_id: str) -> dict[str, object]:
@@ -747,6 +749,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings,
             "agent.run",
             lambda store: _require_found(store.get_workflow_run_detail(run_id), "Workflow run not found"),
+            chrome_bridge_service,
         )
 
     return app
@@ -808,24 +811,38 @@ def _create_agent_task_with_quota(billing_store: BillingStore, tenant_id: str, s
     return store.create_or_continue_task(payload)
 
 
-def _handle_agent_store(request: Request, auth_store: AuthStore, settings: Settings, permission: str, operation) -> dict[str, object]:
+def _handle_agent_store(
+    request: Request,
+    auth_store: AuthStore,
+    settings: Settings,
+    permission: str,
+    operation,
+    chrome_bridge_service: ChromeBridgeService | None = None,
+) -> dict[str, object]:
     def run_with_store() -> Any:
         session = auth_store.require_session(_session_token(request))
         if permission not in session.get("permissions", []):
             raise PermissionError(f"Permission required: {permission}")
         root = tenant_workspace_root(settings.workspace_root, session["activeTenant"]["id"])
-        return operation(AgentStore(settings.daemon_db_path, session["activeTenant"]["id"], root))
+        return operation(AgentStore(settings.daemon_db_path, session["activeTenant"]["id"], root, chrome_bridge_service))
 
     return _handle(run_with_store)
 
 
-def _handle_agent_store_with_session(request: Request, auth_store: AuthStore, settings: Settings, permission: str, operation) -> dict[str, object]:
+def _handle_agent_store_with_session(
+    request: Request,
+    auth_store: AuthStore,
+    settings: Settings,
+    permission: str,
+    operation,
+    chrome_bridge_service: ChromeBridgeService | None = None,
+) -> dict[str, object]:
     def run_with_store() -> Any:
         session = auth_store.require_session(_session_token(request))
         if permission not in session.get("permissions", []):
             raise PermissionError(f"Permission required: {permission}")
         root = tenant_workspace_root(settings.workspace_root, session["activeTenant"]["id"])
-        return operation(AgentStore(settings.daemon_db_path, session["activeTenant"]["id"], root), session)
+        return operation(AgentStore(settings.daemon_db_path, session["activeTenant"]["id"], root, chrome_bridge_service), session)
 
     return _handle(run_with_store)
 

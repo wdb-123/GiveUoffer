@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .connectors import ConnectorCredentialStore, import_qq_email_messages
+from .chrome_bridge import ChromeBridgeService
 from .db import connect_database
 from .jobsearch import JobSearchService
 from .providers import get_provider_definition, list_providers
@@ -22,6 +23,7 @@ class AgentStore:
     db_path: Path
     tenant_id: str
     tenant_workspace_root: Path
+    chrome_bridge: ChromeBridgeService | None = None
 
     def create_or_continue_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         provider_id = str(payload.get("providerId") or "").strip()
@@ -465,7 +467,7 @@ class AgentStore:
                 self.update_task_status(task_id, "completed")
                 return
             try:
-                tool_result = _execute_agent_tool(self.db_path, self.tenant_id, self.tenant_workspace_root, tool_call)
+                tool_result = _execute_agent_tool(self.db_path, self.tenant_id, self.tenant_workspace_root, tool_call, self.chrome_bridge)
             except Exception as cause:
                 failure = str(cause)
                 self._append_error_event(task_id, failure, str(provider["id"]))
@@ -975,7 +977,13 @@ def _parse_agent_tool_call(output: str) -> dict[str, Any] | None:
     }
 
 
-def _execute_agent_tool(db_path: Path, tenant_id: str, tenant_workspace_root: Path, call: dict[str, Any]) -> dict[str, Any]:
+def _execute_agent_tool(
+    db_path: Path,
+    tenant_id: str,
+    tenant_workspace_root: Path,
+    call: dict[str, Any],
+    chrome_bridge: ChromeBridgeService | None = None,
+) -> dict[str, Any]:
     tool = str(call.get("tool") or "")
     payload = call.get("input") if isinstance(call.get("input"), dict) else {}
     applications = ApplicationStore(tenant_workspace_root)
@@ -1061,7 +1069,7 @@ def _execute_agent_tool(db_path: Path, tenant_id: str, tenant_workspace_root: Pa
             "omittedMessages": max(0, len(messages) - 40),
         }
     if tool == "jobsearch.search_jobs":
-        result = JobSearchService(tenant_workspace_root).search(payload)
+        result = JobSearchService(tenant_workspace_root, chrome_bridge).search(payload)
         jobs = result.get("jobs") if isinstance(result.get("jobs"), list) else []
         return {
             "tool": tool,
@@ -1083,6 +1091,38 @@ def _execute_agent_tool(db_path: Path, tenant_id: str, tenant_workspace_root: Pa
             "message": result.get("message", ""),
             "jobs": [_safe_job_summary(job) for job in jobs[:20] if isinstance(job, dict)],
             "omittedJobs": max(0, len(jobs) - 20),
+        }
+    if tool == "jobsearch.import_current_job":
+        result = JobSearchService(tenant_workspace_root, chrome_bridge).import_current_job(payload)
+        jobs = result.get("jobs") if isinstance(result.get("jobs"), list) else []
+        return {
+            "tool": tool,
+            "input": {
+                **({"url": payload.get("url")} if payload.get("url") else {}),
+                "dryRun": bool(payload.get("dryRun")),
+            },
+            "connectorKind": "job_board",
+            "connectorId": "jobsearch",
+            "connectorLabel": "Ucareer Chrome",
+            "protocol": "chrome bridge current page import",
+            "runId": result.get("runId", ""),
+            "status": result.get("status", ""),
+            "startedAt": result.get("startedAt", ""),
+            "completedAt": result.get("completedAt", ""),
+            "stats": {
+                "added": result.get("added", 0),
+                "candidatesSeen": result.get("candidatesSeen", 0),
+                "duplicatesSkipped": result.get("duplicatesSkipped", 0),
+                "failedQueries": result.get("failedQueries", 0),
+            },
+            "message": result.get("message", ""),
+            "resultContract": {
+                "sourceFields": ["connectorLabel", "protocol", "runId", "stats"],
+                "jobFields": ["id", "company", "title", "location", "salary", "source", "url", "score"],
+                "safety": "tool reads the currently open Boss/Zhipin page through the Ucareer Chrome extension; it never searches extra jobs or submits applications",
+            },
+            "jobs": [_safe_job_summary(job) for job in jobs[:10] if isinstance(job, dict)],
+            "omittedJobs": max(0, len(jobs) - 10),
         }
     raise ValueError(f"Unsupported tool: {tool}")
 
