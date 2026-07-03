@@ -860,6 +860,60 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertIn(("agent_task", "created"), [(row["entity_type"], row["event_type"]) for row in sync_rows])
             self.assertIn(("approval_request", "created"), [(row["entity_type"], row["event_type"]) for row in sync_rows])
 
+    def test_jobsearch_routes_run_from_python_daemon_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write_fake_jobsearch_script(root)
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=root,
+                daemon_db_path=root / ".ucareer" / "daemon.sqlite",
+            )
+            client = TestClient(create_app(settings))
+            created = client.post(
+                "/api/auth/create-account",
+                json={
+                    "email": "jobsearch@example.com",
+                    "password": "Password123",
+                    "displayName": "JobSearch",
+                    "tenantName": "JobSearch Workspace",
+                },
+            ).json()
+            self.assertTrue(created["ok"])
+            headers = {"x-ucareer-session": created["data"]["token"]}
+
+            sources = client.get("/api/search/jobsearch/sources", headers=headers).json()
+            self.assertTrue(sources["ok"])
+            source_ids = {source["id"] for source in sources["data"]}
+            self.assertIn("china-crawler", source_ids)
+            self.assertIn("all", source_ids)
+            china = next(source for source in sources["data"] if source["id"] == "china-crawler")
+            self.assertTrue(china["available"])
+            self.assertFalse(china["requiresAuth"])
+
+            result = client.post(
+                "/api/search/jobsearch",
+                headers=headers,
+                json={"source": "china-crawler", "city": "深圳", "queries": ["机器人"], "max": 3, "dryRun": True},
+            ).json()
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["data"]["source"], "china-crawler")
+            self.assertEqual(result["data"]["status"], "completed")
+            self.assertEqual(result["data"]["added"], 1)
+            self.assertEqual(result["data"]["candidatesSeen"], 2)
+            self.assertEqual(result["data"]["jobs"][0]["company"], "Python Search Corp")
+            self.assertEqual(result["data"]["jobs"][0]["role"], "机器人系统工程师")
+
+            portal_result = client.post(
+                "/api/search/jobsearch",
+                headers=headers,
+                json={"source": "portals", "queries": ["机器人"]},
+            ).json()
+            self.assertTrue(portal_result["ok"])
+            self.assertEqual(portal_result["data"]["status"], "failed")
+            self.assertEqual(portal_result["data"]["failedQueries"], 1)
+
     def _write_tenant_workspace_fixture(self, root: Path) -> None:
         (root / "profile").mkdir(parents=True)
         (root / "ops" / "data").mkdir(parents=True)
@@ -1116,6 +1170,21 @@ class PythonDaemonContractTest(unittest.TestCase):
                 (3, tenant_id, "workflow_run", "run-1", "updated", json.dumps({"message": "second-event"}), "2026-07-03T00:00:01Z", None),
             )
             conn.commit()
+
+    def _write_fake_jobsearch_script(self, root: Path) -> None:
+        script = root / "scripts" / "research" / "china-job-crawler.mjs"
+        script.parent.mkdir(parents=True)
+        script.write_text(
+            "\n".join([
+                "#!/usr/bin/env node",
+                "console.log(JSON.stringify({",
+                "  added: 1,",
+                "  stats: { candidatesSeen: 2, duplicatesSkipped: 1, failedQueries: 0 },",
+                "  discovered: [{ id: 'MJ-999', company: 'Python Search Corp', role: '机器人系统工程师', source: 'fake', url: 'https://example.com/job' }]",
+                "}));",
+            ]),
+            encoding="utf-8",
+        )
 
 
 class _SyncPushServer:

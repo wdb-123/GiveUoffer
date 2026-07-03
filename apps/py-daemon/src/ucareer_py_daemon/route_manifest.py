@@ -88,6 +88,12 @@ ROUTE_GROUPS: list[dict[str, object]] = [
         ],
     },
     {
+        "domain": "jobsearch",
+        "nodeModule": "apps/daemon/src/routes/search-routes.ts",
+        "pythonStatus": "implemented",
+        "routes": ["GET /api/search/jobsearch/sources", "POST /api/search/jobsearch"],
+    },
+    {
         "domain": "workspace-data",
         "nodeModule": "apps/daemon/src/routes/*-routes.ts",
         "pythonStatus": "partial-readonly",

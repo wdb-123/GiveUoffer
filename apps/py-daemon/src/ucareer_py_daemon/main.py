@@ -15,6 +15,7 @@ from .config import Settings, load_settings
 from .connectors import ConnectorCredentialStore, get_connector, import_qq_email_attachments, import_qq_email_messages, list_connectors, test_qq_email_connection
 from .db import probe_database
 from .envelope import error, ok
+from .jobsearch import JobSearchService
 from .memory import get_memory_snapshot
 from .providers import check_provider, list_providers
 from .resume_export import export_content_type, export_resume, exported_resume_file
@@ -301,6 +302,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings,
             "workspace.read",
             lambda root: get_memory_snapshot(root, settings.daemon_db_path),
+        )
+
+    @app.get("/api/search/jobsearch/sources")
+    async def jobsearch_sources(request: Request) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: JobSearchService(root).list_sources(),
+        )
+
+    @app.post("/api/search/jobsearch")
+    async def jobsearch(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.write",
+            lambda root: JobSearchService(root).search(payload),
         )
 
     @app.get("/api/profile-overview")
