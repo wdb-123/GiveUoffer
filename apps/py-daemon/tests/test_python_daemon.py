@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from ucareer_py_daemon.config import Settings
+from ucareer_py_daemon.db import connect_database
 from ucareer_py_daemon.main import create_app
 
 
@@ -197,6 +199,61 @@ class PythonDaemonContractTest(unittest.TestCase):
             updated_evidence = client.get("/api/evidence-requests", headers=headers).json()
             self.assertEqual(updated_evidence["data"]["requests"][0]["direction"], "Manual note")
 
+    def test_agent_read_routes_use_tenant_scoped_sqlite_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=Path(tmp),
+                daemon_db_path=Path(tmp) / ".ucareer" / "daemon.sqlite",
+            )
+            client = TestClient(create_app(settings))
+            created = client.post(
+                "/api/auth/create-account",
+                json={
+                    "email": "agent@example.com",
+                    "password": "Password123",
+                    "displayName": "Agent",
+                    "tenantName": "Agent Workspace",
+                },
+            ).json()
+            self.assertTrue(created["ok"])
+            token = created["data"]["token"]
+            tenant_id = created["data"]["activeTenant"]["id"]
+            tenant_workspace = Path(tmp) / "workspace" / "tenants" / tenant_id
+            tenant_workspace.mkdir(parents=True)
+            self._write_agent_fixture(settings.daemon_db_path, tenant_id, tenant_workspace)
+
+            headers = {"x-ucareer-session": token}
+            tasks = client.get("/api/agent-tasks", headers=headers).json()
+            self.assertTrue(tasks["ok"])
+            self.assertEqual(tasks["data"][0]["id"], "task-1")
+
+            task = client.get("/api/agent-tasks/task-1", headers=headers).json()
+            self.assertTrue(task["ok"])
+            self.assertEqual(task["data"]["status"], "running")
+
+            events = client.get("/api/agent-tasks/task-1/events", headers=headers).json()
+            self.assertTrue(events["ok"])
+            self.assertEqual(events["data"][0]["text"], "hello")
+
+            turns = client.get("/api/agent-tasks/task-1/turns", headers=headers).json()
+            self.assertTrue(turns["ok"])
+            self.assertEqual(turns["data"][0]["status"], "answered")
+            self.assertEqual(turns["data"][0]["answer"]["text"], "world")
+
+            approvals = client.get("/api/approvals", headers=headers).json()
+            self.assertTrue(approvals["ok"])
+            self.assertEqual(approvals["data"][0]["id"], "approval-1")
+
+            runs = client.get("/api/workflow-runs", headers=headers).json()
+            self.assertTrue(runs["ok"])
+            self.assertEqual(runs["data"][0]["id"], "run-1")
+
+            detail = client.get("/api/workflow-runs/run-1", headers=headers).json()
+            self.assertTrue(detail["ok"])
+            self.assertEqual(detail["data"]["steps"][0]["stepId"], "route")
+
     def _write_tenant_workspace_fixture(self, root: Path) -> None:
         (root / "profile").mkdir(parents=True)
         (root / "ops" / "data").mkdir(parents=True)
@@ -320,6 +377,99 @@ class PythonDaemonContractTest(unittest.TestCase):
             ]),
             encoding="utf-8",
         )
+
+    def _write_agent_fixture(self, db_path: Path, tenant_id: str, tenant_workspace: Path) -> None:
+        with connect_database(db_path) as conn:
+            conn.execute(
+                """
+                INSERT INTO agent_tasks
+                  (id, tenant_id, provider_id, workspace_path, prompt, mode, status, skill_id, workflow_id, workflow_run_id, input_kind, source_text, route_decision, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "task-1",
+                    tenant_id,
+                    "codex-local",
+                    str(tenant_workspace),
+                    "hello",
+                    "structured",
+                    "running",
+                    "workspace.help",
+                    "wf-1",
+                    "run-1",
+                    "text",
+                    "hello",
+                    json.dumps({"skillId": "workspace.help"}),
+                    "2026-07-03T00:00:00Z",
+                    "2026-07-03T00:00:02Z",
+                ),
+            )
+            conn.execute(
+                "INSERT INTO agent_events (id, tenant_id, task_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                ("event-1", tenant_id, "task-1", "message", json.dumps({"type": "message", "role": "user", "text": "hello", "createdAt": "2026-07-03T00:00:00Z"}), "2026-07-03T00:00:00Z"),
+            )
+            conn.execute(
+                "INSERT INTO agent_events (id, tenant_id, task_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                ("event-2", tenant_id, "task-1", "message", json.dumps({"type": "message", "role": "assistant", "text": "world", "createdAt": "2026-07-03T00:00:01Z"}), "2026-07-03T00:00:01Z"),
+            )
+            conn.execute(
+                """
+                INSERT INTO approval_requests
+                  (id, tenant_id, task_id, action, risk, summary, command, cwd, affected_paths, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "approval-1",
+                    tenant_id,
+                    "task-1",
+                    "run_command",
+                    "medium",
+                    "Run command",
+                    "npm test",
+                    str(tenant_workspace),
+                    json.dumps(["package.json"]),
+                    "2026-07-03T00:00:01Z",
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO workflow_runs
+                  (id, tenant_id, workflow_id, skill_id, task_id, current_step_id, status, source_text, route_decision, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "run-1",
+                    tenant_id,
+                    "wf-1",
+                    "workspace.help",
+                    "task-1",
+                    "route",
+                    "running",
+                    "hello",
+                    json.dumps({"skillId": "workspace.help"}),
+                    "2026-07-03T00:00:00Z",
+                    "2026-07-03T00:00:02Z",
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO workflow_step_runs
+                  (id, tenant_id, workflow_run_id, step_id, status, task_id, approval_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "step-1",
+                    tenant_id,
+                    "run-1",
+                    "route",
+                    "done",
+                    "task-1",
+                    None,
+                    "2026-07-03T00:00:00Z",
+                    "2026-07-03T00:00:01Z",
+                ),
+            )
+            conn.commit()
 
 
 if __name__ == "__main__":

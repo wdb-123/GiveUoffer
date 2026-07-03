@@ -104,6 +104,87 @@ def ensure_core_schema(conn: sqlite3.Connection) -> None:
           last_used_at TEXT,
           PRIMARY KEY (tenant_id, month)
         );
+
+        CREATE TABLE IF NOT EXISTS agent_tasks (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT,
+          provider_id TEXT NOT NULL,
+          workspace_path TEXT NOT NULL,
+          prompt TEXT NOT NULL,
+          mode TEXT NOT NULL,
+          status TEXT NOT NULL,
+          skill_id TEXT,
+          workflow_id TEXT,
+          workflow_run_id TEXT,
+          input_kind TEXT,
+          source_text TEXT,
+          route_decision TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_agent_tasks_tenant_updated_at
+          ON agent_tasks (tenant_id, updated_at);
+
+        CREATE TABLE IF NOT EXISTS agent_events (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT,
+          task_id TEXT NOT NULL,
+          event_type TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_agent_events_task_id_created_at
+          ON agent_events (task_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS approval_requests (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT,
+          task_id TEXT NOT NULL,
+          action TEXT NOT NULL,
+          risk TEXT NOT NULL,
+          summary TEXT NOT NULL,
+          command TEXT,
+          cwd TEXT,
+          affected_paths TEXT,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_approval_requests_tenant_created_at
+          ON approval_requests (tenant_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS workflow_runs (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT,
+          workflow_id TEXT NOT NULL,
+          skill_id TEXT,
+          task_id TEXT,
+          current_step_id TEXT,
+          status TEXT NOT NULL,
+          source_text TEXT,
+          route_decision TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workflow_runs_tenant_updated_at
+          ON workflow_runs (tenant_id, updated_at);
+
+        CREATE TABLE IF NOT EXISTS workflow_step_runs (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT,
+          workflow_run_id TEXT NOT NULL,
+          step_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          task_id TEXT,
+          approval_id TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_workflow_step_runs_workflow_run_id
+          ON workflow_step_runs (workflow_run_id);
         """
     )
     conn.commit()

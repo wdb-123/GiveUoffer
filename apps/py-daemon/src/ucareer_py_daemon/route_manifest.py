@@ -33,11 +33,17 @@ ROUTE_GROUPS: list[dict[str, object]] = [
     {
         "domain": "agent-execution",
         "nodeModule": "apps/daemon/src/routes/agent-routes.ts",
-        "pythonStatus": "pending",
+        "pythonStatus": "partial-readonly",
         "routes": [
             "GET /api/providers",
             "POST /api/providers/:providerId/check",
             "GET /api/agent-tasks",
+            "GET /api/agent-tasks/:taskId",
+            "GET /api/agent-tasks/:taskId/events",
+            "GET /api/agent-tasks/:taskId/turns",
+            "GET /api/approvals",
+            "GET /api/workflow-runs",
+            "GET /api/workflow-runs/:runId",
             "POST /api/agent-tasks",
             "GET /api/agent-tasks/:taskId/events/stream",
             "POST /api/approvals/:approvalId/decision",

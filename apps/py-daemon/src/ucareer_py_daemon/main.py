@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
+from .agent_store import AgentStore
 from .auth import AuthStore
 from .billing import BillingStore
 from .config import Settings, load_settings
@@ -240,6 +241,40 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             lambda root: EvidenceStore(root).save_evidence_note(payload),
         )
 
+    @app.get("/api/agent-tasks")
+    async def agent_tasks(request: Request) -> dict[str, object]:
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_tasks())
+
+    @app.get("/api/agent-tasks/{task_id}")
+    async def agent_task(request: Request, task_id: str) -> dict[str, object]:
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: _require_found(store.get_task(task_id), "Task not found"))
+
+    @app.get("/api/agent-tasks/{task_id}/events")
+    async def agent_task_events(request: Request, task_id: str) -> dict[str, object]:
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_events(task_id))
+
+    @app.get("/api/agent-tasks/{task_id}/turns")
+    async def agent_task_turns(request: Request, task_id: str) -> dict[str, object]:
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_turns(task_id))
+
+    @app.get("/api/approvals")
+    async def approvals(request: Request) -> dict[str, object]:
+        return _handle_agent_store(request, auth_store, settings, "agent.approve", lambda store: store.list_approvals())
+
+    @app.get("/api/workflow-runs")
+    async def workflow_runs(request: Request) -> dict[str, object]:
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_workflow_runs())
+
+    @app.get("/api/workflow-runs/{run_id}")
+    async def workflow_run(request: Request, run_id: str) -> dict[str, object]:
+        return _handle_agent_store(
+            request,
+            auth_store,
+            settings,
+            "agent.run",
+            lambda store: _require_found(store.get_workflow_run_detail(run_id), "Workflow run not found"),
+        )
+
     return app
 
 
@@ -288,3 +323,14 @@ def _require_found(value: Any, message: str) -> Any:
     if value is None:
         raise ValueError(message)
     return value
+
+
+def _handle_agent_store(request: Request, auth_store: AuthStore, settings: Settings, permission: str, operation) -> dict[str, object]:
+    def run_with_store() -> Any:
+        session = auth_store.require_session(_session_token(request))
+        if permission not in session.get("permissions", []):
+            raise PermissionError(f"Permission required: {permission}")
+        root = tenant_workspace_root(settings.workspace_root, session["activeTenant"]["id"])
+        return operation(AgentStore(settings.daemon_db_path, session["activeTenant"]["id"], root))
+
+    return _handle(run_with_store)
