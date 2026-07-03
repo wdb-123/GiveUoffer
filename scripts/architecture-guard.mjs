@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = process.cwd();
-const DAEMON = join(ROOT, "apps/daemon/src");
+const DAEMON = join(ROOT, "docs/archive/legacy-typescript-daemon/src");
 const WEB = join(ROOT, "apps/web/src");
 
 let failures = 0;
@@ -297,9 +297,9 @@ function assertUcareerNamespace() {
   ], "Python daemon owns token billing aggregation and quota gates");
 
   assertContains("apps/py-daemon/src/ucareer_py_daemon/route_manifest.py", [
-    "legacyNodeModule",
+    "legacyReference",
     "pythonStatus",
-  ], "Python route manifest marks Node modules as legacy references");
+  ], "Python route manifest marks archived TypeScript routes as legacy references");
 
   assertNotContains("apps/py-daemon/src/ucareer_py_daemon/route_manifest.py", [
     "\"nodeModule\"",
@@ -308,34 +308,40 @@ function assertUcareerNamespace() {
   assertFilesDoNotContain(
     listFiles("apps/py-daemon/src/ucareer_py_daemon").filter((file) => file !== "apps/py-daemon/src/ucareer_py_daemon/route_manifest.py"),
     [
-      "apps/daemon/src",
+      "docs/archive/legacy-typescript-daemon/src",
       "@ucareer/daemon",
     ],
     "Python daemon implementation does not depend on legacy Node daemon source",
   );
 
-  assertContains("apps/daemon/README.md", [
+  assertContains("docs/archive/legacy-typescript-daemon/README.md", [
     "Legacy TypeScript Daemon",
     "default local backend is now the FastAPI service",
     "There is no root npm script for starting this daemon",
     "default `npm run daemon` command starts the Python daemon",
   ], "legacy TypeScript daemon is documented as non-default");
 
+  assertAbsent([
+    "apps/daemon",
+    "apps/daemon/package.json",
+    "apps/daemon/tsconfig.json",
+  ], "legacy TypeScript daemon app package");
+
   assertContains("docs/architecture/overview.md", [
     "本地 API 服务\\napps/py-daemon",
     "FastAPI 路由组合\\nmain.py",
-    "`apps/daemon` is retained only as the legacy TypeScript reference",
+    "`docs/archive/legacy-typescript-daemon` is retained only as the legacy TypeScript reference",
   ], "architecture overview documents Python daemon as the active backend");
 
   assertNotContains("docs/architecture/overview.md", [
-    "本地 API 服务\\napps/daemon",
+    "本地 API 服务\\ndocs/archive/legacy-typescript-daemon",
     "入口/路由层\\nroutes/*",
   ], "architecture overview does not present legacy Node as the active backend");
 
   assertContains("docs/architecture/governance.md", [
     "本地 API 服务\\napps/py-daemon",
     "`apps/py-daemon/src/ucareer_py_daemon/main.py`",
-    "`apps/daemon`：仅作为 legacy TypeScript 参考和 adapter boundary",
+    "`docs/archive/legacy-typescript-daemon`：仅作为 legacy TypeScript 参考和 adapter boundary",
     "Python daemon 服务分层",
   ], "architecture governance routes backend work to Python");
 
@@ -356,7 +362,7 @@ function assertUcareerNamespace() {
     "docs/guides/boss-chrome-import.md",
     "docs/product/job-search-connector-architecture.md",
   ], [
-    "apps/daemon",
+    "docs/archive/legacy-typescript-daemon",
     "jobsearch-service.ts",
     "connector-registry.ts",
     "connector-routes.ts",
@@ -366,20 +372,25 @@ function assertUcareerNamespace() {
   ], "product and guide docs do not route backend work to legacy Node");
 
   assertContains("package-lock.json", [
-    "\"name\": \"@ucareer/daemon\"",
     "\"name\": \"@ucareer/shared\"",
     "\"node_modules/@ucareer/web\"",
   ], "lockfile uses Ucareer workspaces");
 
-  assertContains("apps/daemon/src/server.ts", [
+  assertNotContains("package-lock.json", [
+    "\"name\": \"@ucareer/daemon\"",
+    "node_modules/@ucareer/daemon",
+    "apps/daemon",
+  ], "lockfile does not expose a legacy Node daemon workspace");
+
+  assertContains("docs/archive/legacy-typescript-daemon/src/server.ts", [
     "const daemonDbPath = resolve(workspaceRoot, \".ucareer/daemon.sqlite\")",
   ], "legacy Node daemon runtime path uses Ucareer namespace");
 
-  assertContains("apps/daemon/src/policy/agent-execution-policy.ts", [
+  assertContains("docs/archive/legacy-typescript-daemon/src/policy/agent-execution-policy.ts", [
     "process.env.UCAREER_AGENT_AUTO_START",
   ], "legacy Node agent execution env uses Ucareer namespace");
 
-  assertContains("apps/daemon/src/routes/sync-routes.ts", [
+  assertContains("docs/archive/legacy-typescript-daemon/src/routes/sync-routes.ts", [
     "process.env.UCAREER_CLOUD_URL",
   ], "legacy Node sync env uses Ucareer namespace");
 
@@ -587,21 +598,21 @@ assertContains("scripts/cli/scan.mjs", [
   "scripts/cli/providers/local-parser.mjs",
 ], "scan script owns scanner provider loading");
 
-assertContains("apps/daemon/src/services/jobsearch-providers.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/services/jobsearch-providers.ts", [
   "export interface JobSearchProvider",
   "createJobSearchProviders",
   "normalizeJobSearchRequest",
   "combineJobSearchResults",
 ], "legacy Node jobsearch sources remain provider based");
 
-assertContains("apps/daemon/src/services/jobsearch-service.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/services/jobsearch-service.ts", [
   "createJobSearchProviders",
   "resolveProviders",
   "combineJobSearchResults",
 ], "legacy Node jobsearch service delegates to provider registry");
 
 assertFilesDoNotContain([
-  "apps/daemon/src/services/jobsearch-service.ts",
+  "docs/archive/legacy-typescript-daemon/src/services/jobsearch-service.ts",
 ], [
   "spawn(",
   "boss-agent-radar.mjs",
@@ -610,65 +621,65 @@ assertFilesDoNotContain([
 ], "legacy Node jobsearch service does not own source-specific execution");
 
 assertExists([
-  "apps/daemon/src/routes",
-  "apps/daemon/src/services",
-  "apps/daemon/src/skills",
-  "apps/daemon/src/memory",
-  "apps/daemon/src/workflow",
-  "apps/daemon/src/connectors",
-  "apps/daemon/src/policy",
-  "apps/daemon/src/sync",
-  "apps/daemon/src/providers",
-  "apps/daemon/src/stores",
-  "apps/daemon/src/execution",
-  "apps/daemon/src/db",
+  "docs/archive/legacy-typescript-daemon/src/routes",
+  "docs/archive/legacy-typescript-daemon/src/services",
+  "docs/archive/legacy-typescript-daemon/src/skills",
+  "docs/archive/legacy-typescript-daemon/src/memory",
+  "docs/archive/legacy-typescript-daemon/src/workflow",
+  "docs/archive/legacy-typescript-daemon/src/connectors",
+  "docs/archive/legacy-typescript-daemon/src/policy",
+  "docs/archive/legacy-typescript-daemon/src/sync",
+  "docs/archive/legacy-typescript-daemon/src/providers",
+  "docs/archive/legacy-typescript-daemon/src/stores",
+  "docs/archive/legacy-typescript-daemon/src/execution",
+  "docs/archive/legacy-typescript-daemon/src/db",
 ], "legacy Node daemon architecture directories");
 
 assertExists([
-  "apps/daemon/src/skills/registry.ts",
-  "apps/daemon/src/skills/definitions.ts",
-  "apps/daemon/src/skills/README.md",
-  "apps/daemon/src/skills/tools.ts",
-  "apps/daemon/src/skills/job-evaluate/skill.ts",
-  "apps/daemon/src/skills/job-evaluate/SKILL.md",
-  "apps/daemon/src/skills/resume-generate/skill.ts",
-  "apps/daemon/src/skills/resume-generate/SKILL.md",
-  "apps/daemon/src/skills/workspace-help/skill.ts",
-  "apps/daemon/src/skills/workspace-help/SKILL.md",
-  "apps/daemon/src/workflow/skill-registry.ts",
-  "apps/daemon/src/workflow/workflow-registry.ts",
-  "apps/daemon/src/workflow/classify-intake.ts",
-  "apps/daemon/src/workflow/prompt-builder.ts",
-  "apps/daemon/src/connectors/connector-registry.ts",
-  "apps/daemon/src/routes/connector-routes.ts",
-  "apps/daemon/src/policy/agent-execution-policy.ts",
-  "apps/daemon/src/services/workflow-run-service.ts",
-  "apps/daemon/src/sync/sync-service.ts",
-  "apps/daemon/src/providers/paperclip-adapter-provider.ts",
-  "apps/daemon/src/providers/provider-definitions.ts",
-  "apps/daemon/src/execution/runner.ts",
-  "apps/daemon/src/stores/workflow-run-store.ts",
-  "apps/daemon/src/stores/connector-credential-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/skills/registry.ts",
+  "docs/archive/legacy-typescript-daemon/src/skills/definitions.ts",
+  "docs/archive/legacy-typescript-daemon/src/skills/README.md",
+  "docs/archive/legacy-typescript-daemon/src/skills/tools.ts",
+  "docs/archive/legacy-typescript-daemon/src/skills/job-evaluate/skill.ts",
+  "docs/archive/legacy-typescript-daemon/src/skills/job-evaluate/SKILL.md",
+  "docs/archive/legacy-typescript-daemon/src/skills/resume-generate/skill.ts",
+  "docs/archive/legacy-typescript-daemon/src/skills/resume-generate/SKILL.md",
+  "docs/archive/legacy-typescript-daemon/src/skills/workspace-help/skill.ts",
+  "docs/archive/legacy-typescript-daemon/src/skills/workspace-help/SKILL.md",
+  "docs/archive/legacy-typescript-daemon/src/workflow/skill-registry.ts",
+  "docs/archive/legacy-typescript-daemon/src/workflow/workflow-registry.ts",
+  "docs/archive/legacy-typescript-daemon/src/workflow/classify-intake.ts",
+  "docs/archive/legacy-typescript-daemon/src/workflow/prompt-builder.ts",
+  "docs/archive/legacy-typescript-daemon/src/connectors/connector-registry.ts",
+  "docs/archive/legacy-typescript-daemon/src/routes/connector-routes.ts",
+  "docs/archive/legacy-typescript-daemon/src/policy/agent-execution-policy.ts",
+  "docs/archive/legacy-typescript-daemon/src/services/workflow-run-service.ts",
+  "docs/archive/legacy-typescript-daemon/src/sync/sync-service.ts",
+  "docs/archive/legacy-typescript-daemon/src/providers/paperclip-adapter-provider.ts",
+  "docs/archive/legacy-typescript-daemon/src/providers/provider-definitions.ts",
+  "docs/archive/legacy-typescript-daemon/src/execution/runner.ts",
+  "docs/archive/legacy-typescript-daemon/src/stores/workflow-run-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/stores/connector-credential-store.ts",
 ], "legacy Node daemon core modules");
 
 assertAbsent([
-  "apps/daemon/src/application-store.ts",
-  "apps/daemon/src/auth-store.ts",
-  "apps/daemon/src/evidence-store.ts",
-  "apps/daemon/src/experience-store.ts",
-  "apps/daemon/src/market-store.ts",
-  "apps/daemon/src/profile-store.ts",
-  "apps/daemon/src/report-store.ts",
-  "apps/daemon/src/resume-export-store.ts",
-  "apps/daemon/src/resume-store.ts",
-  "apps/daemon/src/sqlite-task-store.ts",
-  "apps/daemon/src/task-store.ts",
-  "apps/daemon/src/runner.ts",
-  "apps/daemon/src/agent-execution-policy.ts",
-  "apps/daemon/src/paperclip-adapter-provider.ts",
+  "docs/archive/legacy-typescript-daemon/src/application-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/auth-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/evidence-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/experience-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/market-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/profile-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/report-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/resume-export-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/resume-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/sqlite-task-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/task-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/runner.ts",
+  "docs/archive/legacy-typescript-daemon/src/agent-execution-policy.ts",
+  "docs/archive/legacy-typescript-daemon/src/paperclip-adapter-provider.ts",
 ], "legacy Node daemon root modules");
 
-assertNotContains("apps/daemon/src/server.ts", [
+assertNotContains("docs/archive/legacy-typescript-daemon/src/server.ts", [
   "runApprovedTask",
   "runApprovedLocalCommand",
   "evaluateAgentExecutionPolicy",
@@ -676,7 +687,7 @@ assertNotContains("apps/daemon/src/server.ts", [
   "app.post<{\n  Body: import(\"@ucareer/shared\").SaveGeneratedResumeRequest",
 ], "legacy Node server stays as composition root");
 
-const routeFiles = listFiles("apps/daemon/src/routes").filter((file) => file.endsWith(".ts"));
+const routeFiles = listFiles("docs/archive/legacy-typescript-daemon/src/routes").filter((file) => file.endsWith(".ts"));
 assertFilesDoNotContain(routeFiles, [
   "../execution/",
   "../providers/paperclip-adapter-provider",
@@ -685,7 +696,7 @@ assertFilesDoNotContain(routeFiles, [
   "spawn(",
 ], "legacy Node routes do not execute providers or processes directly");
 
-const storeFiles = listFiles("apps/daemon/src/stores").filter((file) => file.endsWith(".ts"));
+const storeFiles = listFiles("docs/archive/legacy-typescript-daemon/src/stores").filter((file) => file.endsWith(".ts"));
 assertFilesDoNotContain(storeFiles, [
   "../routes/",
   "../services/",
@@ -697,7 +708,7 @@ assertFilesDoNotContain(storeFiles, [
   "spawn(",
 ], "legacy Node stores stay below routes/services/execution");
 
-assertContains("apps/daemon/src/routes/workflow-routes.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/routes/workflow-routes.ts", [
   "/api/skills",
   "/api/skills/file-management",
   "workflowRegistry",
@@ -706,11 +717,11 @@ assertContains("apps/daemon/src/routes/workflow-routes.ts", [
   "services.routePreviewService.preview",
 ], "legacy Node workflow routes expose backend routing");
 
-assertContains("apps/daemon/src/server.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/server.ts", [
   "registerConnectorRoutes",
 ], "legacy Node server wires connector routes");
 
-assertContains("apps/daemon/src/connectors/connector-registry.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/connectors/connector-registry.ts", [
   "qq-email",
   "imap.qq.com",
   "readonly",
@@ -720,7 +731,7 @@ assertContains("apps/daemon/src/connectors/connector-registry.ts", [
   "authorizationCode",
 ], "legacy Node connector registry owns data-source boundaries");
 
-assertNotContains("apps/daemon/src/connectors/connector-registry.ts", [
+assertNotContains("docs/archive/legacy-typescript-daemon/src/connectors/connector-registry.ts", [
   "local-workspace",
   "agent-uploads",
   "ucareer-cloud-sync",
@@ -730,7 +741,7 @@ assertNotContains("apps/daemon/src/connectors/connector-registry.ts", [
   "job-board-import",
 ], "legacy Node connector registry currently exposes only email");
 
-assertContains("apps/daemon/src/routes/connector-routes.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/routes/connector-routes.ts", [
   "/api/connectors",
   "/api/connectors/qq-email/test",
   "/api/connectors/qq-email/credential",
@@ -738,14 +749,14 @@ assertContains("apps/daemon/src/routes/connector-routes.ts", [
   "connector_not_found",
 ], "legacy Node connector routes expose connector registry");
 
-assertContains("apps/daemon/src/connectors/imap-connector.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/connectors/imap-connector.ts", [
   "openImapSession",
   "LOGIN",
   "LOGOUT",
   "authorizationCode",
 ], "legacy Node QQ email connector uses IMAP only");
 
-assertContains("apps/daemon/src/stores/connector-credential-store.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/stores/connector-credential-store.ts", [
   "connectorCredentials",
   "aes-256-gcm",
   "connector.key",
@@ -753,19 +764,19 @@ assertContains("apps/daemon/src/stores/connector-credential-store.ts", [
   "secretStored",
 ], "legacy Node QQ email credential store encrypts local SQLite secrets");
 
-assertContains("apps/daemon/src/db/sqlite.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/db/sqlite.ts", [
   "CREATE TABLE IF NOT EXISTS connector_credentials",
   "secret_ciphertext",
   "secret_auth_tag",
 ], "legacy Node SQLite schema stores connector credentials");
 
-assertContains("apps/daemon/src/skills/definitions.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/skills/definitions.ts", [
   "jobEvaluateSkill",
   "resumeGenerateSkill",
   "skillDefinitions",
 ], "legacy Node skill definitions aggregate built-in skills");
 
-assertContains("apps/daemon/src/skills/job-evaluate/skill.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/skills/job-evaluate/skill.ts", [
   "fileManagement",
   "intakeFolder",
   "acceptedAttachmentKinds",
@@ -775,7 +786,7 @@ assertContains("apps/daemon/src/skills/job-evaluate/skill.ts", [
   "outputArtifacts",
 ], "legacy Node job evaluate skill owns file-management contract");
 
-assertContains("apps/daemon/src/skills/resume-generate/skill.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/skills/resume-generate/skill.ts", [
   "fileManagement",
   "intakeFolder",
   "acceptedAttachmentKinds",
@@ -785,7 +796,7 @@ assertContains("apps/daemon/src/skills/resume-generate/skill.ts", [
   "outputArtifacts",
 ], "legacy Node resume generate skill owns file-management contract");
 
-assertContains("apps/daemon/src/skills/registry.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/skills/registry.ts", [
   "skillDefinitions",
   "skillRegistry",
   "getSkill",
@@ -794,35 +805,35 @@ assertContains("apps/daemon/src/skills/registry.ts", [
   "getSkillUiContracts",
 ], "legacy Node skill registry exposes lookup API");
 
-assertContains("apps/daemon/src/routes/workflow-routes.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/routes/workflow-routes.ts", [
   "/api/skills/ui-contracts",
   "/api/skills/pages/:pageId",
   "getSkillUiContracts",
   "getSkillsForPage",
 ], "workflow routes expose skill UI contracts");
 
-assertContains("apps/daemon/src/skills/workspace-help/skill.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/skills/workspace-help/skill.ts", [
   "workspace.help",
   "help.connect_mailbox",
   "help.connect_job_sources",
   "workspace/profile/portals.yml",
 ], "legacy Node workspace help skill explains connectors and portals");
 
-assertContains("apps/daemon/src/skills/job-evaluate/skill.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/skills/job-evaluate/skill.ts", [
   "ui:",
   "primaryPage",
   "entryActions",
   "market.import_or_evaluate_job",
 ], "legacy Node job evaluate skill exposes UI actions");
 
-assertContains("apps/daemon/src/skills/resume-generate/skill.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/skills/resume-generate/skill.ts", [
   "ui:",
   "primaryPage",
   "entryActions",
   "resumes.diagnose_selected_resume",
 ], "legacy Node resume generate skill exposes UI actions");
 
-assertContains("apps/daemon/src/workflow/classify-intake.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/workflow/classify-intake.ts", [
   "RouteDecision",
   "findWorkflowForRoute",
   "workflowId",
@@ -830,13 +841,13 @@ assertContains("apps/daemon/src/workflow/classify-intake.ts", [
   "agentPrompt",
 ], "legacy Node route decision builds agent prompt");
 
-assertContains("apps/daemon/src/workflow/workflow-registry.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/workflow/workflow-registry.ts", [
   "workflowRegistry",
   "WorkflowDefinition",
   "findWorkflowForRoute",
 ], "legacy Node workflow registry is centralized");
 
-assertContains("apps/daemon/src/policy/agent-execution-policy.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/policy/agent-execution-policy.ts", [
   "evaluateActionPolicy",
   "evaluateWorkflowStepPolicy",
   "run_shell",
@@ -845,7 +856,7 @@ assertContains("apps/daemon/src/policy/agent-execution-policy.ts", [
   "evaluateAgentExecutionPolicy",
 ], "legacy Node policy layer evaluates generic actions");
 
-assertContains("apps/daemon/src/services/workflow-run-service.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/services/workflow-run-service.ts", [
   "createRunMetadata",
   "attachTask",
   "attachApproval",
@@ -853,7 +864,7 @@ assertContains("apps/daemon/src/services/workflow-run-service.ts", [
   "evaluateWorkflowStepPolicy",
 ], "legacy Node workflow run service binds tasks and approvals");
 
-assertContains("apps/daemon/src/services/agent-task-service.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/services/agent-task-service.ts", [
   "continueTask",
   "workflowRunService?.attachApproval",
   "workflowRunService?.syncTaskStatus",
@@ -861,23 +872,23 @@ assertContains("apps/daemon/src/services/agent-task-service.ts", [
 ], "legacy Node agent task service keeps continuation workflow state in sync");
 
 assertExists([
-  "apps/daemon/src/routes/attachment-routes.ts",
-  "apps/daemon/src/services/attachment-parser-service.ts",
+  "docs/archive/legacy-typescript-daemon/src/routes/attachment-routes.ts",
+  "docs/archive/legacy-typescript-daemon/src/services/attachment-parser-service.ts",
 ], "legacy Node daemon attachment entry modules");
 
-assertContains("apps/daemon/src/server.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/server.ts", [
   "createAttachmentParserService",
   "registerAttachmentRoutes",
   "attachmentParserService",
 ], "legacy Node server wires attachment entry layer");
 
-assertContains("apps/daemon/src/routes/attachment-routes.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/routes/attachment-routes.ts", [
   "/api/agent-attachments",
   "requirePermission(ctx, request, \"workspace.write\")",
   "services.attachmentParserService.upload",
 ], "legacy Node attachment route delegates parsing to service");
 
-assertContains("apps/daemon/src/services/attachment-parser-service.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/services/attachment-parser-service.ts", [
   "workspaceDataPath(workspaceRoot, \"agentAttachments\")",
   "isInsideDir",
   "formatDate",
@@ -897,7 +908,7 @@ assertContains("packages/shared/src/index.ts", [
   "attachments?: AgentAttachment[]",
 ], "shared attachment contracts");
 
-assertContains("apps/daemon/src/services/route-preview-service.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/services/route-preview-service.ts", [
   "RoutePreviewRequest",
   "composePreviewText",
   "attachments",
@@ -905,7 +916,7 @@ assertContains("apps/daemon/src/services/route-preview-service.ts", [
   "executeRouterPrompt",
 ], "legacy Node route preview service consumes attachment summaries");
 
-assertContains("apps/daemon/src/services/agent-task-service.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/services/agent-task-service.ts", [
   "composeDisplaySourceText",
   "composePromptWithAttachments",
   "User uploaded attachments",
@@ -936,7 +947,7 @@ assertContains("apps/web/src/sections/agent/AgentApprovalBar.tsx", [
   "allow_workspace",
 ], "agent approval bar owns approval controls");
 
-assertContains("apps/daemon/src/stores/workflow-run-store.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/stores/workflow-run-store.ts", [
   "WorkflowRunStore",
   "createRun",
   "workflowRuns",
@@ -944,7 +955,7 @@ assertContains("apps/daemon/src/stores/workflow-run-store.ts", [
   "writeSyncEvent",
 ], "legacy Node workflow run store persists syncable runs");
 
-assertContains("apps/daemon/src/db/schema.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/db/schema.ts", [
   "workflowRuns",
   "workflowStepRuns",
   "workflowRunId",
@@ -1033,7 +1044,7 @@ assertContains("apps/web/src/ARCHITECTURE.md", [
   "The daemon owns `RouteDecision` and agent prompt construction",
 ], "web architecture documents routing ownership");
 
-assertContains("apps/daemon/src/ARCHITECTURE.md", [
+assertContains("docs/archive/legacy-typescript-daemon/src/ARCHITECTURE.md", [
   "routes/*",
   "services/*",
   "workflow/*",
@@ -1057,7 +1068,7 @@ assertContains("workspace/README.md", [
   "Runtime state belongs in `.ucareer/`",
 ], "workspace boundary is documented");
 
-assertContains("apps/daemon/src/workspace-paths.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/workspace-paths.ts", [
   "export type WorkspaceDataPath",
   "workspaceDataPath",
   "workspace/ops/data/applications.md",
@@ -1068,44 +1079,44 @@ assertContains("apps/daemon/src/workspace-paths.ts", [
   "isInsideOrSameDir",
 ], "legacy Node centralizes workspace data paths");
 
-assertContains("apps/daemon/src/stores/application-store.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/stores/application-store.ts", [
   "workspaceDataPath(workspaceRoot, \"applications\")",
   "workspaceDataPath(workspaceRoot, \"applicationEvents\")",
 ], "application store writes through workspace path contract");
 
-assertContains("apps/daemon/src/stores/market-store.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/stores/market-store.ts", [
   "workspaceDataPath(workspaceRoot, \"recruitmentMarket\")",
   "workspaceDataPath(workspaceRoot, \"jobDescriptions\")",
   "joinWorkspaceDataPath(workspaceRoot, \"jobDescriptions\"",
 ], "market store writes through workspace path contract");
 
-assertContains("apps/daemon/src/stores/resume-store.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/stores/resume-store.ts", [
   "workspaceDataPath(workspaceRoot, \"resumeLibrary\")",
   "workspaceDataPath(workspaceRoot, \"resumeJobLinks\")",
 ], "resume store writes through workspace path contract");
 
-assertContains("apps/daemon/src/services/attachment-parser-service.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/services/attachment-parser-service.ts", [
   "workspaceDataPath(workspaceRoot, \"agentAttachments\")",
 ], "attachment parser writes through workspace path contract");
 
-assertContains("apps/daemon/src/services/resume-export-service.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/services/resume-export-service.ts", [
   "workspaceDataPath(workspaceRoot, \"resumeLibrary\")",
   "workspaceDataPath(workspaceRoot, \"resumeExports\")",
 ], "resume export writes through workspace path contract");
 
-assertContains("apps/daemon/src/tools/tool-executor.ts", [
+assertContains("docs/archive/legacy-typescript-daemon/src/tools/tool-executor.ts", [
   "workspaceRelativeDataPath(\"projectNotes\")",
 ], "agent tools derive default target files from workspace path contract");
 
 assertFilesDoNotContain([
-  "apps/daemon/src/stores/application-store.ts",
-  "apps/daemon/src/stores/evidence-store.ts",
-  "apps/daemon/src/stores/experience-store.ts",
-  "apps/daemon/src/stores/market-store.ts",
-  "apps/daemon/src/stores/resume-store.ts",
-  "apps/daemon/src/services/attachment-parser-service.ts",
-  "apps/daemon/src/services/resume-export-service.ts",
-  "apps/daemon/src/tools/tool-executor.ts",
+  "docs/archive/legacy-typescript-daemon/src/stores/application-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/stores/evidence-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/stores/experience-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/stores/market-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/stores/resume-store.ts",
+  "docs/archive/legacy-typescript-daemon/src/services/attachment-parser-service.ts",
+  "docs/archive/legacy-typescript-daemon/src/services/resume-export-service.ts",
+  "docs/archive/legacy-typescript-daemon/src/tools/tool-executor.ts",
 ], [
   "join(workspaceRoot, \"workspace/",
   "resolve(workspaceRoot, \"workspace/",

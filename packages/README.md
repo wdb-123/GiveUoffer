@@ -29,5 +29,5 @@ packages must not depend on apps/*, workspace/* or local daemon stores/routes.
 - `shared` stays framework-independent and must not import Node runtime APIs or other Ucareer packages.
 - `agent-core` may import shared contracts, but must not know any concrete provider.
 - `provider-*` packages may import `agent-core`, but must not import daemon routes, stores, workflow registries or workspace files.
-- Product workflow routing belongs in `apps/daemon/src/workflow/*`, not in packages.
+- Product workflow routing belongs in `apps/py-daemon/src/ucareer_py_daemon/routing.py`, not in packages.
 - User data and generated artifacts belong under `workspace/`, never under `packages/`.

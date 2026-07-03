@@ -55,7 +55,7 @@ class PythonDaemonContractTest(unittest.TestCase):
         self.assertEqual(data["backend"], "python")
         self.assertIn("routeGroups", data)
         self.assertTrue(any(group["domain"] == "auth-tenants" for group in data["routeGroups"]))
-        self.assertTrue(all("legacyNodeModule" in group for group in data["routeGroups"]))
+        self.assertTrue(all("legacyReference" in group for group in data["routeGroups"]))
         self.assertTrue(all("nodeModule" not in group for group in data["routeGroups"]))
 
     def test_root_dev_scripts_start_python_daemon_by_default(self) -> None:

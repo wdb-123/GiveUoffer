@@ -58,8 +58,8 @@ export const workspaceHelpSkill: SkillDefinition = {
     readPaths: [
       "README.md",
       "docs",
-      "apps/daemon/src/ARCHITECTURE.md",
-      "apps/daemon/src/connectors/connector-registry.ts",
+      "docs/archive/legacy-typescript-daemon/src/ARCHITECTURE.md",
+      "docs/archive/legacy-typescript-daemon/src/connectors/connector-registry.ts",
       "workspace/profile/portals.yml",
       "docs/product/job-search-connector-architecture.md",
     ],

@@ -653,7 +653,7 @@ if (pythonApiTests !== null) {
   fail('Python cloud API contract tests failed');
 }
 
-const adapterReadme = readFile('apps/daemon/src/paperclip-adapters/README.md');
+const adapterReadme = readFile('docs/archive/legacy-typescript-daemon/src/paperclip-adapters/README.md');
 if (
   adapterReadme.includes('Treat this directory as vendored runtime code') &&
   adapterReadme.includes('dangerously*') &&

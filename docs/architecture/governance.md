@@ -42,7 +42,7 @@ flowchart LR
 - `apps/web`：React/Vite 前端控制台。
 - `apps/py-daemon/src/ucareer_py_daemon/main.py`：FastAPI API 路由组合入口。
 - `apps/py-daemon/src/ucareer_py_daemon/*`：Python 后端业务编排与文件/SQLite 读写调用。
-- `apps/daemon`：仅作为 legacy TypeScript 参考和 adapter boundary，不能作为新后端功能落点。
+- `docs/archive/legacy-typescript-daemon`：仅作为 legacy TypeScript 参考和 adapter boundary，不能作为新后端功能落点。
 - 规则：
   - 路由层不做持久化策略决策。
   - 大文件读写必须通过 Python daemon store 抽象。

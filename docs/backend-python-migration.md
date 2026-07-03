@@ -3,7 +3,7 @@
 The requested end state is a Python-maintained backend architecture. The default
 local backend is now `apps/py-daemon`, a FastAPI service started by
 `npm run daemon` and `npm run dev:ucareer`. The old TypeScript/Fastify daemon in
-`apps/daemon` is retained only as migration reference source while remaining
+`docs/archive/legacy-typescript-daemon` is retained only as migration reference source while remaining
 Node-specific adapter code is retired. The cloud/API skeleton is now
 `apps/py-api`, a FastAPI service started by `npm run api`; the old TypeScript
 Fastify API in `apps/api` has been removed.
@@ -60,7 +60,7 @@ for the React frontend and shared UI types.
 `apps/py-daemon` is the default local backend, and `apps/py-api` is the default
 cloud/API skeleton. `npm run test:all` verifies that all frontend API routes have
 FastAPI handlers, and `npm run daemon:python:test` / `npm run api:python:test`
-cover the Python backend contracts. The route manifest uses `legacyNodeModule`
+cover the Python backend contracts. The route manifest uses `legacyReference`
 for old TypeScript references so the architecture endpoint does not present Node
 as the active backend module.
 

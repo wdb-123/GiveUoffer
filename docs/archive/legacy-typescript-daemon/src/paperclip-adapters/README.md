@@ -19,8 +19,8 @@ for this project to run with the embedded adapter code.
 
 Governance rules:
 - Treat this directory as vendored runtime code. Keep product-specific wiring in
-  `apps/daemon/src/providers/paperclip-adapter-provider.ts` and
-  `apps/daemon/src/policy/agent-execution-policy.ts` unless a vendor fix is required.
+  `docs/archive/legacy-typescript-daemon/src/providers/paperclip-adapter-provider.ts` and
+  `docs/archive/legacy-typescript-daemon/src/policy/agent-execution-policy.ts` unless a vendor fix is required.
 - Any sync from upstream Paperclip must record the source commit or release in
   this file and pass `npm run typecheck`, `npm run web:build`, and
   `npm run test:all`.

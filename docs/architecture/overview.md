@@ -16,7 +16,7 @@ flowchart LR
   Workflow --> Sync["Sync Outbox\n未来云端/移动端同步桥"]
 ```
 
-`apps/daemon` is retained only as the legacy TypeScript reference and adapter
+`docs/archive/legacy-typescript-daemon` is retained only as the legacy TypeScript reference and adapter
 boundary. New backend API work lands in `apps/py-daemon` first.
 
 ## Runtime Flow

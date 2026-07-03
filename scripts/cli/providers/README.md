@@ -7,7 +7,7 @@ These are ATS/job-board parsers, not agent runtime providers. Agent providers li
 - `packages/provider-codex`
 - `packages/provider-claude`
 - `packages/provider-gemini`
-- `apps/daemon/src/providers`
+- `docs/archive/legacy-typescript-daemon/src/providers` for historical TypeScript adapter reference
 
 ## Contract
 
