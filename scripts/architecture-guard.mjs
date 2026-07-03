@@ -299,6 +299,32 @@ function assertUcareerNamespace() {
     "Python daemon 服务分层",
   ], "architecture governance routes backend work to Python");
 
+  assertContains("docs/guides/boss-chrome-import.md", [
+    "apps/py-daemon/src/ucareer_py_daemon/workspace_stores.py",
+    "MarketStore",
+    "FastAPI 招聘市场 API",
+  ], "Boss import guide points to the Python market store");
+
+  assertContains("docs/product/job-search-connector-architecture.md", [
+    "apps/py-daemon/src/ucareer_py_daemon/connectors.py",
+    "apps/py-daemon/src/ucareer_py_daemon/jobsearch.py",
+    "apps/py-daemon/src/ucareer_py_daemon/workspace_stores.py",
+    "Python `routing.py`",
+  ], "job search connector design points backend work to Python");
+
+  assertFilesDoNotContain([
+    "docs/guides/boss-chrome-import.md",
+    "docs/product/job-search-connector-architecture.md",
+  ], [
+    "apps/daemon",
+    "jobsearch-service.ts",
+    "connector-registry.ts",
+    "connector-routes.ts",
+    "market-store.ts",
+    "skill-registry.ts",
+    "classify-intake.ts",
+  ], "product and guide docs do not route backend work to legacy Node");
+
   assertContains("package-lock.json", [
     "\"name\": \"@ucareer/daemon\"",
     "\"name\": \"@ucareer/shared\"",

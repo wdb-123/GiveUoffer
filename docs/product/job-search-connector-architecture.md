@@ -11,8 +11,8 @@
 ## 当前基线
 
 - 前端 Agent 输入框已经有连接器入口：`apps/web/src/sections/agent/MobileConnectorBar.tsx`，现在只展示 QQ 邮箱。
-- 后端连接器边界已经存在：`apps/daemon/src/connectors/connector-registry.ts` 和 `apps/daemon/src/routes/connector-routes.ts`。
-- Skill registry 已有 `job.scan`，但没有 connector tool 绑定。
+- 后端连接器边界已经在 Python daemon 中落地：`apps/py-daemon/src/ucareer_py_daemon/connectors.py` 和 `apps/py-daemon/src/ucareer_py_daemon/main.py`。
+- Python routing 已有 `job.scan`，并通过 `jobsearch.search_jobs` / `jobsearch.import_current_job` tool 绑定到 Agent 执行。
 - 岗位列表读取 `GET /api/recruitment-market`，数据来自 `workspace/ops/data/recruitment-market.json` 和分片目录。
 - 中国岗位雷达已有两个本地脚本：
   - `scripts/research/boss-agent-radar.mjs`
@@ -44,21 +44,21 @@
 
 新增连接器定义：
 
-```ts
+```python
 {
-  id: "jobsearch",
-  label: "找岗位",
-  kind: "job_board",
-  status: "available",
-  capabilities: ["import_jobs"],
-  readScopes: ["workspace.read"],
-  writeScopes: ["workspace.write"],
-  workspacePaths: [
+  "id": "jobsearch",
+  "label": "jobsearch",
+  "kind": "job_board",
+  "status": "available",
+  "capabilities": ["import_jobs"],
+  "readScopes": ["workspace.read"],
+  "writeScopes": ["workspace.write"],
+  "workspacePaths": [
     "workspace/ops/data/recruitment-market.json",
     "workspace/profile/portals.yml"
   ],
-  requiresAuth: false,
-  syncable: false
+  "requiresAuth": False,
+  "syncable": False
 }
 ```
 
@@ -75,29 +75,29 @@
 
 `search` 请求体建议：
 
-```ts
-interface JobSearchRequest {
-  source: "boss-agent" | "china-crawler" | "portals" | "all";
-  city?: string;
-  queries?: string[];
-  max?: number;
-  minMatchScore?: number;
-  withDetails?: boolean;
-  dryRun?: boolean;
+```python
+JobSearchRequest = {
+  "source": "codex-chrome | boss-agent | china-crawler | portals | all",
+  "city": "深圳",
+  "queries": ["机器人系统工程师", "ROS2 机器人"],
+  "max": 12,
+  "minMatchScore": 0,
+  "withDetails": True,
+  "dryRun": False,
 }
 ```
 
 响应体建议：
 
-```ts
-interface JobSearchResult {
-  runId: string;
-  status: "queued" | "running" | "completed" | "failed";
-  added: number;
-  candidatesSeen: number;
-  duplicatesSkipped: number;
-  jobs: MarketJob[];
-  marketUpdatedAt?: string;
+```python
+JobSearchResult = {
+  "runId": "jobsearch_...",
+  "status": "completed | failed",
+  "added": 0,
+  "candidatesSeen": 0,
+  "duplicatesSkipped": 0,
+  "jobs": [],
+  "marketUpdatedAt": "2026-07-03",
 }
 ```
 
@@ -129,17 +129,17 @@ interface JobSearchResult {
 
 ## 执行层
 
-不要让 route 直接 `spawn` 研究脚本。建议新增一个 service：
+不要让 route 直接 `spawn` 研究脚本。当前执行入口是 Python service：
 
 ```text
-apps/daemon/src/services/jobsearch-service.ts
+apps/py-daemon/src/ucareer_py_daemon/jobsearch.py
 ```
 
 职责：
 
 - 校验请求参数和权限。
 - 把 source 映射到受控命令。
-- 调用现有本地脚本或未来的纯 TS connector。
+- 调用现有本地脚本或未来的纯 Python connector。
 - 解析 JSON 输出。
 - 通过 market store 写入岗位。
 - 返回结构化统计和新增岗位。
@@ -149,51 +149,44 @@ apps/daemon/src/services/jobsearch-service.ts
 - `boss-agent` -> `node scripts/research/boss-agent-radar.mjs --max ... --city ... --query ...`
 - `china-crawler` -> `node scripts/research/china-job-crawler.mjs --max=... --platform=...`
 
-中期把脚本内的 normalize、dedupe、write market 逻辑迁到 daemon service，脚本只保留 CLI 包装。
+中期把脚本内的 normalize、dedupe、write market 逻辑迁到 Python daemon service，脚本只保留 CLI 包装。
 
 ### Service 接口
 
-```ts
-export interface JobSearchService {
-  listSources(): Promise<JobSearchSource[]>;
-  search(input: JobSearchRequest): Promise<JobSearchResult>;
-  importJob(input: ImportJobRequest): Promise<ImportJobResult>;
-}
+```python
+class JobSearchService:
+    def list_sources(self) -> list[dict]: ...
+    def search(self, payload: dict) -> dict: ...
+    def import_current_job(self, payload: dict | None = None) -> dict: ...
 ```
 
 service 构造函数：
 
-```ts
-createJobSearchService({
-  workspaceRoot,
-  marketStore,
-  commandRunner,
-})
+```python
+JobSearchService(workspace_root=workspace_root, chrome_bridge=chrome_bridge)
 ```
 
 `commandRunner` 使用受控命令白名单，不接收任意 shell 字符串：
 
-```ts
-type JobSearchCommand =
-  | { kind: "boss-agent"; args: string[] }
-  | { kind: "china-crawler"; args: string[] }
-  | { kind: "portals"; args: string[] };
+```python
+provider["id"] in {"codex-chrome", "boss-agent", "china-crawler", "portals"}
+subprocess.run([node_bin, script_path, *args], shell=False, ...)
 ```
 
 这样可以复用现有脚本，又避免把前端参数拼进 shell。
 
 ### Market Store 写接口
 
-当前 `marketStore` 只有 `getRecruitmentMarket()`。Phase 1 如果继续让脚本自己写文件，可以先不动 store；Phase 2 应补：
+当前 Python `MarketStore` 已有读取、导入、更新和删除接口：
 
-```ts
-interface MarketStore {
-  getRecruitmentMarket(): Promise<RecruitmentMarket>;
-  upsertJobs(jobs: MarketJob[], metadata: MarketWriteMetadata): Promise<RecruitmentMarket>;
-}
+```python
+MarketStore.get_recruitment_market()
+MarketStore.import_job(payload)
+MarketStore.update_job(job_id, patch)
+MarketStore.delete_job(job_id)
 ```
 
-`upsertJobs` 负责：
+`MarketStore` 负责：
 
 - 读取现有 market。
 - 用 `company + role + normalized url` 去重。
@@ -207,14 +200,14 @@ interface MarketStore {
 flowchart LR
   Composer["Agent 输入框连接器"] --> API["POST /api/search/jobsearch"]
   MarketPanel["岗位列表跑雷达面板"] --> API
-  API --> Service["jobsearch-service"]
+  API --> Service["Python JobSearchService"]
   Service --> Boss["boss-agent-radar"]
   Service --> Crawler["china-job-crawler"]
   Service --> Portals["scan / portals.yml"]
   Boss --> Normalize["normalize + dedupe"]
   Crawler --> Normalize
   Portals --> Normalize
-  Normalize --> Store["market-store write"]
+  Normalize --> Store["Python MarketStore write"]
   Store --> Files["workspace/ops/data/recruitment-market.json(.jobs.d)"]
   Files --> MarketAPI["GET /api/recruitment-market"]
   MarketAPI --> MarketView["岗位列表"]
@@ -226,33 +219,26 @@ flowchart LR
 
 给 `job.scan` 增加 connector tool：
 
-```ts
+```python
 connectorTools: [
   {
-    id: "jobsearch.search_jobs",
-    connectorId: "jobsearch",
-    label: "搜索岗位雷达",
-    capability: "import_jobs",
-    readonly: false,
-    risk: "medium",
-    description: "按关键词、城市和来源只读搜索岗位，并把去重后的结果写入岗位雷达。",
-    inputSchema: { ...JobSearchRequest }
+    "id": "jobsearch.search_jobs",
+    "connectorId": "jobsearch",
+    "label": "搜索岗位雷达",
+    "capability": "import_jobs",
+    "readonly": False,
+    "risk": "medium",
+    "description": "按关键词、城市和来源只读搜索岗位，并把去重后的结果写入岗位雷达。",
+    "inputSchema": JobSearchRequest,
   }
 ]
 ```
 
-这样用户在 Agent 输入框输入“帮我找今天最值得推进的岗位”时，可以由 `classify-intake` 路由到 `job.scan`，prompt-builder 会把 jobsearch tool 暴露给执行 Agent。
+这样用户在 Agent 输入框输入“帮我找今天最值得推进的岗位”时，可以由 Python `routing.py` 路由到 `job.scan`，并把 jobsearch tool 暴露给执行 Agent。
 
 ### Intake 路由
 
-`classify-intake.ts` 已经会用 `scan`、`扫描`、`门户`、`新岗位`、`pipeline`、`portals` 路由到 `job.scan`。建议补充这些关键词：
-
-- `找岗位`
-- `岗位雷达`
-- `跑雷达`
-- `今天值得推进`
-- `Boss`
-- `智联`
+Python `routing.py` 已经会用 `搜索`、`找岗位`、`岗位搜索`、`扫描`、`jobsearch`、`radar`、`跑雷达`、`Boss`、`智联`、`猎聘` 路由到 `job.scan`。
 
 这样输入框提示词和连接器按钮都能落到同一个 skill。
 
@@ -348,14 +334,14 @@ async function refreshMarket() {
 ### Phase 1：最小闭环
 
 1. 泛化 `MobileConnectorBar` 为多连接器菜单。
-2. 新增 `jobsearch` registry 定义。
-3. 新增 `POST /api/search/jobsearch`。
+2. `jobsearch` registry 定义在 Python `connectors.py` 中维护。
+3. `POST /api/search/jobsearch` 由 Python FastAPI 提供。
 4. service 内部先调用现有两个脚本。
 5. Market 页“开始扫描”和 Agent 连接器调用同一 API。
 
 ### Phase 2：结构化执行
 
-1. 把脚本里的 normalize/dedupe/renumber/markdown 输出迁入 daemon。
+1. 把脚本里的 normalize/dedupe/renumber/markdown 输出迁入 Python daemon。
 2. market store 增加写接口，替代脚本直接写文件。
 3. job.scan skill 绑定 `jobsearch.search_jobs` connector tool。
 4. Agent 执行过程中显示 run 状态和新增岗位摘要。
@@ -370,11 +356,11 @@ async function refreshMarket() {
 
 ```text
 packages/shared/src/index.ts
-apps/daemon/src/connectors/connector-registry.ts
-apps/daemon/src/routes/connector-routes.ts
-apps/daemon/src/services/jobsearch-service.ts
-apps/daemon/src/stores/market-store.ts
-apps/daemon/src/workflow/skill-registry.ts
+apps/py-daemon/src/ucareer_py_daemon/connectors.py
+apps/py-daemon/src/ucareer_py_daemon/main.py
+apps/py-daemon/src/ucareer_py_daemon/jobsearch.py
+apps/py-daemon/src/ucareer_py_daemon/workspace_stores.py
+apps/py-daemon/src/ucareer_py_daemon/routing.py
 apps/web/src/api.ts
 apps/web/src/hooks/useJobSearch.ts
 apps/web/src/sections/agent/AgentConnectorBar.tsx
@@ -390,18 +376,18 @@ apps/web/src/sections/MarketSection.tsx
    - 增加 `JobSearchSource`、`JobSearchRequest`、`JobSearchResult`、`ImportJobRequest`、`ImportJobResult` 类型。
    - 如果 `ConnectorProtocol` 暂不扩展，`ConnectorDefinition.protocol` 保持可选即可。
 
-2. `apps/daemon/src/connectors/connector-registry.ts`
-   - 增加 `jobsearch` connector。
+2. `apps/py-daemon/src/ucareer_py_daemon/connectors.py`
+   - 维护 `jobsearch` connector。
 
-3. `apps/daemon/src/services/jobsearch-service.ts`
-   - 实现 `listSources()` 和 `search()`。
-   - `search()` 用 `spawn(process.execPath, [scriptPath, ...args])` 调现有 `.mjs`，不要走 shell。
+3. `apps/py-daemon/src/ucareer_py_daemon/jobsearch.py`
+   - 实现 `list_sources()`、`search()` 和 `import_current_job()`。
+   - `search()` 用 `subprocess.run([...], shell=False)` 调现有 `.mjs`，不要走 shell。
    - 解析 stdout JSON，映射成 `JobSearchResult`。
 
-4. `apps/daemon/src/routes/context.ts` 和 `apps/daemon/src/server.ts`
-   - 把 `jobSearchService` 注入 `ctx.services`。
+4. `apps/py-daemon/src/ucareer_py_daemon/main.py`
+   - 由 `create_app()` 组合 `JobSearchService` 和 FastAPI routes。
 
-5. `apps/daemon/src/routes/connector-routes.ts`
+5. `apps/py-daemon/src/ucareer_py_daemon/main.py`
    - 增加 `/api/search/jobsearch/sources`。
    - 增加 `/api/search/jobsearch`。
    - 权限用 `workspace.write`，如果前端当前 session 没有该权限，再临时降到现有可用权限并记录 TODO。

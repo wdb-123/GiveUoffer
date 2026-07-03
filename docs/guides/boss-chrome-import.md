@@ -45,7 +45,8 @@ https://www.zhipin.com/web/geek/jobs?city=101280600&query={encoded keyword}&indu
 
 ## Current Parser
 
-入口：`apps/daemon/src/market-store.ts` 和相关招聘市场 API。
+入口：`apps/py-daemon/src/ucareer_py_daemon/workspace_stores.py` 的
+`MarketStore`，通过 FastAPI 招聘市场 API 调用。
 
 - URL-only：先尝试 fetch / browser 解析；被拦截时标记 `fetch-blocked` 或 `browser-blocked`。
 - rawText：通过 `parseJobText(..., "text")` 解析可见 JD 正文。
