@@ -479,15 +479,30 @@ class PythonDaemonContractTest(unittest.TestCase):
             headers = {"x-ucareer-session": token}
             tasks = client.get("/api/agent-tasks", headers=headers).json()
             self.assertTrue(tasks["ok"])
-            self.assertEqual(tasks["data"][0]["id"], "task-1")
+            self.assertEqual({task["id"] for task in tasks["data"]}, {"task-1", "task-2"})
+
+            queue = client.get("/api/agent-execution-queue", headers=headers).json()
+            self.assertTrue(queue["ok"])
+            self.assertEqual(queue["data"]["currentTenant"]["tenantId"], tenant_id)
+            self.assertEqual(queue["data"]["currentTenant"]["running"], 1)
+            self.assertEqual(queue["data"]["currentTenant"]["queued"], 0)
 
             task = client.get("/api/agent-tasks/task-1", headers=headers).json()
             self.assertTrue(task["ok"])
             self.assertEqual(task["data"]["status"], "running")
 
+            busy_delete = client.delete("/api/agent-tasks/task-1", headers=headers).json()
+            self.assertFalse(busy_delete["ok"])
+            self.assertEqual(busy_delete["error"]["code"], "task_busy")
+
+            cancelled = client.post("/api/agent-tasks/task-1/cancel", headers=headers).json()
+            self.assertTrue(cancelled["ok"])
+            self.assertEqual(cancelled["data"]["status"], "cancelled")
+
             events = client.get("/api/agent-tasks/task-1/events", headers=headers).json()
             self.assertTrue(events["ok"])
             self.assertEqual(events["data"][0]["text"], "hello")
+            self.assertEqual(events["data"][-1]["status"], "cancelled")
 
             turns = client.get("/api/agent-tasks/task-1/turns", headers=headers).json()
             self.assertTrue(turns["ok"])
@@ -505,6 +520,17 @@ class PythonDaemonContractTest(unittest.TestCase):
             detail = client.get("/api/workflow-runs/run-1", headers=headers).json()
             self.assertTrue(detail["ok"])
             self.assertEqual(detail["data"]["steps"][0]["stepId"], "route")
+
+            deleted = client.delete("/api/agent-tasks/task-2", headers=headers).json()
+            self.assertTrue(deleted["ok"])
+            self.assertEqual(deleted["data"]["id"], "task-2")
+            missing = client.get("/api/agent-tasks/task-2", headers=headers).json()
+            self.assertFalse(missing["ok"])
+
+            with connect_database(settings.daemon_db_path) as conn:
+                sync_rows = conn.execute("SELECT event_type FROM sync_events WHERE tenant_id = ? AND entity_type = 'agent_task' ORDER BY id", (tenant_id,)).fetchall()
+                self.assertIn("status_updated", [row["event_type"] for row in sync_rows])
+                self.assertIn("deleted", [row["event_type"] for row in sync_rows])
 
     def _write_tenant_workspace_fixture(self, root: Path) -> None:
         (root / "profile").mkdir(parents=True)
@@ -654,6 +680,30 @@ class PythonDaemonContractTest(unittest.TestCase):
                     json.dumps({"skillId": "workspace.help"}),
                     "2026-07-03T00:00:00Z",
                     "2026-07-03T00:00:02Z",
+                ),
+            )
+            conn.execute(
+                """
+                INSERT INTO agent_tasks
+                  (id, tenant_id, provider_id, workspace_path, prompt, mode, status, skill_id, workflow_id, workflow_run_id, input_kind, source_text, route_decision, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "task-2",
+                    tenant_id,
+                    "codex-local",
+                    str(tenant_workspace),
+                    "done task",
+                    "structured",
+                    "completed",
+                    None,
+                    None,
+                    None,
+                    "text",
+                    "done task",
+                    None,
+                    "2026-07-03T00:00:03Z",
+                    "2026-07-03T00:00:04Z",
                 ),
             )
             conn.execute(

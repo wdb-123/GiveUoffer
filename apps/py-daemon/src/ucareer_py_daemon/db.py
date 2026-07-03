@@ -154,6 +154,26 @@ def ensure_core_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_approval_requests_tenant_created_at
           ON approval_requests (tenant_id, created_at);
 
+        CREATE TABLE IF NOT EXISTS approval_decisions (
+          approval_id TEXT PRIMARY KEY,
+          tenant_id TEXT,
+          task_id TEXT NOT NULL,
+          decision TEXT NOT NULL,
+          note TEXT,
+          decided_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS approval_grants (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT,
+          action TEXT NOT NULL,
+          provider_id TEXT NOT NULL,
+          workspace_path TEXT NOT NULL,
+          source_approval_id TEXT,
+          created_at TEXT NOT NULL,
+          UNIQUE(tenant_id, action, provider_id, workspace_path)
+        );
+
         CREATE TABLE IF NOT EXISTS workflow_runs (
           id TEXT PRIMARY KEY,
           tenant_id TEXT,

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import re
+import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +35,72 @@ class AgentStore:
             row = conn.execute("SELECT * FROM agent_tasks WHERE id = ? AND tenant_id = ?", (task_id, self.tenant_id)).fetchone()
             task = _task_from_row(row) if row else None
             return task if task and self._is_tenant_task(task) else None
+
+    def queue_overview(self, tenant_name: str) -> dict[str, Any]:
+        tasks = self.list_tasks()
+        running = sum(1 for task in tasks if task.get("status") == "running")
+        queued = sum(1 for task in tasks if task.get("status") == "queued")
+        waiting_approval = sum(1 for task in tasks if task.get("status") == "waiting_approval")
+        max_concurrent = 2
+        max_concurrent_per_tenant = 2
+        max_queued = 100
+        max_queued_per_tenant = 25
+        return {
+            "maxConcurrent": max_concurrent,
+            "maxConcurrentPerTenant": max_concurrent_per_tenant,
+            "maxQueued": max_queued,
+            "maxQueuedPerTenant": max_queued_per_tenant,
+            "running": running,
+            "queued": queued + waiting_approval,
+            "queuedExclusive": 0,
+            "currentTenant": {
+                "tenantId": self.tenant_id,
+                "tenantName": tenant_name,
+                "running": running,
+                "queued": queued + waiting_approval,
+            },
+            "saturated": queued + waiting_approval >= max_queued,
+            "tenantSaturated": queued + waiting_approval >= max_queued_per_tenant,
+        }
+
+    def delete_task(self, task_id: str) -> dict[str, Any]:
+        task = self.get_task(task_id)
+        if not task:
+            raise ValueError(f"Task not found: {task_id}")
+        if task.get("status") in {"queued", "running", "waiting_approval"}:
+            raise PermissionError("Cannot delete a task while it is queued, running, or waiting for approval")
+        with connect_database(self.db_path) as conn:
+            conn.execute("DELETE FROM agent_events WHERE task_id = ? AND tenant_id = ?", (task_id, self.tenant_id))
+            conn.execute("DELETE FROM approval_requests WHERE task_id = ? AND tenant_id = ?", (task_id, self.tenant_id))
+            conn.execute("DELETE FROM approval_decisions WHERE task_id = ? AND tenant_id = ?", (task_id, self.tenant_id))
+            conn.execute("DELETE FROM agent_tasks WHERE id = ? AND tenant_id = ?", (task_id, self.tenant_id))
+            _write_sync_event(conn, self.tenant_id, "agent_task", task_id, "deleted", task)
+            conn.commit()
+        return task
+
+    def cancel_task(self, task_id: str) -> dict[str, Any]:
+        return self.update_task_status(task_id, "cancelled")
+
+    def update_task_status(self, task_id: str, status: str) -> dict[str, Any]:
+        task = self.get_task(task_id)
+        if not task:
+            raise ValueError(f"Task not found: {task_id}")
+        updated_at = _now_iso()
+        with connect_database(self.db_path) as conn:
+            conn.execute(
+                "UPDATE agent_tasks SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?",
+                (status, updated_at, task_id, self.tenant_id),
+            )
+            updated = {**task, "status": status, "updatedAt": updated_at}
+            event = {"type": "task_status", "taskId": task_id, "status": status, "createdAt": updated_at}
+            conn.execute(
+                "INSERT INTO agent_events (id, tenant_id, task_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), self.tenant_id, task_id, "task_status", json.dumps(event, ensure_ascii=False), updated_at),
+            )
+            _write_sync_event(conn, self.tenant_id, "agent_task", task_id, "status_updated", updated)
+            self._sync_workflow_status(conn, updated)
+            conn.commit()
+        return updated
 
     def list_events(self, task_id: str) -> list[dict[str, Any]]:
         if not self.get_task(task_id):
@@ -103,6 +171,29 @@ class AgentStore:
             return path == root or root in path.parents
         except OSError:
             return False
+
+    def _sync_workflow_status(self, conn: Any, task: dict[str, Any]) -> None:
+        workflow_run_id = task.get("workflowRunId")
+        skill_id = task.get("skillId") or task.get("currentStepId")
+        if not workflow_run_id or not skill_id:
+            return
+        updated_at = task.get("updatedAt") or _now_iso()
+        conn.execute(
+            """
+            UPDATE workflow_runs
+            SET status = ?, current_step_id = ?, updated_at = ?
+            WHERE id = ? AND tenant_id = ?
+            """,
+            (task["status"], skill_id, updated_at, workflow_run_id, self.tenant_id),
+        )
+        conn.execute(
+            """
+            UPDATE workflow_step_runs
+            SET status = ?, task_id = ?, updated_at = ?
+            WHERE workflow_run_id = ? AND tenant_id = ? AND step_id = ?
+            """,
+            (task["status"], task["id"], updated_at, workflow_run_id, self.tenant_id, skill_id),
+        )
 
 
 def _task_from_row(row: Any) -> dict[str, Any]:
@@ -177,6 +268,20 @@ def _parse_json(value: str, fallback: Any) -> Any:
         return json.loads(value)
     except (TypeError, json.JSONDecodeError):
         return fallback
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _write_sync_event(conn: Any, tenant_id: str, entity_type: str, entity_id: str, event_type: str, payload: Any) -> None:
+    conn.execute(
+        """
+        INSERT INTO sync_events (tenant_id, entity_type, entity_id, event_type, payload, created_at, pushed_at)
+        VALUES (?, ?, ?, ?, ?, ?, NULL)
+        """,
+        (tenant_id, entity_type, entity_id, event_type, json.dumps(payload, ensure_ascii=False), _now_iso()),
+    )
 
 
 def _drop_empty(value: dict[str, Any]) -> dict[str, Any]:

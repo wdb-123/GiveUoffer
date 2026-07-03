@@ -406,9 +406,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def agent_tasks(request: Request) -> dict[str, object]:
         return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_tasks())
 
+    @app.get("/api/agent-execution-queue")
+    async def agent_execution_queue(request: Request) -> dict[str, object]:
+        return _handle_agent_store_with_session(
+            request,
+            auth_store,
+            settings,
+            "agent.run",
+            lambda store, session: store.queue_overview(session["activeTenant"]["name"]),
+        )
+
     @app.get("/api/agent-tasks/{task_id}")
     async def agent_task(request: Request, task_id: str) -> dict[str, object]:
         return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: _require_found(store.get_task(task_id), "Task not found"))
+
+    @app.delete("/api/agent-tasks/{task_id}")
+    async def delete_agent_task(request: Request, task_id: str) -> dict[str, object]:
+        result = _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.delete_task(task_id))
+        if not result.get("ok") and result.get("error", {}).get("code") == "forbidden" and "Cannot delete" in str(result.get("error", {}).get("message", "")):
+            return error("task_busy", "Cannot delete a task while it is queued, running, or waiting for approval")
+        return result
+
+    @app.post("/api/agent-tasks/{task_id}/cancel")
+    async def cancel_agent_task(request: Request, task_id: str) -> dict[str, object]:
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.cancel_task(task_id))
 
     @app.get("/api/agent-tasks/{task_id}/events")
     async def agent_task_events(request: Request, task_id: str) -> dict[str, object]:
@@ -493,6 +514,17 @@ def _handle_agent_store(request: Request, auth_store: AuthStore, settings: Setti
             raise PermissionError(f"Permission required: {permission}")
         root = tenant_workspace_root(settings.workspace_root, session["activeTenant"]["id"])
         return operation(AgentStore(settings.daemon_db_path, session["activeTenant"]["id"], root))
+
+    return _handle(run_with_store)
+
+
+def _handle_agent_store_with_session(request: Request, auth_store: AuthStore, settings: Settings, permission: str, operation) -> dict[str, object]:
+    def run_with_store() -> Any:
+        session = auth_store.require_session(_session_token(request))
+        if permission not in session.get("permissions", []):
+            raise PermissionError(f"Permission required: {permission}")
+        root = tenant_workspace_root(settings.workspace_root, session["activeTenant"]["id"])
+        return operation(AgentStore(settings.daemon_db_path, session["activeTenant"]["id"], root), session)
 
     return _handle(run_with_store)
 
