@@ -281,6 +281,24 @@ function assertUcareerNamespace() {
     "default `npm run daemon` command starts the Python daemon",
   ], "legacy TypeScript daemon is documented as non-default");
 
+  assertContains("docs/architecture/overview.md", [
+    "本地 API 服务\\napps/py-daemon",
+    "FastAPI 路由组合\\nmain.py",
+    "`apps/daemon` is retained only as the legacy TypeScript reference",
+  ], "architecture overview documents Python daemon as the active backend");
+
+  assertNotContains("docs/architecture/overview.md", [
+    "本地 API 服务\\napps/daemon",
+    "入口/路由层\\nroutes/*",
+  ], "architecture overview does not present legacy Node as the active backend");
+
+  assertContains("docs/architecture/governance.md", [
+    "本地 API 服务\\napps/py-daemon",
+    "`apps/py-daemon/src/ucareer_py_daemon/main.py`",
+    "`apps/daemon`：仅作为 legacy TypeScript 参考和 adapter boundary",
+    "Python daemon 服务分层",
+  ], "architecture governance routes backend work to Python");
+
   assertContains("package-lock.json", [
     "\"name\": \"@ucareer/daemon\"",
     "\"name\": \"@ucareer/shared\"",

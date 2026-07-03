@@ -19,10 +19,10 @@ flowchart LR
   CLI[AI CLI 入口\n(agent 运行面)] --> Core[核心流程层\nworkflow / scan / task]
   Core --> DataLayer[持久化层\nworkspace/ + .ucareer/]
   Core --> Web[React Web 控制台\napps/web]
-  Core --> Daemon[本地 API 服务\napps/daemon]
+  Core --> Daemon[本地 API 服务\napps/py-daemon]
   Core --> Scripts[离线脚本\nscripts/, .mjs 工具]
   Web --> Daemon
-  Daemon --> Services[服务层\napplication/evidence/workspace/recruitment/...]
+  Daemon --> Services[Python 服务层\nauth/billing/agent/workspace/connectors]
   Scripts --> ParseTools[parser/network/parser-utils]
   DataLayer --> Tracker[tracker 校验\nmerge-tracker/verify/dedup/normalize]
 ```
@@ -40,11 +40,12 @@ flowchart LR
 ### 3.2 Web + Daemon（Web 服务）
 
 - `apps/web`：React/Vite 前端控制台。
-- `apps/daemon/src/server.ts`：Fastify API 路由入口。
-- `apps/daemon/src/*-store.ts`：业务编排与文件/SQLite 读写调用。
+- `apps/py-daemon/src/ucareer_py_daemon/main.py`：FastAPI API 路由组合入口。
+- `apps/py-daemon/src/ucareer_py_daemon/*`：Python 后端业务编排与文件/SQLite 读写调用。
+- `apps/daemon`：仅作为 legacy TypeScript 参考和 adapter boundary，不能作为新后端功能落点。
 - 规则：
   - 路由层不做持久化策略决策。
-  - 大文件读写必须通过 daemon store 抽象。
+  - 大文件读写必须通过 Python daemon store 抽象。
   - `/api/*` 返回错误结构统一，避免“前端靠文本解析”。
 
 ### 3.3 Web 控制台
@@ -111,7 +112,7 @@ flowchart LR
   3. 计算/评分逻辑
   4. 输出渲染/导出
 - 每个文件不超过一个核心抽象。
-- 公共工具优先 `tools/`、`scripts/*-lib/`、`apps/daemon/src/*-store.ts`。
+- 公共工具优先 `tools/`、`scripts/*-lib/`、`apps/py-daemon/src/ucareer_py_daemon/*`。
 
 ### 5.3 样式治理
 
@@ -159,7 +160,7 @@ flowchart LR
   - `docs/architecture/overview.md`
   - `docs/architecture/governance.md`
   - `apps/web/src/ARCHITECTURE.md`
-  - `apps/daemon/src/ARCHITECTURE.md`
+  - `apps/py-daemon/README.md`
 - 引入新脚本/新服务必须在对应 README 或 `docs/guides/` 中补充用途和输入输出。
 
 ## 八、治理指标与告警
@@ -176,7 +177,7 @@ flowchart LR
 ## 九、当前治理状态（快照）
 
 - Frontend：样式与服务已按域拆分，`styles.css` 聚合化。
-- 后端数据治理：招聘市场数据已抽象为 `recruitment-market-store.mjs` + 分片目录。
+- 后端数据治理：默认本地 API 已迁移到 `apps/py-daemon`，招聘市场数据已抽象为 Python workspace store + 分片目录。
 - Boss JD 导入能力：已沉淀为 `url + rawText` 导入流程，详见 `docs/guides/boss-chrome-import.md`。不要依赖无登录态 fetch 解析 Boss 详情页。
 - 前后端已统一读取新招聘市场访问入口。
 - 当前高优先级待治理文件（>500 行）：
@@ -192,5 +193,5 @@ flowchart LR
 3. 每次拆分提交后做 smoke 与回归验证。
 4. 下轮治理按“最大收益”优先级：
    1. 脚本层（evaluate/scan）
-   2. 服务分层（TS）
+   2. Python daemon 服务分层
    3. 文档与流程规则收口
