@@ -773,6 +773,93 @@ class PythonDaemonContractTest(unittest.TestCase):
                 approval_grant = conn.execute("SELECT * FROM approval_grants WHERE source_approval_id = ?", ("approval-1",)).fetchone()
                 self.assertEqual(approval_grant["provider_id"], "codex-local")
 
+    def test_agent_task_creation_routes_write_python_sqlite_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=Path(tmp),
+                daemon_db_path=Path(tmp) / ".ucareer" / "daemon.sqlite",
+            )
+            client = TestClient(create_app(settings))
+            created = client.post(
+                "/api/auth/create-account",
+                json={
+                    "email": "creator@example.com",
+                    "password": "Password123",
+                    "displayName": "Creator",
+                    "tenantName": "Creator Workspace",
+                },
+            ).json()
+            self.assertTrue(created["ok"])
+            token = created["data"]["token"]
+            tenant_id = created["data"]["activeTenant"]["id"]
+            headers = {"x-ucareer-session": token}
+
+            fast_reply = client.post(
+                "/api/agent-tasks",
+                headers=headers,
+                json={"providerId": "codex", "prompt": "你好"},
+            ).json()
+            self.assertTrue(fast_reply["ok"])
+            self.assertEqual(fast_reply["data"]["status"], "completed")
+            self.assertEqual(fast_reply["data"]["skillId"], "agent.general")
+            fast_task_id = fast_reply["data"]["id"]
+            fast_turns = client.get(f"/api/agent-tasks/{fast_task_id}/turns", headers=headers).json()
+            self.assertTrue(fast_turns["ok"])
+            self.assertEqual(fast_turns["data"][0]["answer"]["text"], "你好！你可以直接发岗位、简历、截图或问题。")
+
+            routed = client.post(
+                "/api/agent-tasks",
+                headers=headers,
+                json={"providerId": "codex", "prompt": "帮我看看qq邮箱里的offer情况，命中后更新投递进度。"},
+            ).json()
+            self.assertTrue(routed["ok"])
+            self.assertEqual(routed["data"]["task"]["status"], "waiting_approval")
+            self.assertEqual(routed["data"]["task"]["skillId"], "application.progress")
+            self.assertEqual(routed["data"]["task"]["workflowId"], "application.import_progress")
+            self.assertEqual(routed["data"]["approval"]["action"], "start_agent")
+            self.assertEqual(routed["data"]["approval"]["risk"], "medium")
+            self.assertIn("Codex CLI", routed["data"]["approval"]["summary"])
+            task_id = routed["data"]["task"]["id"]
+
+            events = client.get(f"/api/agent-tasks/{task_id}/events", headers=headers).json()
+            self.assertTrue(events["ok"])
+            self.assertEqual(events["data"][0]["role"], "user")
+            self.assertEqual(events["data"][-1]["type"], "approval_request")
+
+            runs = client.get("/api/workflow-runs", headers=headers).json()
+            self.assertTrue(runs["ok"])
+            self.assertEqual(runs["data"][0]["taskId"], task_id)
+            self.assertEqual(runs["data"][0]["workflowId"], "application.import_progress")
+
+            local = client.post(
+                "/api/local-commands",
+                headers=headers,
+                json={"command": "npm", "args": ["run", "typecheck"], "cwd": ".", "label": "Typecheck"},
+            ).json()
+            self.assertTrue(local["ok"])
+            self.assertEqual(local["data"]["task"]["providerId"], "local-shell")
+            self.assertEqual(local["data"]["approval"]["action"], "run_shell")
+            self.assertEqual(local["data"]["approval"]["risk"], "high")
+
+            denied_outside = client.post(
+                "/api/agent-tasks",
+                headers=headers,
+                json={"providerId": "codex", "prompt": "hello", "workspacePath": str(Path(tmp).parent)},
+            ).json()
+            self.assertFalse(denied_outside["ok"])
+            self.assertEqual(denied_outside["error"]["code"], "bad_request")
+
+            with connect_database(settings.daemon_db_path) as conn:
+                task_rows = conn.execute("SELECT COUNT(*) AS count FROM agent_tasks WHERE tenant_id = ?", (tenant_id,)).fetchone()
+                approval_rows = conn.execute("SELECT COUNT(*) AS count FROM approval_requests WHERE tenant_id = ?", (tenant_id,)).fetchone()
+                sync_rows = conn.execute("SELECT entity_type, event_type FROM sync_events WHERE tenant_id = ?", (tenant_id,)).fetchall()
+            self.assertEqual(task_rows["count"], 3)
+            self.assertEqual(approval_rows["count"], 2)
+            self.assertIn(("agent_task", "created"), [(row["entity_type"], row["event_type"]) for row in sync_rows])
+            self.assertIn(("approval_request", "created"), [(row["entity_type"], row["event_type"]) for row in sync_rows])
+
     def _write_tenant_workspace_fixture(self, root: Path) -> None:
         (root / "profile").mkdir(parents=True)
         (root / "ops" / "data").mkdir(parents=True)

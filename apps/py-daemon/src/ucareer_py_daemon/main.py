@@ -574,6 +574,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def agent_tasks(request: Request) -> dict[str, object]:
         return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_tasks())
 
+    @app.post("/api/agent-tasks")
+    async def create_agent_task(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_agent_store_with_session(
+            request,
+            auth_store,
+            settings,
+            "agent.run",
+            lambda store, session: _create_agent_task_with_quota(billing_store, session["activeTenant"]["id"], store, payload),
+        )
+
+    @app.post("/api/local-commands")
+    async def create_local_command(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.create_local_command(payload))
+
     @app.get("/api/agent-execution-queue")
     async def agent_execution_queue(request: Request) -> dict[str, object]:
         return _handle_agent_store_with_session(
@@ -679,6 +693,13 @@ def _require_found(value: Any, message: str) -> Any:
     if value is None:
         raise ValueError(message)
     return value
+
+
+def _create_agent_task_with_quota(billing_store: BillingStore, tenant_id: str, store: AgentStore, payload: dict[str, Any]) -> Any:
+    billing = billing_store.get_tenant_billing(tenant_id)
+    if billing.get("quota", {}).get("exceeded"):
+        raise PermissionError("Tenant token quota exceeded")
+    return store.create_or_continue_task(payload)
 
 
 def _handle_agent_store(request: Request, auth_store: AuthStore, settings: Settings, permission: str, operation) -> dict[str, object]:

@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from .db import connect_database
+from .providers import list_providers
+from .routing import preview_agent_route
 
 
 @dataclass
@@ -16,6 +18,148 @@ class AgentStore:
     db_path: Path
     tenant_id: str
     tenant_workspace_root: Path
+
+    def create_or_continue_task(self, payload: dict[str, Any]) -> dict[str, Any]:
+        provider_id = str(payload.get("providerId") or "").strip()
+        prompt = str(payload.get("prompt") or "").strip()
+        if not provider_id or not prompt:
+            raise ValueError("providerId and prompt are required")
+        provider = _provider_by_id(provider_id)
+        if not provider:
+            raise LookupError(f"Provider not found: {provider_id}")
+
+        if payload.get("continueTaskId"):
+            return self._continue_task(str(payload["continueTaskId"]), provider, prompt, payload)
+
+        workspace_path = self._resolve_workspace_path(payload.get("workspacePath"))
+        route_metadata = _resolve_route_metadata(payload, provider_id, prompt)
+        selected_provider_id = str(route_metadata.get("recommendedProviderId") or provider_id)
+        selected_provider = _provider_by_id(selected_provider_id) or provider
+        created_at = _now_iso()
+        workflow_run_id = str(uuid.uuid4()) if route_metadata.get("workflowId") else None
+        task_id = str(uuid.uuid4())
+        task = _drop_empty({
+            "id": task_id,
+            "tenantId": self.tenant_id,
+            "providerId": selected_provider["id"],
+            "workspacePath": str(workspace_path),
+            "prompt": _compose_prompt_with_attachments(str(route_metadata.get("agentPrompt") or prompt), payload.get("attachments")),
+            "mode": str(payload.get("mode") or "structured"),
+            "status": "waiting_approval",
+            "skillId": route_metadata.get("skillId"),
+            "workflowId": route_metadata.get("workflowId"),
+            "workflowRunId": workflow_run_id,
+            "inputKind": route_metadata.get("inputKind"),
+            "sourceText": route_metadata.get("sourceText") or prompt,
+            "routeDecision": route_metadata.get("routeDecision") or route_metadata,
+            "createdAt": created_at,
+            "updatedAt": created_at,
+        })
+
+        with connect_database(self.db_path) as conn:
+            self._insert_task(conn, task)
+            self._append_event(conn, task_id, {"type": "message", "role": "user", "text": prompt, "createdAt": created_at})
+            if workflow_run_id:
+                self._insert_workflow_run(conn, task, route_metadata)
+            _write_sync_event(conn, self.tenant_id, "agent_task", task_id, "created", task)
+
+            fast_reply = _build_local_fast_reply(route_metadata, prompt)
+            if fast_reply:
+                replied_at = _now_iso()
+                self._append_event(conn, task_id, {"type": "message", "role": "assistant", "text": fast_reply, "createdAt": replied_at})
+                task = {**task, "status": "completed", "updatedAt": replied_at}
+                self._update_task_status_in_conn(conn, task_id, "completed", replied_at)
+                _write_sync_event(conn, self.tenant_id, "agent_task", task_id, "status_updated", task)
+                self._sync_workflow_status(conn, task)
+                conn.commit()
+                return task
+
+            system_at = _now_iso()
+            self._append_event(
+                conn,
+                task_id,
+                {
+                    "type": "message",
+                    "role": "system",
+                    "text": f"{selected_provider['label']} 本地会话已创建，等待启动审批。",
+                    "createdAt": system_at,
+                },
+            )
+            approval = self._create_agent_approval(conn, task, selected_provider, bool(payload.get("continueTaskId")), payload.get("permissionMode"))
+            if approval:
+                self._append_event(conn, task_id, {"type": "approval_request", "approval": approval, "createdAt": approval["createdAt"]})
+                if workflow_run_id:
+                    conn.execute(
+                        "UPDATE workflow_step_runs SET approval_id = ?, updated_at = ? WHERE workflow_run_id = ? AND tenant_id = ?",
+                        (approval["id"], approval["createdAt"], workflow_run_id, self.tenant_id),
+                    )
+                conn.commit()
+                return {"task": self.get_task(task_id) or task, "approval": approval}
+
+            queued_at = _now_iso()
+            task = {**task, "status": "queued", "updatedAt": queued_at}
+            self._update_task_status_in_conn(conn, task_id, "queued", queued_at)
+            self._sync_workflow_status(conn, task)
+            conn.commit()
+        return self.get_task(task_id) or task
+
+    def create_local_command(self, payload: dict[str, Any]) -> dict[str, Any]:
+        command = str(payload.get("command") or "").strip()
+        if not command:
+            raise ValueError("command is required")
+        args = [str(arg) for arg in payload.get("args", [])] if isinstance(payload.get("args"), list) else []
+        cwd = self._resolve_workspace_path(payload.get("cwd"))
+        now = _now_iso()
+        task = {
+            "id": str(uuid.uuid4()),
+            "tenantId": self.tenant_id,
+            "providerId": "local-shell",
+            "workspacePath": str(cwd),
+            "prompt": str(payload.get("label") or " ".join([command, *args])),
+            "mode": "structured",
+            "status": "waiting_approval",
+            "createdAt": now,
+            "updatedAt": now,
+        }
+        with connect_database(self.db_path) as conn:
+            self._insert_task(conn, task)
+            approval = self._insert_approval(conn, {
+                "taskId": task["id"],
+                "action": "run_shell",
+                "risk": "high",
+                "summary": f"Run local command: {' '.join([command, *args])}",
+                "command": json.dumps({"command": command, "args": args, "cwd": str(cwd)}, ensure_ascii=False),
+                "cwd": str(cwd),
+                "affectedPaths": [str(cwd)],
+            })
+            self._append_event(conn, task["id"], {"type": "approval_request", "approval": approval, "createdAt": approval["createdAt"]})
+            _write_sync_event(conn, self.tenant_id, "agent_task", task["id"], "created", task)
+            conn.commit()
+        return {"task": self.get_task(task["id"]) or task, "approval": approval}
+
+    def _continue_task(self, task_id: str, provider: dict[str, Any], prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
+        task = self.get_task(task_id)
+        if not task:
+            raise ValueError(f"Task not found: {task_id}")
+        now = _now_iso()
+        with connect_database(self.db_path) as conn:
+            self._append_event(conn, task_id, {"type": "message", "role": "user", "text": prompt, "createdAt": now})
+            updated = {**task, "status": "waiting_approval", "updatedAt": now}
+            self._update_task_status_in_conn(conn, task_id, "waiting_approval", now)
+            self._sync_workflow_status(conn, updated)
+            approval = self._create_agent_approval(conn, updated, provider, True, payload.get("permissionMode"))
+            if approval:
+                self._append_event(conn, task_id, {"type": "approval_request", "approval": approval, "createdAt": approval["createdAt"]})
+                _write_sync_event(conn, self.tenant_id, "agent_task", task_id, "continued", updated)
+                conn.commit()
+                return {"task": self.get_task(task_id) or updated, "approval": approval}
+            queued_at = _now_iso()
+            self._update_task_status_in_conn(conn, task_id, "queued", queued_at)
+            updated = {**updated, "status": "queued", "updatedAt": queued_at}
+            self._sync_workflow_status(conn, updated)
+            _write_sync_event(conn, self.tenant_id, "agent_task", task_id, "continued", updated)
+            conn.commit()
+        return self.get_task(task_id) or updated
 
     def list_tasks(self) -> list[dict[str, Any]]:
         with connect_database(self.db_path) as conn:
@@ -135,8 +279,10 @@ class AgentStore:
 
     def decide_approval(self, approval_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         decision = str(payload.get("decision") or "").strip()
-        if decision not in {"allow", "allow_workspace", "deny"}:
-            raise ValueError("Approval decision must be allow, allow_workspace, or deny")
+        if decision == "allow":
+            decision = "allow_once"
+        if decision not in {"allow_once", "allow_task", "allow_workspace", "deny"}:
+            raise ValueError("Approval decision must be allow_once, allow_task, allow_workspace, or deny")
         with connect_database(self.db_path) as conn:
             row = conn.execute(
                 "SELECT * FROM approval_requests WHERE id = ? AND tenant_id = ?",
@@ -240,6 +386,175 @@ class AgentStore:
         except OSError:
             return False
 
+    def _resolve_workspace_path(self, value: Any) -> Path:
+        raw = str(value or ".").strip()
+        candidate = Path(raw)
+        if not candidate.is_absolute():
+            candidate = self.tenant_workspace_root / raw
+        try:
+            root = self.tenant_workspace_root.resolve()
+            path = candidate.resolve()
+        except OSError as cause:
+            raise ValueError("workspacePath must stay inside tenant workspace") from cause
+        if path != root and root not in path.parents:
+            raise ValueError("workspacePath must stay inside tenant workspace")
+        return path
+
+    def _insert_task(self, conn: Any, task: dict[str, Any]) -> None:
+        conn.execute(
+            """
+            INSERT INTO agent_tasks
+              (id, tenant_id, provider_id, workspace_path, prompt, mode, status, skill_id, workflow_id, workflow_run_id, input_kind, source_text, route_decision, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                task["id"],
+                self.tenant_id,
+                task["providerId"],
+                task["workspacePath"],
+                task["prompt"],
+                task["mode"],
+                task["status"],
+                task.get("skillId"),
+                task.get("workflowId"),
+                task.get("workflowRunId"),
+                task.get("inputKind"),
+                task.get("sourceText"),
+                json.dumps(task.get("routeDecision"), ensure_ascii=False) if task.get("routeDecision") else None,
+                task["createdAt"],
+                task["updatedAt"],
+            ),
+        )
+
+    def _append_event(self, conn: Any, task_id: str, event: dict[str, Any]) -> None:
+        conn.execute(
+            "INSERT INTO agent_events (id, tenant_id, task_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                str(uuid.uuid4()),
+                self.tenant_id,
+                task_id,
+                str(event.get("type") or "message"),
+                json.dumps(event, ensure_ascii=False),
+                str(event.get("createdAt") or _now_iso()),
+            ),
+        )
+
+    def _insert_workflow_run(self, conn: Any, task: dict[str, Any], route_metadata: dict[str, Any]) -> None:
+        workflow_run_id = task.get("workflowRunId")
+        if not workflow_run_id:
+            return
+        now = task["createdAt"]
+        conn.execute(
+            """
+            INSERT INTO workflow_runs
+              (id, tenant_id, workflow_id, skill_id, task_id, current_step_id, status, source_text, route_decision, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                workflow_run_id,
+                self.tenant_id,
+                task.get("workflowId"),
+                task.get("skillId"),
+                task["id"],
+                task.get("skillId"),
+                task["status"],
+                task.get("sourceText"),
+                json.dumps(route_metadata, ensure_ascii=False),
+                now,
+                now,
+            ),
+        )
+        conn.execute(
+            """
+            INSERT INTO workflow_step_runs
+              (id, tenant_id, workflow_run_id, step_id, status, task_id, approval_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                str(uuid.uuid4()),
+                self.tenant_id,
+                workflow_run_id,
+                task.get("skillId") or "route",
+                task["status"],
+                task["id"],
+                None,
+                now,
+                now,
+            ),
+        )
+
+    def _create_agent_approval(
+        self,
+        conn: Any,
+        task: dict[str, Any],
+        provider: dict[str, Any],
+        is_continuation: bool,
+        permission_mode: Any,
+    ) -> dict[str, Any] | None:
+        if str(permission_mode or "") == "full_access":
+            return None
+        verb = "Continue" if is_continuation else "Start"
+        risk = _risk_for_provider(str(provider["id"]))
+        return self._insert_approval(conn, {
+            "taskId": task["id"],
+            "action": "start_agent",
+            "risk": risk,
+            "summary": f"{verb} {provider['label']} in {task['workspacePath']}",
+            "command": json.dumps(
+                {
+                    "providerId": provider["id"],
+                    "providerLabel": provider["label"],
+                    "workspacePath": task["workspacePath"],
+                    "continuation": is_continuation,
+                },
+                ensure_ascii=False,
+            ),
+            "cwd": task["workspacePath"],
+            "affectedPaths": [task["workspacePath"]],
+        })
+
+    def _insert_approval(self, conn: Any, payload: dict[str, Any]) -> dict[str, Any]:
+        now = _now_iso()
+        approval = _drop_empty({
+            "id": str(uuid.uuid4()),
+            "tenantId": self.tenant_id,
+            "taskId": payload["taskId"],
+            "action": payload["action"],
+            "risk": payload["risk"],
+            "summary": payload["summary"],
+            "command": payload.get("command"),
+            "cwd": payload.get("cwd"),
+            "affectedPaths": payload.get("affectedPaths") or [],
+            "createdAt": now,
+        })
+        conn.execute(
+            """
+            INSERT INTO approval_requests
+              (id, tenant_id, task_id, action, risk, summary, command, cwd, affected_paths, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                approval["id"],
+                self.tenant_id,
+                approval["taskId"],
+                approval["action"],
+                approval["risk"],
+                approval["summary"],
+                approval.get("command"),
+                approval.get("cwd"),
+                json.dumps(approval.get("affectedPaths") or [], ensure_ascii=False),
+                approval["createdAt"],
+            ),
+        )
+        _write_sync_event(conn, self.tenant_id, "approval_request", approval["id"], "created", approval)
+        return approval
+
+    def _update_task_status_in_conn(self, conn: Any, task_id: str, status: str, updated_at: str) -> None:
+        conn.execute(
+            "UPDATE agent_tasks SET status = ?, updated_at = ? WHERE id = ? AND tenant_id = ?",
+            (status, updated_at, task_id, self.tenant_id),
+        )
+
     def _sync_workflow_status(self, conn: Any, task: dict[str, Any]) -> None:
         workflow_run_id = task.get("workflowRunId")
         skill_id = task.get("skillId") or task.get("currentStepId")
@@ -262,6 +577,67 @@ class AgentStore:
             """,
             (task["status"], task["id"], updated_at, workflow_run_id, self.tenant_id, skill_id),
         )
+
+
+def _provider_by_id(provider_id: str) -> dict[str, Any] | None:
+    return next((provider for provider in list_providers() if provider["id"] == provider_id), None)
+
+
+def _resolve_route_metadata(payload: dict[str, Any], provider_id: str, prompt: str) -> dict[str, Any]:
+    supplied = payload.get("routeMetadata")
+    if isinstance(supplied, dict) and supplied.get("skillId"):
+        return {
+            **supplied,
+            "sourceText": supplied.get("sourceText") or prompt,
+            "recommendedProviderId": provider_id,
+            "agentPrompt": str(supplied.get("agentPrompt") or prompt),
+        }
+    preview = preview_agent_route({
+        "text": prompt,
+        "attachments": payload.get("attachments") if isinstance(payload.get("attachments"), list) else [],
+        "preferredProviderId": provider_id,
+        **({"pageContext": payload.get("pageContext")} if isinstance(payload.get("pageContext"), dict) else {}),
+    })
+    return {
+        "skillId": preview.get("skillId"),
+        "workflowId": preview.get("workflowId"),
+        "inputKind": preview.get("inputKind"),
+        "sourceText": prompt,
+        "routeDecision": preview,
+        "recommendedProviderId": preview.get("recommendedProviderId") or provider_id,
+        "agentPrompt": preview.get("agentPrompt") or prompt,
+    }
+
+
+def _compose_prompt_with_attachments(prompt: str, attachments: Any) -> str:
+    if not isinstance(attachments, list) or not attachments:
+        return prompt
+    lines = [prompt, "", "附件上下文："]
+    for attachment in attachments:
+        if not isinstance(attachment, dict):
+            continue
+        file_name = attachment.get("fileName") or attachment.get("name") or "attachment"
+        kind = attachment.get("kind") or attachment.get("mimeType") or "unknown"
+        parsed = attachment.get("parsed") if isinstance(attachment.get("parsed"), dict) else {}
+        summary = parsed.get("summary") or parsed.get("text") or ""
+        lines.append(f"- {file_name} ({kind}) {str(summary)[:1200]}")
+    return "\n".join(lines).strip()
+
+
+def _build_local_fast_reply(route_metadata: dict[str, Any], prompt: str) -> str | None:
+    if route_metadata.get("skillId") != "agent.general":
+        return None
+    if not re.match(r"^(你好|你好啊|您好|您好啊|嗨|哈喽|hello|hi|hey|在吗|在不在|早上好|中午好|下午好|晚上好|谢谢|感谢|thanks|thank you)[！!。.?？~～\s]*$", prompt.strip(), re.I):
+        return None
+    return "你好！你可以直接发岗位、简历、截图或问题。"
+
+
+def _risk_for_provider(provider_id: str) -> str:
+    if provider_id == "openclaw":
+        return "critical"
+    if provider_id in {"opencode", "claude"}:
+        return "high"
+    return "medium"
 
 
 def _task_from_row(row: Any) -> dict[str, Any]:

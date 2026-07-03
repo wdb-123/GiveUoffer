@@ -53,12 +53,14 @@ ROUTE_GROUPS: list[dict[str, object]] = [
     {
         "domain": "agent-execution",
         "nodeModule": "apps/daemon/src/routes/agent-routes.ts",
-        "pythonStatus": "partial-readonly",
+        "pythonStatus": "partial-lifecycle",
         "routes": [
             "GET /api/providers",
             "POST /api/providers/:providerId/check",
             "POST /api/agent-attachments",
             "GET /api/agent-tasks",
+            "POST /api/agent-tasks",
+            "POST /api/local-commands",
             "GET /api/agent-execution-queue",
             "GET /api/agent-tasks/:taskId",
             "DELETE /api/agent-tasks/:taskId",
@@ -68,7 +70,6 @@ ROUTE_GROUPS: list[dict[str, object]] = [
             "GET /api/approvals",
             "GET /api/workflow-runs",
             "GET /api/workflow-runs/:runId",
-            "POST /api/agent-tasks",
             "GET /api/agent-tasks/:taskId/events/stream",
             "POST /api/approvals/:approvalId/decision",
         ],
