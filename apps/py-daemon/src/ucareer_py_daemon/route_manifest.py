@@ -3,13 +3,13 @@ from __future__ import annotations
 ROUTE_GROUPS: list[dict[str, object]] = [
     {
         "domain": "health",
-        "nodeModule": "apps/daemon/src/server.ts",
+        "legacyNodeModule": "apps/daemon/src/server.ts",
         "pythonStatus": "implemented",
         "routes": ["GET /health", "GET /api/backend/architecture", "GET /api/python-daemon/routes"],
     },
     {
         "domain": "auth-tenants",
-        "nodeModule": "apps/daemon/src/routes/auth-routes.ts",
+        "legacyNodeModule": "apps/daemon/src/routes/auth-routes.ts",
         "pythonStatus": "implemented",
         "routes": [
             "POST /api/auth/login",
@@ -26,19 +26,19 @@ ROUTE_GROUPS: list[dict[str, object]] = [
     },
     {
         "domain": "billing",
-        "nodeModule": "apps/daemon/src/routes/billing-routes.ts",
+        "legacyNodeModule": "apps/daemon/src/routes/billing-routes.ts",
         "pythonStatus": "implemented",
         "routes": ["GET /api/billing/plans", "GET /api/billing/tenant", "PATCH /api/billing/tenant/plan"],
     },
     {
         "domain": "sync",
-        "nodeModule": "apps/daemon/src/routes/sync-routes.ts",
+        "legacyNodeModule": "apps/daemon/src/routes/sync-routes.ts",
         "pythonStatus": "implemented",
         "routes": ["GET /api/sync/outbox", "POST /api/sync/mark-pushed", "POST /api/sync/push-to-cloud"],
     },
     {
         "domain": "connectors",
-        "nodeModule": "apps/daemon/src/routes/connector-routes.ts",
+        "legacyNodeModule": "apps/daemon/src/routes/connector-routes.ts",
         "pythonStatus": "implemented",
         "routes": [
             "GET /api/connectors",
@@ -52,7 +52,7 @@ ROUTE_GROUPS: list[dict[str, object]] = [
     },
     {
         "domain": "agent-execution",
-        "nodeModule": "apps/daemon/src/routes/agent-routes.ts",
+        "legacyNodeModule": "apps/daemon/src/routes/agent-routes.ts",
         "pythonStatus": "partial-lifecycle",
         "routes": [
             "GET /api/providers",
@@ -76,7 +76,7 @@ ROUTE_GROUPS: list[dict[str, object]] = [
     },
     {
         "domain": "workflow-routing",
-        "nodeModule": "apps/daemon/src/routes/workflow-routes.ts",
+        "legacyNodeModule": "apps/daemon/src/routes/workflow-routes.ts",
         "pythonStatus": "implemented",
         "routes": [
             "GET /api/skills",
@@ -89,19 +89,19 @@ ROUTE_GROUPS: list[dict[str, object]] = [
     },
     {
         "domain": "jobsearch",
-        "nodeModule": "apps/daemon/src/routes/search-routes.ts",
+        "legacyNodeModule": "apps/daemon/src/routes/search-routes.ts",
         "pythonStatus": "implemented",
         "routes": ["GET /api/search/jobsearch/sources", "POST /api/search/jobsearch"],
     },
     {
         "domain": "chrome-bridge",
-        "nodeModule": "apps/daemon/src/routes/chrome-bridge-routes.ts",
+        "legacyNodeModule": "apps/daemon/src/routes/chrome-bridge-routes.ts",
         "pythonStatus": "implemented",
         "routes": ["GET /api/chrome-bridge/tasks/next", "POST /api/chrome-bridge/tasks/:taskId/result"],
     },
     {
         "domain": "workspace-data",
-        "nodeModule": "apps/daemon/src/routes/*-routes.ts",
+        "legacyNodeModule": "apps/daemon/src/routes/*-routes.ts",
         "pythonStatus": "partial-readonly",
         "routes": [
             "GET /api/workspace-file",
