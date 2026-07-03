@@ -188,9 +188,13 @@ function assertUcareerNamespace() {
     "\"daemon:node\": \"npm --workspace @ucareer/daemon run dev\"",
     "\"api\": \"npm run api:python\"",
     "\"api:python\": \"PYTHONPATH=apps/py-api/src python3 -m ucareer_py_api\"",
-    "\"api:node\": \"npm --workspace @ucareer/api run dev\"",
     "npm --workspace @ucareer/web run build",
   ], "root npm scripts start Python backends by default and keep Node backends explicit");
+
+  assertNotContains("package.json", [
+    "\"api:node\"",
+    "@ucareer/api",
+  ], "root npm scripts do not expose a legacy Node cloud API");
 
   assertContains("scripts/dev/dev-ucareer.mjs", [
     "daemon:python",
@@ -245,14 +249,14 @@ function assertUcareerNamespace() {
   assertContains("apps/py-api/README.md", [
     "default cloud/API backend",
     "FastAPI",
-    "npm run api:node",
   ], "Python cloud API README documents default backend ownership");
 
-  assertContains("apps/api/README.md", [
-    "Legacy TypeScript Cloud API",
-    "default cloud/API backend is now the FastAPI service",
-    "npm run api:node",
-  ], "legacy TypeScript cloud API is documented as non-default");
+  assertAbsent([
+    "apps/api/package.json",
+    "apps/api/src/server.ts",
+    "apps/api/README.md",
+    "apps/api/tsconfig.json",
+  ], "legacy TypeScript cloud API package is removed");
 
   assertContains("apps/py-daemon/src/ucareer_py_daemon/main.py", [
     "FastAPI(title=\"Ucareer Python Daemon\"",

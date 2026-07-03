@@ -2,9 +2,6 @@
 
 SaaS-ready sync and relay API implemented with FastAPI. This is the default cloud/API backend for `npm run api`.
 
-The legacy TypeScript Fastify API in `apps/api` is retained only as
-`npm run api:node` while remaining Node backend surfaces are retired.
-
 ## Run
 
 ```bash

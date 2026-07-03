@@ -6,7 +6,7 @@ local backend is now `apps/py-daemon`, a FastAPI service started by
 `apps/daemon` is retained only as `npm run daemon:node` while remaining
 Node-specific adapter code is retired. The cloud/API skeleton is now
 `apps/py-api`, a FastAPI service started by `npm run api`; the old TypeScript
-Fastify API in `apps/api` is retained only as `npm run api:node`.
+Fastify API in `apps/api` has been removed.
 
 ## Target Shape
 
@@ -52,8 +52,8 @@ for the React frontend and shared UI types.
    the current local UI/API surface; local provider runner retirement remains.
 7. Frontend cutover: `npm run daemon`, `npm run daemon:api` and `npm run
    dev:ucareer` start Python by default. Done.
-8. Cloud/API skeleton cutover: `npm run api` starts Python by default while the
-   TypeScript Fastify API is explicit `npm run api:node`. Done.
+8. Cloud/API skeleton cutover: `npm run api` starts Python and the TypeScript
+   Fastify API has been removed. Done.
 
 ## Current Status
 
