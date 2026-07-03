@@ -6,6 +6,7 @@ DATA_PATHS: dict[str, str] = {
     "applications": "workspace/ops/data/applications.md",
     "applicationEvents": "workspace/ops/data/application-events.jsonl",
     "applicationEmailSnapshots": "workspace/ops/data/application-email-snapshots.jsonl",
+    "agentAttachments": "workspace/ops/imports/agent-attachments",
     "evidenceRequests": "workspace/ops/data/evidence-requests.json",
     "experienceMetadata": "workspace/ops/data/experience-metadata.json",
     "headshots": "workspace/profile/headshots",

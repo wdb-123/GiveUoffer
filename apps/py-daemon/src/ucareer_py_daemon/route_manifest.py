@@ -43,6 +43,7 @@ ROUTE_GROUPS: list[dict[str, object]] = [
         "routes": [
             "GET /api/providers",
             "POST /api/providers/:providerId/check",
+            "POST /api/agent-attachments",
             "GET /api/agent-tasks",
             "GET /api/agent-tasks/:taskId",
             "GET /api/agent-tasks/:taskId/events",

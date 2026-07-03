@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from .agent_store import AgentStore
+from .attachments import AttachmentStore
 from .auth import AuthStore
 from .billing import BillingStore
 from .config import Settings, load_settings
@@ -162,6 +163,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings,
             "sync.cloud",
             lambda store: store.push_to_cloud(payload),
+        )
+
+    @app.post("/api/agent-attachments")
+    async def agent_attachments(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.write",
+            lambda root: AttachmentStore(root).upload(payload),
         )
 
     @app.get("/api/profile-overview")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import http.server
+import base64
 import tempfile
 import threading
 import unittest
@@ -283,6 +284,31 @@ class PythonDaemonContractTest(unittest.TestCase):
             outside_preview = client.get(f"/api/workspace-file?path={Path(tmp) / 'outside.md'}", headers=headers).json()
             self.assertFalse(outside_preview["ok"])
             self.assertEqual(outside_preview["error"]["code"], "bad_request")
+
+            attachment = client.post(
+                "/api/agent-attachments",
+                headers=headers,
+                json={
+                    "fileName": "../offer note.md",
+                    "mimeType": "text/markdown",
+                    "dataBase64": base64.b64encode("Offer details\nNext step.".encode("utf-8")).decode("ascii"),
+                },
+            ).json()
+            self.assertTrue(attachment["ok"])
+            self.assertEqual(attachment["data"]["fileName"], "offer note.md")
+            self.assertEqual(attachment["data"]["kind"], "text")
+            self.assertIn("Offer details", attachment["data"]["parsed"]["text"])
+            stored_path = Path(attachment["data"]["storedPath"])
+            self.assertTrue(stored_path.exists())
+            self.assertIn(tenant_workspace.resolve(), stored_path.resolve().parents)
+
+            bad_attachment = client.post(
+                "/api/agent-attachments",
+                headers=headers,
+                json={"fileName": "bad.txt", "dataBase64": "not-base64"},
+            ).json()
+            self.assertFalse(bad_attachment["ok"])
+            self.assertEqual(bad_attachment["error"]["code"], "bad_request")
 
             resumes = client.get("/api/resumes", headers=headers).json()
             self.assertTrue(resumes["ok"])
