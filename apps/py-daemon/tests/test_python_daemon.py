@@ -861,6 +861,50 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertIn(("agent_task", "created"), [(row["entity_type"], row["event_type"]) for row in sync_rows])
             self.assertIn(("approval_request", "created"), [(row["entity_type"], row["event_type"]) for row in sync_rows])
 
+    def test_agent_event_stream_returns_frontend_snapshot_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=Path(tmp),
+                daemon_db_path=Path(tmp) / ".ucareer" / "daemon.sqlite",
+            )
+            client = TestClient(create_app(settings))
+            created = client.post(
+                "/api/auth/create-account",
+                json={
+                    "email": "stream@example.com",
+                    "password": "Password123",
+                    "displayName": "Stream",
+                    "tenantName": "Stream Workspace",
+                },
+            ).json()
+            self.assertTrue(created["ok"])
+            headers = {"x-ucareer-session": created["data"]["token"]}
+            task = client.post("/api/agent-tasks", headers=headers, json={"providerId": "codex", "prompt": "你好"}).json()
+            self.assertTrue(task["ok"])
+            task_id = task["data"]["id"]
+
+            with client.stream("GET", f"/api/agent-tasks/{task_id}/events/stream?once=1", headers=headers) as response:
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("text/event-stream", response.headers["content-type"])
+                event_name = ""
+                payload = ""
+                for line in response.iter_lines():
+                    if line.startswith("event:"):
+                        event_name = line.removeprefix("event:").strip()
+                    if line.startswith("data:"):
+                        payload = line.removeprefix("data:").strip()
+                        break
+
+            self.assertEqual(event_name, "agent_snapshot")
+            snapshot = json.loads(payload)
+            self.assertEqual(snapshot["task"]["id"], task_id)
+            self.assertEqual(snapshot["task"]["status"], "completed")
+            self.assertEqual(snapshot["events"][0]["role"], "user")
+            self.assertEqual(snapshot["turns"][0]["status"], "answered")
+            self.assertEqual(snapshot["approvals"], [])
+
     def test_jobsearch_routes_run_from_python_daemon_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

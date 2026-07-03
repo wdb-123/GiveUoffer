@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 import uvicorn
 
 from .agent_store import AgentStore
@@ -661,6 +663,63 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/api/agent-tasks/{task_id}/turns")
     async def agent_task_turns(request: Request, task_id: str) -> dict[str, object]:
         return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_turns(task_id))
+
+    @app.get("/api/agent-tasks/{task_id}/events/stream")
+    async def agent_task_event_stream(request: Request, task_id: str, once: int = 0):
+        try:
+            session = auth_store.require_session(_session_token(request))
+            if "agent.run" not in session.get("permissions", []):
+                raise PermissionError("Permission required: agent.run")
+            root = tenant_workspace_root(settings.workspace_root, session["activeTenant"]["id"])
+            store = AgentStore(settings.daemon_db_path, session["activeTenant"]["id"], root)
+            if not store.get_task(task_id):
+                return error("task_not_found", f"Task not found: {task_id}")
+        except LookupError as cause:
+            return error("not_found", str(cause))
+        except PermissionError as cause:
+            return error("forbidden", str(cause))
+        except ValueError as cause:
+            return error("bad_request", str(cause))
+
+        async def stream():
+            last_payload = ""
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    next_task = store.get_task(task_id)
+                    if not next_task:
+                        break
+                    events = store.list_events(task_id)
+                    payload = json.dumps(
+                        {
+                            "task": next_task,
+                            "events": events,
+                            "turns": store.list_turns(task_id),
+                            "approvals": [approval for approval in store.list_approvals() if approval.get("taskId") == task_id],
+                        },
+                        ensure_ascii=False,
+                    )
+                    if payload != last_payload:
+                        last_payload = payload
+                        yield f"event: agent_snapshot\ndata: {payload}\n\n"
+                        if once:
+                            break
+                except Exception as cause:
+                    payload = json.dumps({"error": str(cause)}, ensure_ascii=False)
+                    yield f"event: agent_error\ndata: {payload}\n\n"
+                    break
+                await asyncio.sleep(0.5)
+
+        return StreamingResponse(
+            stream(),
+            media_type="text/event-stream",
+            headers={
+                "cache-control": "no-cache, no-transform",
+                "connection": "keep-alive",
+                "x-accel-buffering": "no",
+            },
+        )
 
     @app.get("/api/approvals")
     async def approvals(request: Request) -> dict[str, object]:
