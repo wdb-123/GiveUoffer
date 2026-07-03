@@ -133,6 +133,74 @@ class AgentStore:
             ).fetchall()
             return [_approval_from_row(row) for row in rows]
 
+    def decide_approval(self, approval_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        decision = str(payload.get("decision") or "").strip()
+        if decision not in {"allow", "allow_workspace", "deny"}:
+            raise ValueError("Approval decision must be allow, allow_workspace, or deny")
+        with connect_database(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT * FROM approval_requests WHERE id = ? AND tenant_id = ?",
+                (approval_id, self.tenant_id),
+            ).fetchone()
+            if not row:
+                raise ValueError(f"Approval not found: {approval_id}")
+            approval = _approval_from_row(row)
+            decided_at = _now_iso()
+            record = {
+                "approvalId": approval_id,
+                "taskId": approval["taskId"],
+                "decision": decision,
+                **({"note": str(payload.get("note"))} if payload.get("note") else {}),
+                "decidedAt": decided_at,
+            }
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO approval_decisions
+                  (approval_id, tenant_id, task_id, decision, note, decided_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (approval_id, self.tenant_id, approval["taskId"], decision, record.get("note"), decided_at),
+            )
+            _write_sync_event(conn, self.tenant_id, "approval_decision", approval_id, decision, record)
+            conn.execute("DELETE FROM approval_requests WHERE id = ? AND tenant_id = ?", (approval_id, self.tenant_id))
+
+            if decision == "allow_workspace":
+                grant = _parse_start_agent_grant(str(approval.get("command") or ""), approval_id)
+                if grant:
+                    conn.execute(
+                        """
+                        INSERT OR REPLACE INTO approval_grants
+                          (id, tenant_id, action, provider_id, workspace_path, source_approval_id, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            str(uuid.uuid4()),
+                            self.tenant_id,
+                            grant["action"],
+                            grant["providerId"],
+                            grant["workspacePath"],
+                            approval_id,
+                            decided_at,
+                        ),
+                    )
+                    _write_sync_event(conn, self.tenant_id, "approval_grant", approval_id, "created", grant)
+
+            system_event = {
+                "type": "message",
+                "role": "system",
+                "text": f"Approval {decision}: {approval['summary']}",
+                "createdAt": decided_at,
+            }
+            conn.execute(
+                "INSERT INTO agent_events (id, tenant_id, task_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (str(uuid.uuid4()), self.tenant_id, approval["taskId"], "message", json.dumps(system_event, ensure_ascii=False), decided_at),
+            )
+            conn.commit()
+
+        next_status = "cancelled" if decision == "deny" else "queued"
+        self.update_task_status(str(approval["taskId"]), next_status)
+        return record
+
     def list_workflow_runs(self) -> list[dict[str, Any]]:
         with connect_database(self.db_path) as conn:
             rows = conn.execute(
@@ -282,6 +350,25 @@ def _write_sync_event(conn: Any, tenant_id: str, entity_type: str, entity_id: st
         """,
         (tenant_id, entity_type, entity_id, event_type, json.dumps(payload, ensure_ascii=False), _now_iso()),
     )
+
+
+def _parse_start_agent_grant(command: str, source_approval_id: str) -> dict[str, str] | None:
+    if not command:
+        return None
+    try:
+        parsed = json.loads(command)
+    except json.JSONDecodeError:
+        return None
+    provider_id = parsed.get("providerId") if isinstance(parsed, dict) else None
+    workspace_path = parsed.get("workspacePath") if isinstance(parsed, dict) else None
+    if not isinstance(provider_id, str) or not isinstance(workspace_path, str):
+        return None
+    return {
+        "action": "start_agent",
+        "providerId": provider_id,
+        "workspacePath": workspace_path,
+        "sourceApprovalId": source_approval_id,
+    }
 
 
 def _drop_empty(value: dict[str, Any]) -> dict[str, Any]:

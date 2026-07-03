@@ -491,6 +491,27 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertTrue(task["ok"])
             self.assertEqual(task["data"]["status"], "running")
 
+            approvals = client.get("/api/approvals", headers=headers).json()
+            self.assertTrue(approvals["ok"])
+            self.assertEqual(approvals["data"][0]["id"], "approval-1")
+
+            decision = client.post(
+                "/api/approvals/approval-1/decision",
+                headers=headers,
+                json={"decision": "allow_workspace", "note": "Approved for this workspace"},
+            ).json()
+            self.assertTrue(decision["ok"])
+            self.assertEqual(decision["data"]["decision"], "allow_workspace")
+            self.assertEqual(decision["data"]["taskId"], "task-1")
+
+            approvals_after_decision = client.get("/api/approvals", headers=headers).json()
+            self.assertTrue(approvals_after_decision["ok"])
+            self.assertEqual(approvals_after_decision["data"], [])
+
+            task_after_decision = client.get("/api/agent-tasks/task-1", headers=headers).json()
+            self.assertTrue(task_after_decision["ok"])
+            self.assertEqual(task_after_decision["data"]["status"], "queued")
+
             busy_delete = client.delete("/api/agent-tasks/task-1", headers=headers).json()
             self.assertFalse(busy_delete["ok"])
             self.assertEqual(busy_delete["error"]["code"], "task_busy")
@@ -508,10 +529,6 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertTrue(turns["ok"])
             self.assertEqual(turns["data"][0]["status"], "answered")
             self.assertEqual(turns["data"][0]["answer"]["text"], "world")
-
-            approvals = client.get("/api/approvals", headers=headers).json()
-            self.assertTrue(approvals["ok"])
-            self.assertEqual(approvals["data"][0]["id"], "approval-1")
 
             runs = client.get("/api/workflow-runs", headers=headers).json()
             self.assertTrue(runs["ok"])
@@ -531,6 +548,10 @@ class PythonDaemonContractTest(unittest.TestCase):
                 sync_rows = conn.execute("SELECT event_type FROM sync_events WHERE tenant_id = ? AND entity_type = 'agent_task' ORDER BY id", (tenant_id,)).fetchall()
                 self.assertIn("status_updated", [row["event_type"] for row in sync_rows])
                 self.assertIn("deleted", [row["event_type"] for row in sync_rows])
+                approval_decision = conn.execute("SELECT * FROM approval_decisions WHERE approval_id = ?", ("approval-1",)).fetchone()
+                self.assertEqual(approval_decision["decision"], "allow_workspace")
+                approval_grant = conn.execute("SELECT * FROM approval_grants WHERE source_approval_id = ?", ("approval-1",)).fetchone()
+                self.assertEqual(approval_grant["provider_id"], "codex-local")
 
     def _write_tenant_workspace_fixture(self, root: Path) -> None:
         (root / "profile").mkdir(parents=True)
@@ -727,7 +748,7 @@ class PythonDaemonContractTest(unittest.TestCase):
                     "run_command",
                     "medium",
                     "Run command",
-                    "npm test",
+                    json.dumps({"providerId": "codex-local", "workspacePath": str(tenant_workspace)}),
                     str(tenant_workspace),
                     json.dumps(["package.json"]),
                     "2026-07-03T00:00:01Z",

@@ -443,6 +443,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def approvals(request: Request) -> dict[str, object]:
         return _handle_agent_store(request, auth_store, settings, "agent.approve", lambda store: store.list_approvals())
 
+    @app.post("/api/approvals/{approval_id}/decision")
+    async def approval_decision(request: Request, approval_id: str, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_agent_store(request, auth_store, settings, "agent.approve", lambda store: store.decide_approval(approval_id, payload))
+
     @app.get("/api/workflow-runs")
     async def workflow_runs(request: Request) -> dict[str, object]:
         return _handle_agent_store(request, auth_store, settings, "agent.run", lambda store: store.list_workflow_runs())
