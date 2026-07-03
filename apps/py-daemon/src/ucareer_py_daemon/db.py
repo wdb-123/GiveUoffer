@@ -185,6 +185,23 @@ def ensure_core_schema(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_workflow_step_runs_workflow_run_id
           ON workflow_step_runs (workflow_run_id);
+
+        CREATE TABLE IF NOT EXISTS sync_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          tenant_id TEXT,
+          entity_type TEXT NOT NULL,
+          entity_id TEXT NOT NULL,
+          event_type TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          pushed_at TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_sync_events_pushed_id
+          ON sync_events (pushed_at, id);
+
+        CREATE INDEX IF NOT EXISTS idx_sync_events_tenant_pushed_id
+          ON sync_events (tenant_id, pushed_at, id);
         """
     )
     conn.commit()

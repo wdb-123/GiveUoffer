@@ -14,6 +14,7 @@ from .db import probe_database
 from .envelope import error, ok
 from .providers import check_provider, list_providers
 from .route_manifest import ROUTE_GROUPS
+from .sync import SyncStore
 from .workspace import tenant_workspace_root
 from .workspace_stores import ApplicationStore, EvidenceStore, ExperienceStore, MarketStore, ProfileStore, ReportStore, ResumeStore, WorkspaceFileStore
 
@@ -132,6 +133,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not status:
             return error("provider_not_found", f"Provider not found: {provider_id}")
         return ok(status)
+
+    @app.get("/api/sync/outbox")
+    async def sync_outbox(request: Request, limit: int = 100) -> dict[str, object]:
+        return _handle_sync_store(
+            request,
+            auth_store,
+            settings,
+            "sync.cloud",
+            lambda store: store.list_outbox(limit),
+        )
+
+    @app.post("/api/sync/mark-pushed")
+    async def sync_mark_pushed(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_sync_store(
+            request,
+            auth_store,
+            settings,
+            "sync.cloud",
+            lambda store: store.mark_pushed(payload.get("ids") if isinstance(payload.get("ids"), list) else []),
+        )
+
+    @app.post("/api/sync/push-to-cloud")
+    async def sync_push_to_cloud(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_sync_store(
+            request,
+            auth_store,
+            settings,
+            "sync.cloud",
+            lambda store: store.push_to_cloud(payload),
+        )
 
     @app.get("/api/profile-overview")
     async def profile_overview(request: Request) -> dict[str, object]:
@@ -451,5 +482,15 @@ def _handle_agent_store(request: Request, auth_store: AuthStore, settings: Setti
             raise PermissionError(f"Permission required: {permission}")
         root = tenant_workspace_root(settings.workspace_root, session["activeTenant"]["id"])
         return operation(AgentStore(settings.daemon_db_path, session["activeTenant"]["id"], root))
+
+    return _handle(run_with_store)
+
+
+def _handle_sync_store(request: Request, auth_store: AuthStore, settings: Settings, permission: str, operation) -> dict[str, object]:
+    def run_with_store() -> Any:
+        session = auth_store.require_session(_session_token(request))
+        if permission not in session.get("permissions", []):
+            raise PermissionError(f"Permission required: {permission}")
+        return operation(SyncStore(settings.daemon_db_path, session["activeTenant"]["id"]))
 
     return _handle(run_with_store)

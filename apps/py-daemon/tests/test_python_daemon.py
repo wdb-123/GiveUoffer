@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import http.server
 import tempfile
+import threading
 import unittest
 import json
 from pathlib import Path
@@ -129,6 +131,50 @@ class PythonDaemonContractTest(unittest.TestCase):
             ).json()
             self.assertTrue(tenant["ok"])
             self.assertEqual(tenant["data"]["activeTenant"]["name"], "Second Workspace")
+
+    def test_sync_routes_use_tenant_scoped_outbox(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=Path(tmp),
+                daemon_db_path=Path(tmp) / ".ucareer" / "daemon.sqlite",
+            )
+            client = TestClient(create_app(settings))
+            created = client.post(
+                "/api/auth/create-account",
+                json={
+                    "email": "sync@example.com",
+                    "password": "Password123",
+                    "displayName": "Sync",
+                    "tenantName": "Sync Workspace",
+                },
+            ).json()
+            self.assertTrue(created["ok"])
+            token = created["data"]["token"]
+            tenant_id = created["data"]["activeTenant"]["id"]
+            headers = {"x-ucareer-session": token}
+            self._write_sync_fixture(settings.daemon_db_path, tenant_id)
+
+            outbox = client.get("/api/sync/outbox?limit=10", headers=headers).json()
+            self.assertTrue(outbox["ok"])
+            self.assertEqual([event["id"] for event in outbox["data"]["events"]], [1, 3])
+            self.assertEqual(outbox["data"]["events"][0]["payload"]["message"], "tenant-event")
+
+            marked = client.post("/api/sync/mark-pushed", headers=headers, json={"ids": [1, 2]}).json()
+            self.assertTrue(marked["ok"])
+            self.assertEqual(marked["data"]["marked"], 1)
+
+            with _SyncPushServer([3]) as server:
+                pushed = client.post(
+                    "/api/sync/push-to-cloud",
+                    headers=headers,
+                    json={"cloudUrl": server.url, "limit": 10},
+                ).json()
+            self.assertTrue(pushed["ok"])
+            self.assertEqual(pushed["data"]["sent"], 1)
+            self.assertEqual(pushed["data"]["acceptedIds"], [3])
+            self.assertEqual(pushed["data"]["marked"], 1)
 
     def test_workspace_read_routes_use_active_tenant_directory(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -650,6 +696,61 @@ class PythonDaemonContractTest(unittest.TestCase):
                 ),
             )
             conn.commit()
+
+    def _write_sync_fixture(self, db_path: Path, tenant_id: str) -> None:
+        with connect_database(db_path) as conn:
+            conn.execute(
+                "INSERT INTO sync_events (id, tenant_id, entity_type, entity_id, event_type, payload, created_at, pushed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (1, tenant_id, "agent_task", "task-1", "created", json.dumps({"message": "tenant-event"}), "2026-07-03T00:00:00Z", None),
+            )
+            conn.execute(
+                "INSERT INTO sync_events (id, tenant_id, entity_type, entity_id, event_type, payload, created_at, pushed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (2, "other-tenant", "agent_task", "task-2", "created", json.dumps({"message": "other-event"}), "2026-07-03T00:00:00Z", None),
+            )
+            conn.execute(
+                "INSERT INTO sync_events (id, tenant_id, entity_type, entity_id, event_type, payload, created_at, pushed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (3, tenant_id, "workflow_run", "run-1", "updated", json.dumps({"message": "second-event"}), "2026-07-03T00:00:01Z", None),
+            )
+            conn.commit()
+
+
+class _SyncPushServer:
+    def __init__(self, accepted_ids: list[int]) -> None:
+        self.accepted_ids = accepted_ids
+        self.server: http.server.ThreadingHTTPServer | None = None
+        self.thread: threading.Thread | None = None
+        self.url = ""
+
+    def __enter__(self) -> "_SyncPushServer":
+        accepted_ids = self.accepted_ids
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                length = int(self.headers.get("content-length") or "0")
+                self.rfile.read(length)
+                body = json.dumps({"ok": True, "data": {"acceptedIds": accepted_ids, "cursor": "cursor-1"}}).encode("utf-8")
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format: str, *args: object) -> None:
+                return
+
+        self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        port = self.server.server_address[1]
+        self.url = f"http://127.0.0.1:{port}"
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
+        if self.server:
+            self.server.shutdown()
+            self.server.server_close()
+        if self.thread:
+            self.thread.join(timeout=2)
 
 
 if __name__ == "__main__":

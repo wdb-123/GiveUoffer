@@ -31,6 +31,12 @@ ROUTE_GROUPS: list[dict[str, object]] = [
         "routes": ["GET /api/billing/plans", "GET /api/billing/tenant", "PATCH /api/billing/tenant/plan"],
     },
     {
+        "domain": "sync",
+        "nodeModule": "apps/daemon/src/routes/sync-routes.ts",
+        "pythonStatus": "implemented",
+        "routes": ["GET /api/sync/outbox", "POST /api/sync/mark-pushed", "POST /api/sync/push-to-cloud"],
+    },
+    {
         "domain": "agent-execution",
         "nodeModule": "apps/daemon/src/routes/agent-routes.ts",
         "pythonStatus": "partial-readonly",
