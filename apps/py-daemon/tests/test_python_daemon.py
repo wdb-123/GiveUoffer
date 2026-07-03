@@ -217,6 +217,34 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertEqual(len(experience["data"]["files"]), 1)
             self.assertEqual(experience["data"]["experiences"][0]["sourceContent"], "# Robot Project\n\nBuilt a robot demo.")
 
+            saved_experience = client.post(
+                "/api/experience-metadata",
+                headers=headers,
+                json={
+                    "metadata": {
+                        "experiences": [
+                            {
+                                "id": "exp-new",
+                                "title": "New robot story",
+                                "category": "project",
+                                "role": "lead",
+                                "sourceFile": "workspace/jobs/project-notes/robot-project.md",
+                                "summary": "New summary",
+                                "tags": "robot, ai",
+                                "evidence": ["demo"],
+                                "gaps": "",
+                                "publicLevel": "internal",
+                            },
+                            {"title": ""},
+                        ],
+                    },
+                },
+            ).json()
+            self.assertTrue(saved_experience["ok"])
+            self.assertEqual(len(saved_experience["data"]["experiences"]), 1)
+            self.assertEqual(saved_experience["data"]["experiences"][0]["tags"], ["robot", "ai"])
+            self.assertIn("New robot story", (tenant_workspace / "ops" / "data" / "experience-metadata.json").read_text(encoding="utf-8"))
+
             market = client.get("/api/recruitment-market", headers=headers).json()
             self.assertTrue(market["ok"])
             self.assertEqual(market["data"]["jobsCount"], 1)

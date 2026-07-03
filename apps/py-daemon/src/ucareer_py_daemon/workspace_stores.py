@@ -182,6 +182,17 @@ class ExperienceStore:
             "experiences": experiences,
         }
 
+    def save_experience_metadata(self, payload: dict[str, Any]) -> dict[str, Any]:
+        metadata = payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}
+        next_metadata = {
+            "updatedAt": _now_iso(),
+            "experiences": _normalize_experiences(metadata.get("experiences") if isinstance(metadata, dict) else []),
+        }
+        path = workspace_data_path(self.workspace_root, "experienceMetadata")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(next_metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return self.get_experience_overview()
+
 
 @dataclass
 class MarketStore:

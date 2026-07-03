@@ -231,6 +231,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             lambda root: ExperienceStore(root).get_experience_overview(),
         )
 
+    @app.post("/api/experience-metadata")
+    async def save_experience_metadata(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.write",
+            lambda root: ExperienceStore(root).save_experience_metadata(payload),
+        )
+
     @app.get("/api/recruitment-market")
     async def recruitment_market(request: Request) -> dict[str, object]:
         return _handle_workspace(
