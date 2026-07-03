@@ -8,6 +8,7 @@ import threading
 import unittest
 import json
 import time
+from unittest import mock
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -962,6 +963,66 @@ class PythonDaemonContractTest(unittest.TestCase):
             approvals = client.get("/api/approvals", headers=headers).json()
             self.assertTrue(approvals["ok"])
             self.assertEqual(approvals["data"], [])
+
+    def test_provider_approval_executes_structured_cli_from_python_daemon(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_codex = root / "fake-codex"
+            fake_codex.write_text(
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "print('provider-ok:' + ' '.join(sys.argv[1:3]))\n",
+                encoding="utf-8",
+            )
+            fake_codex.chmod(0o755)
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=root,
+                daemon_db_path=root / ".ucareer" / "daemon.sqlite",
+            )
+            with mock.patch.dict("os.environ", {"CODEX_BIN": str(fake_codex)}):
+                client = TestClient(create_app(settings))
+                created = client.post(
+                    "/api/auth/create-account",
+                    json={
+                        "email": "provider@example.com",
+                        "password": "Password123",
+                        "displayName": "Provider",
+                        "tenantName": "Provider Workspace",
+                    },
+                ).json()
+                self.assertTrue(created["ok"])
+                headers = {"x-ucareer-session": created["data"]["token"]}
+
+                created_task = client.post(
+                    "/api/agent-tasks",
+                    headers=headers,
+                    json={"providerId": "codex", "prompt": "请执行一个 provider runner 测试"},
+                ).json()
+                self.assertTrue(created_task["ok"])
+                self.assertEqual(created_task["data"]["task"]["status"], "waiting_approval")
+                task_id = created_task["data"]["task"]["id"]
+                approval_id = created_task["data"]["approval"]["id"]
+
+                decision = client.post(
+                    f"/api/approvals/{approval_id}/decision",
+                    headers=headers,
+                    json={"decision": "allow_once"},
+                ).json()
+                self.assertTrue(decision["ok"])
+
+                task = client.get(f"/api/agent-tasks/{task_id}", headers=headers).json()
+                self.assertTrue(task["ok"])
+                self.assertEqual(task["data"]["status"], "completed")
+
+                events = client.get(f"/api/agent-tasks/{task_id}/events", headers=headers).json()
+                self.assertTrue(events["ok"])
+                command_events = [event for event in events["data"] if event.get("type") == "command"]
+                self.assertEqual(command_events[0]["status"], "running")
+                self.assertEqual(command_events[-1]["status"], "done")
+                output_text = "\n".join(str(event.get("text") or "") for event in events["data"])
+                self.assertIn("provider-ok:exec", output_text)
 
     def test_jobsearch_routes_run_from_python_daemon_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

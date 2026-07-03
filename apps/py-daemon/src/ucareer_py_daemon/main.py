@@ -728,9 +728,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.post("/api/approvals/{approval_id}/decision")
     async def approval_decision(request: Request, approval_id: str, payload: dict[str, Any], background_tasks: BackgroundTasks) -> dict[str, object]:
         def decide(store: AgentStore) -> dict[str, Any]:
-            record, local_execution = store.decide_approval_with_followup(approval_id, payload)
-            if local_execution:
-                background_tasks.add_task(store.run_approved_local_command, local_execution)
+            record, followup = store.decide_approval_with_followup(approval_id, payload)
+            if followup:
+                background_tasks.add_task(store.run_approved_followup, followup)
             return record
 
         return _handle_agent_store(request, auth_store, settings, "agent.approve", decide)

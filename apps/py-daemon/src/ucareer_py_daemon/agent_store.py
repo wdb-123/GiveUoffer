@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .db import connect_database
-from .providers import list_providers
+from .providers import get_provider_definition, list_providers
 from .routing import preview_agent_route
 
 
@@ -279,7 +279,7 @@ class AgentStore:
             return [_approval_from_row(row) for row in rows]
 
     def decide_approval(self, approval_id: str, payload: dict[str, Any]) -> dict[str, Any]:
-        record, _local_execution = self.decide_approval_with_followup(approval_id, payload)
+        record, _followup = self.decide_approval_with_followup(approval_id, payload)
         return record
 
     def decide_approval_with_followup(self, approval_id: str, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
@@ -288,7 +288,7 @@ class AgentStore:
             decision = "allow_once"
         if decision not in {"allow_once", "allow_task", "allow_workspace", "deny"}:
             raise ValueError("Approval decision must be allow_once, allow_task, allow_workspace, or deny")
-        local_execution: dict[str, Any] | None = None
+        followup: dict[str, Any] | None = None
         with connect_database(self.db_path) as conn:
             row = conn.execute(
                 "SELECT * FROM approval_requests WHERE id = ? AND tenant_id = ?",
@@ -350,12 +350,23 @@ class AgentStore:
             if decision != "deny" and approval.get("action") == "run_shell":
                 parsed = _parse_local_command_approval(str(approval.get("command") or ""))
                 if parsed:
-                    local_execution = {"taskId": approval["taskId"], **parsed}
+                    followup = {"kind": "local_command", "taskId": approval["taskId"], **parsed}
+            elif decision != "deny" and approval.get("action") == "start_agent":
+                parsed = _parse_start_agent_grant(str(approval.get("command") or ""), approval_id)
+                if parsed:
+                    followup = {"kind": "provider_task", "taskId": approval["taskId"], **parsed}
             conn.commit()
 
         next_status = "cancelled" if decision == "deny" else "queued"
         self.update_task_status(str(approval["taskId"]), next_status)
-        return record, local_execution
+        return record, followup
+
+    def run_approved_followup(self, followup: dict[str, Any]) -> None:
+        if followup.get("kind") == "local_command":
+            self.run_approved_local_command(followup)
+            return
+        if followup.get("kind") == "provider_task":
+            self.run_approved_provider_task(str(followup.get("taskId") or ""))
 
     def run_approved_local_command(self, execution: dict[str, Any]) -> None:
         task_id = str(execution.get("taskId") or "")
@@ -401,6 +412,67 @@ class AgentStore:
                 self._append_event(conn, task_id, {"type": "message", "role": "assistant", "text": stdout, "createdAt": finished_at})
             if stderr:
                 self._append_event(conn, task_id, {"type": "message", "role": "system", "text": stderr, "createdAt": finished_at})
+            self._append_event(
+                conn,
+                task_id,
+                {
+                    "type": "command",
+                    "command": command_text,
+                    "cwd": str(cwd),
+                    "status": "done" if completed.returncode == 0 else "failed",
+                    "createdAt": finished_at,
+                },
+            )
+            conn.commit()
+        self.update_task_status(task_id, "completed" if completed.returncode == 0 else "failed")
+
+    def run_approved_provider_task(self, task_id: str) -> None:
+        task = self.get_task(task_id)
+        if not task:
+            return
+        if task.get("providerId") == "local-shell":
+            return
+        if task.get("status") not in {"queued", "waiting_approval", "running"}:
+            return
+        provider = _provider_by_id(str(task.get("providerId") or ""))
+        command_spec = _provider_execution_command(provider, task) if provider else None
+        if not provider or not command_spec:
+            self._append_error_event(task_id, f"Provider {task.get('providerId')} does not support Python structured execution", str(task.get("providerId") or "provider"))
+            self.update_task_status(task_id, "failed")
+            return
+
+        cwd = self._resolve_workspace_path(command_spec["cwd"])
+        cwd.mkdir(parents=True, exist_ok=True)
+        command = str(command_spec["command"])
+        args = [str(arg) for arg in command_spec["args"]]
+        command_text = " ".join([command, *args])
+        started_at = _now_iso()
+        with connect_database(self.db_path) as conn:
+            self._append_event(conn, task_id, {"type": "command", "command": command_text, "cwd": str(cwd), "status": "running", "createdAt": started_at})
+            conn.commit()
+        self.update_task_status(task_id, "running")
+
+        try:
+            completed = subprocess.run(
+                [command, *args],
+                cwd=str(cwd),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError as cause:
+            self._append_error_event(task_id, str(cause), str(task.get("providerId") or "provider"))
+            self.update_task_status(task_id, "failed")
+            return
+
+        finished_at = _now_iso()
+        assistant_output = (completed.stdout or "").strip()
+        system_output = (completed.stderr or "").strip()
+        with connect_database(self.db_path) as conn:
+            if assistant_output:
+                self._append_event(conn, task_id, {"type": "message", "role": "assistant", "text": assistant_output, "createdAt": finished_at})
+            if system_output:
+                self._append_event(conn, task_id, {"type": "message", "role": "system", "text": system_output, "createdAt": finished_at})
             self._append_event(
                 conn,
                 task_id,
@@ -507,10 +579,10 @@ class AgentStore:
             ),
         )
 
-    def _append_error_event(self, task_id: str, message: str) -> None:
+    def _append_error_event(self, task_id: str, message: str, provider: str = "local-shell") -> None:
         now = _now_iso()
         with connect_database(self.db_path) as conn:
-            self._append_event(conn, task_id, {"type": "error", "message": message, "provider": "local-shell", "createdAt": now})
+            self._append_event(conn, task_id, {"type": "error", "message": message, "provider": provider, "createdAt": now})
             conn.commit()
 
     def _insert_workflow_run(self, conn: Any, task: dict[str, Any], route_metadata: dict[str, Any]) -> None:
@@ -655,6 +727,25 @@ class AgentStore:
 
 def _provider_by_id(provider_id: str) -> dict[str, Any] | None:
     return next((provider for provider in list_providers() if provider["id"] == provider_id), None)
+
+
+def _provider_execution_command(provider: dict[str, Any] | None, task: dict[str, Any]) -> dict[str, Any] | None:
+    if not provider:
+        return None
+    provider = get_provider_definition(str(provider["id"])) or provider
+    if not provider.get("capabilities", {}).get("structuredRunner"):
+        return None
+    provider_id = str(provider["id"])
+    command = str(provider.get("command") or provider_id)
+    prompt = str(task.get("prompt") or "")
+    cwd = str(task.get("workspacePath") or ".")
+    if provider_id == "codex":
+        return {"command": command, "args": ["exec", prompt], "cwd": cwd}
+    if provider_id in {"claude", "gemini"}:
+        return {"command": command, "args": ["-p", prompt], "cwd": cwd}
+    if provider_id == "opencode":
+        return {"command": command, "args": ["run", prompt], "cwd": cwd}
+    return None
 
 
 def _resolve_route_metadata(payload: dict[str, Any], provider_id: str, prompt: str) -> dict[str, Any]:

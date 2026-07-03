@@ -10,8 +10,12 @@ def list_providers() -> list[dict[str, Any]]:
     return [_provider_summary(provider) for provider in _provider_definitions()]
 
 
+def get_provider_definition(provider_id: str) -> dict[str, Any] | None:
+    return next((item for item in _provider_definitions() if item["id"] == provider_id), None)
+
+
 def check_provider(provider_id: str) -> dict[str, Any] | None:
-    provider = next((item for item in _provider_definitions() if item["id"] == provider_id), None)
+    provider = get_provider_definition(provider_id)
     if not provider:
         return None
     command = str(provider.get("command") or provider["id"])
