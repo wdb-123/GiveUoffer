@@ -19,7 +19,6 @@
     "daemon": "npm run daemon:python",
     "daemon:api": "npm run daemon:python",
     "daemon:python": "PYTHONPATH=apps/py-daemon/src python3 -m ucareer_py_daemon",
-    "daemon:node": "npm --workspace @ucareer/daemon run dev",
     "daemon:python:test": "PYTHONPATH=apps/py-daemon/src python3 -m unittest discover apps/py-daemon/tests",
     "dev:ucareer": "node scripts/dev/dev-ucareer.mjs",
     "api": "npm run api:python",

@@ -12,10 +12,4 @@ Current state:
 - `sync_events` in SQLite is the local outbox for future cloud sync.
 - The daemon keeps source-code access, shell execution and AI CLI sessions local.
 
-Run:
-
-```bash
-npm run daemon:node
-```
-
-The default `npm run daemon` command starts the Python daemon.
+There is no root npm script for starting this daemon. The default `npm run daemon` command starts the Python daemon.

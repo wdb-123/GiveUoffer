@@ -66,7 +66,7 @@ class PythonDaemonContractTest(unittest.TestCase):
         self.assertEqual(scripts["daemon"], "npm run daemon:python")
         self.assertEqual(scripts["daemon:api"], "npm run daemon:python")
         self.assertIn("python3 -m ucareer_py_daemon", scripts["daemon:python"])
-        self.assertIn("@ucareer/daemon", scripts["daemon:node"])
+        self.assertNotIn("daemon:node", scripts)
         self.assertIn('args: ["run", "daemon:python"]', (repo_root / "scripts" / "dev" / "dev-ucareer.mjs").read_text(encoding="utf-8"))
 
     def test_provider_routes_match_frontend_contract(self) -> None:

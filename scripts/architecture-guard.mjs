@@ -185,11 +185,15 @@ function assertUcareerNamespace() {
   assertContains("package.json", [
     "\"daemon\": \"npm run daemon:python\"",
     "\"daemon:api\": \"npm run daemon:python\"",
-    "\"daemon:node\": \"npm --workspace @ucareer/daemon run dev\"",
     "\"api\": \"npm run api:python\"",
     "\"api:python\": \"PYTHONPATH=apps/py-api/src python3 -m ucareer_py_api\"",
     "npm --workspace @ucareer/web run build",
-  ], "root npm scripts start Python backends by default and keep Node backends explicit");
+  ], "root npm scripts start Python backends");
+
+  assertNotContains("package.json", [
+    "\"daemon:node\"",
+    "@ucareer/daemon",
+  ], "root npm scripts do not expose a legacy Node local daemon");
 
   assertNotContains("package.json", [
     "\"api:node\"",
@@ -313,7 +317,7 @@ function assertUcareerNamespace() {
   assertContains("apps/daemon/README.md", [
     "Legacy TypeScript Daemon",
     "default local backend is now the FastAPI service",
-    "npm run daemon:node",
+    "There is no root npm script for starting this daemon",
     "default `npm run daemon` command starts the Python daemon",
   ], "legacy TypeScript daemon is documented as non-default");
 

@@ -623,7 +623,7 @@ const pythonDaemonReadme = readFile('apps/py-daemon/README.md');
 if (
   pythonDaemonReadme.includes('default local backend') &&
   pythonDaemonReadme.includes('FastAPI') &&
-  pythonDaemonReadme.includes('npm run daemon:node') &&
+  pythonDaemonReadme.includes('migration reference') &&
   pythonDaemonReadme.includes('UCAREER_PY_PORT')
 ) {
   pass('Python daemon README documents default backend ownership');
