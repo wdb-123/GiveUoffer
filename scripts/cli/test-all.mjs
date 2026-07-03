@@ -505,46 +505,41 @@ try {
     .map((match) => normalizeFrontendRoute(match[1]))
     .filter(Boolean);
   const uniqueFrontendRoutes = [...new Set(frontendRoutes)].sort();
-  const daemonRouteFiles = readdirSync(join(ROOT, 'apps/daemon/src/routes'))
-    .filter((file) => file.endsWith('.ts'))
-    .map((file) => `apps/daemon/src/routes/${file}`)
-    .concat(['apps/daemon/src/server.ts']);
+  const daemonRouteFiles = ['apps/py-daemon/src/ucareer_py_daemon/main.py'];
   const backendRoutes = [];
   for (const file of daemonRouteFiles) {
     const content = readFile(file);
-    for (const match of content.matchAll(/app\.(get|post|delete|patch|options)\(\s*([`"])([^`"]+)\2/g)) {
+    for (const match of content.matchAll(/@app\.(get|post|delete|patch|options)\(\s*([`"])([^`"]+)\2/g)) {
       backendRoutes.push({ method: match[1].toUpperCase(), path: match[3], file });
     }
   }
   const missingRoutes = uniqueFrontendRoutes.filter((route) => !backendRoutes.some((backendRoute) => routeMatches(backendRoute.path, route)));
   if (missingRoutes.length === 0) {
-    pass(`all ${uniqueFrontendRoutes.length} frontend API routes have daemon handlers`);
+    pass(`all ${uniqueFrontendRoutes.length} frontend API routes have Python daemon handlers`);
   } else {
-    fail(`frontend API routes missing daemon handlers: ${missingRoutes.join(', ')}`);
+    fail(`frontend API routes missing Python daemon handlers: ${missingRoutes.join(', ')}`);
   }
 } catch (e) {
   fail(`API route contract check crashed: ${e.message}`);
 }
 
 try {
-  const sqliteSchema = readFile('apps/daemon/src/db/sqlite.ts');
-  const drizzleSchema = readFile('apps/daemon/src/db/schema.ts');
+  const pythonDb = readFile('apps/py-daemon/src/ucareer_py_daemon/db.py');
+  const pythonMain = readFile('apps/py-daemon/src/ucareer_py_daemon/main.py');
   const sharedTypes = readFile('packages/shared/src/index.ts');
   const adminSection = readFile('apps/web/src/sections/AdminSection.tsx');
   const checks = [
     {
-      label: 'daemon CORS allows every frontend mutation method',
-      ok: readFile('apps/daemon/src/server.ts').includes('"GET,POST,PATCH,DELETE,OPTIONS"'),
+      label: 'Python daemon CORS allows every frontend mutation method',
+      ok: pythonMain.includes('allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"]'),
     },
     {
-      label: 'tenant membership primary key is aligned across SQLite and Drizzle',
-      ok: sqliteSchema.includes('PRIMARY KEY (tenant_id, account_id)') &&
-        drizzleSchema.includes('primaryKey({ columns: [table.tenantId, table.accountId] })'),
+      label: 'tenant membership primary key is owned by Python SQLite schema',
+      ok: pythonDb.includes('PRIMARY KEY (tenant_id, account_id)'),
     },
     {
-      label: 'connector credential tenant key is aligned across SQLite and Drizzle',
-      ok: sqliteSchema.includes('PRIMARY KEY (tenant_id, connector_id)') &&
-        drizzleSchema.includes('primaryKey({ columns: [table.tenantId, table.connectorId] })'),
+      label: 'connector credential tenant key is owned by Python SQLite schema',
+      ok: pythonDb.includes('PRIMARY KEY (tenant_id, connector_id)'),
     },
     {
       label: 'tenant member API contract reaches admin UI',
@@ -577,14 +572,15 @@ try {
 
 function normalizeFrontendRoute(route) {
   return route
-    .replace(/\$\{[^}]+\}/g, ':param')
+    .replace(/\$\{[^}]+\}/g, (match, offset, input) => input[offset - 1] === '/' ? ':param' : '')
     .replace(/\?.*$/, '')
     .replace(/:param$/, '/:param')
     .replace(/\/+/g, '/');
 }
 
 function routeMatches(backendRoute, frontendRoute) {
-  const escaped = backendRoute.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const normalizedBackendRoute = backendRoute.replace(/\{[^/}]+\}/g, ':param');
+  const escaped = normalizedBackendRoute.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const regex = new RegExp(`^${escaped.replace(/\\:[^/]+/g, '[^/]+').replace(/\\\*/g, '.*')}$`);
   return regex.test(frontendRoute);
 }
@@ -600,40 +596,39 @@ console.log('\n13. Architecture governance');
 
 const architectureGuard = run(NODE, ['scripts/architecture-guard.mjs'], { stdio: ['pipe', 'pipe', 'pipe'] });
 if (architectureGuard !== null) {
-  pass('local daemon architecture guard passes');
+  pass('Python daemon architecture guard passes');
 } else {
-  fail('local daemon architecture guard failed');
+  fail('Python daemon architecture guard failed');
 }
 
-if (fileExists('apps/daemon/src/policy/agent-execution-policy.ts')) {
-  pass('daemon has a dedicated agent execution policy module');
+if (fileExists('apps/py-daemon/src/ucareer_py_daemon/agent_store.py')) {
+  pass('Python daemon has a dedicated agent execution store module');
 } else {
-  fail('daemon is missing policy/agent-execution-policy.ts');
+  fail('Python daemon is missing agent_store.py');
 }
 
-const daemonServer = readFile('apps/daemon/src/server.ts');
+const pythonDaemonMain = readFile('apps/py-daemon/src/ucareer_py_daemon/main.py');
 if (
-  daemonServer.includes('registerWorkflowRoutes(ctx)') &&
-  daemonServer.includes('registerAgentRoutes(ctx)') &&
-  !daemonServer.includes('runApprovedTask') &&
-  !daemonServer.includes('evaluateAgentExecutionPolicy')
+  pythonDaemonMain.includes('def create_app(settings: Settings | None = None) -> FastAPI:') &&
+  pythonDaemonMain.includes('@app.post("/api/agent-tasks")') &&
+  pythonDaemonMain.includes('@app.get("/api/workflow-runs")') &&
+  !pythonDaemonMain.includes('subprocess.Popen')
 ) {
-  pass('daemon server stays as composition root');
+  pass('Python daemon main stays as FastAPI composition root');
 } else {
-  fail('daemon server architecture boundary regressed');
+  fail('Python daemon main architecture boundary regressed');
 }
 
-const daemonArchitecture = readFile('apps/daemon/src/ARCHITECTURE.md');
+const pythonDaemonReadme = readFile('apps/py-daemon/README.md');
 if (
-  daemonArchitecture.includes('Agent Execution Governance') &&
-  daemonArchitecture.includes('workflow/*') &&
-  daemonArchitecture.includes('sync/*') &&
-  daemonArchitecture.includes('start_agent') &&
-  daemonArchitecture.includes('UCAREER_AGENT_AUTO_START=1')
+  pythonDaemonReadme.includes('default local backend') &&
+  pythonDaemonReadme.includes('FastAPI') &&
+  pythonDaemonReadme.includes('npm run daemon:node') &&
+  pythonDaemonReadme.includes('UCAREER_PY_PORT')
 ) {
-  pass('daemon architecture documents local execution governance');
+  pass('Python daemon README documents default backend ownership');
 } else {
-  fail('daemon architecture is missing local execution governance rules');
+  fail('Python daemon README is missing default backend ownership notes');
 }
 
 const adapterReadme = readFile('apps/daemon/src/paperclip-adapters/README.md');
@@ -642,9 +637,9 @@ if (
   adapterReadme.includes('dangerously*') &&
   adapterReadme.includes('approval-gated')
 ) {
-  pass('embedded adapter governance is documented');
+  pass('legacy embedded adapter governance is documented');
 } else {
-  fail('embedded adapter governance documentation is incomplete');
+  fail('legacy embedded adapter governance documentation is incomplete');
 }
 
 const agentSection = readFile('apps/web/src/sections/AgentSection.tsx');

@@ -1,7 +1,8 @@
 # Ucareer Python Daemon
 
-This is the default local Ucareer backend. The legacy TypeScript daemon is kept
-as `npm run daemon:node` while remaining adapter code is retired.
+This FastAPI service is the default local backend for Ucareer. The legacy
+TypeScript daemon is kept as `npm run daemon:node` while remaining adapter code
+is retired.
 
 ## Run
 
