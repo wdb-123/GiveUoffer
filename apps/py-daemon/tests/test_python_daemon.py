@@ -1323,6 +1323,82 @@ class PythonDaemonContractTest(unittest.TestCase):
                 self.assertIn("current job imported", output_text)
                 import_mock.assert_called_once()
 
+    def test_provider_tool_loop_handles_market_and_resume_admin_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_codex = root / "fake-codex-market-resume-tools"
+            fake_codex.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, sys\n"
+                "prompt = sys.argv[2] if len(sys.argv) > 2 else ''\n"
+                "def call(tool, data): print('UC_TOOL_CALL ' + json.dumps({'tool': tool, 'input': data}, ensure_ascii=False))\n"
+                "if 'UC_TOOL_RESULT for resumes.save_diagnosis' in prompt:\n"
+                "    print('market and resume tools done')\n"
+                "elif 'UC_TOOL_RESULT for market.update' in prompt:\n"
+                "    call('resumes.save_diagnosis', {'title': '机器人简历诊断', 'markdown': '诊断内容', 'resumeFile': 'robot-resume.md', 'targetJobId': 'MJ-001'})\n"
+                "elif 'UC_TOOL_RESULT for market.record_link' in prompt:\n"
+                "    call('market.update', {'id': 'MJ-001', 'company': 'Updated Corp', 'matchScore': 4.7, 'keywords': ['ROS2', 'Agent']})\n"
+                "else:\n"
+                "    call('market.record_link', {'url': 'https://example.test/jobs/robot', 'source': 'agent_test', 'note': '待处理岗位'})\n",
+                encoding="utf-8",
+            )
+            fake_codex.chmod(0o755)
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=root,
+                daemon_db_path=root / ".ucareer" / "daemon.sqlite",
+            )
+            with mock.patch.dict("os.environ", {"CODEX_BIN": str(fake_codex)}):
+                client = TestClient(create_app(settings))
+                created = client.post(
+                    "/api/auth/create-account",
+                    json={
+                        "email": "market-resume-tools@example.com",
+                        "password": "Password123",
+                        "displayName": "Market Resume Tools",
+                        "tenantName": "Market Resume Tools",
+                    },
+                ).json()
+                self.assertTrue(created["ok"])
+                headers = {"x-ucareer-session": created["data"]["token"]}
+                tenant_workspace = root / "workspace" / "tenants" / created["data"]["activeTenant"]["id"] / "workspace"
+                (tenant_workspace / "ops" / "data").mkdir(parents=True)
+                (tenant_workspace / "resumes" / "library").mkdir(parents=True)
+                (tenant_workspace / "ops" / "data" / "recruitment-market.json").write_text(
+                    json.dumps({"updatedAt": "", "jobs": [{"id": "MJ-001", "company": "Demo Corp", "role": "Robot Engineer", "keywords": []}]}, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                (tenant_workspace / "resumes" / "library" / "robot-resume.md").write_text("# Robot Resume\n\nContent.", encoding="utf-8")
+
+                created_task = client.post(
+                    "/api/agent-tasks",
+                    headers=headers,
+                    json={"providerId": "codex", "prompt": "记录链接、更新岗位、保存简历诊断"},
+                ).json()
+                self.assertTrue(created_task["ok"])
+                task_id = created_task["data"]["task"]["id"]
+                approval_id = created_task["data"]["approval"]["id"]
+                decision = client.post(f"/api/approvals/{approval_id}/decision", headers=headers, json={"decision": "allow_once"}).json()
+                self.assertTrue(decision["ok"])
+
+                task = client.get(f"/api/agent-tasks/{task_id}", headers=headers).json()
+                self.assertTrue(task["ok"])
+                self.assertEqual(task["data"]["status"], "completed")
+                events = client.get(f"/api/agent-tasks/{task_id}/events", headers=headers).json()
+                output_text = "\n".join(str(event.get("text") or "") for event in events["data"])
+                self.assertIn('"tool": "market.record_link"', output_text)
+                self.assertIn('"tool": "market.update"', output_text)
+                self.assertIn('"tool": "resumes.save_diagnosis"', output_text)
+                self.assertIn("market and resume tools done", output_text)
+                self.assertIn("https://example.test/jobs/robot", (tenant_workspace / "ops" / "data" / "pipeline.md").read_text(encoding="utf-8"))
+                market = json.loads((tenant_workspace / "ops" / "data" / "recruitment-market.json.jobs.d" / "0000.json").read_text(encoding="utf-8"))
+                self.assertEqual(market[0]["company"], "Updated Corp")
+                self.assertEqual(market[0]["matchScore"], 4.7)
+                diagnosis_files = list((tenant_workspace / "resumes" / "diagnostics").glob("*.md"))
+                self.assertEqual(len(diagnosis_files), 1)
+                self.assertIn("诊断内容", diagnosis_files[0].read_text(encoding="utf-8"))
+
     def test_jobsearch_routes_run_from_python_daemon_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -997,8 +997,38 @@ def _execute_agent_tool(
         return {"tool": tool, "deletedEventId": applications.delete_application_event(payload)}
     if tool == "market.list":
         return {"tool": tool, **MarketStore(tenant_workspace_root).get_recruitment_market()}
+    if tool == "market.record_link":
+        return {"tool": tool, **MarketStore(tenant_workspace_root).record_link(payload)}
     if tool == "market.import":
+        if _is_boss_search_container_url_only_import(payload):
+            result = JobSearchService(tenant_workspace_root, chrome_bridge).import_current_job({"url": str(payload.get("url") or ""), "dryRun": False})
+            jobs = result.get("jobs") if isinstance(result.get("jobs"), list) else []
+            return {
+                "tool": "jobsearch.import_current_job",
+                "input": {"url": str(payload.get("url") or ""), "dryRun": False},
+                "connectorKind": "job_board",
+                "connectorId": "jobsearch",
+                "connectorLabel": "Ucareer Chrome",
+                "protocol": "chrome bridge current page import",
+                "runId": result.get("runId", ""),
+                "status": result.get("status", ""),
+                "stats": {
+                    "added": result.get("added", 0),
+                    "candidatesSeen": result.get("candidatesSeen", 0),
+                    "duplicatesSkipped": result.get("duplicatesSkipped", 0),
+                    "failedQueries": result.get("failedQueries", 0),
+                },
+                "message": result.get("message", ""),
+                "jobs": [_safe_job_summary(job) for job in jobs[:10] if isinstance(job, dict)],
+                "omittedJobs": max(0, len(jobs) - 10),
+            }
         return {"tool": tool, **MarketStore(tenant_workspace_root).import_job(payload)}
+    if tool == "market.update":
+        job_id = str(payload.get("id") or "").strip()
+        if not job_id:
+            raise ValueError("Market job id is required")
+        job = MarketStore(tenant_workspace_root).update_job(job_id, payload)
+        return {"tool": tool, "job": _safe_job_summary(job)}
     if tool == "market.delete":
         return {"tool": tool, "deletedJobId": MarketStore(tenant_workspace_root).delete_job(str(payload.get("id") or ""))}
     if tool == "resumes.list":
@@ -1012,6 +1042,14 @@ def _execute_agent_tool(
     if tool == "resumes.save":
         resume = ResumeStore(tenant_workspace_root).save_resume(payload)
         return {"tool": tool, "resume": {"file": resume["file"], "title": resume["title"]}}
+    if tool == "resumes.save_diagnosis":
+        report = ResumeStore(tenant_workspace_root).save_diagnosis(payload)
+        return {"tool": tool, "report": report}
+    if tool == "resumes.delete":
+        file = str(payload.get("file") or "").strip()
+        if not file:
+            raise ValueError("Resume file is required")
+        return {"tool": tool, "deletedResumeFile": ResumeStore(tenant_workspace_root).delete_resume(file)}
     if tool == "experience.list":
         overview = ExperienceStore(tenant_workspace_root).get_experience_overview()
         return {
@@ -1043,12 +1081,25 @@ def _execute_agent_tool(
         merged.insert(0, next_item)
         updated = ExperienceStore(tenant_workspace_root).save_experience_metadata({"metadata": {"experiences": merged}})
         return {"tool": tool, "experience": next_item, "updatedAt": updated.get("updatedAt", "")}
+    if tool == "experience.delete":
+        experience_id = str(payload.get("id") or "").strip()
+        if not experience_id:
+            raise ValueError("Experience id is required")
+        return {"tool": tool, "deletedExperienceId": ExperienceStore(tenant_workspace_root).delete_experience(experience_id)}
     if tool == "evidence.list":
         return {"tool": tool, **EvidenceStore(tenant_workspace_root).list_evidence_requests()}
     if tool == "evidence.note":
-        return {"tool": tool, **EvidenceStore(tenant_workspace_root).save_evidence_note(payload)}
+        return {"tool": tool, **EvidenceStore(tenant_workspace_root).save_evidence_note({**payload, "content": payload.get("content") or payload.get("note")})}
+    if tool == "evidence.upsert":
+        request = EvidenceStore(tenant_workspace_root).upsert_evidence_request(payload)
+        return {"tool": tool, "request": request}
     if tool == "evidence.fulfill":
         return {"tool": tool, **EvidenceStore(tenant_workspace_root).fulfill_evidence_request(payload)}
+    if tool == "evidence.delete":
+        request_id = str(payload.get("id") or "").strip()
+        if not request_id:
+            raise ValueError("Evidence request id is required")
+        return {"tool": tool, "deletedEvidenceRequestId": EvidenceStore(tenant_workspace_root).delete_evidence_request(request_id)}
     if tool == "mailbox.search_messages":
         credential = ConnectorCredentialStore(db_path, tenant_workspace_root, tenant_id).get_secret("qq-email")
         if not credential:
@@ -1141,6 +1192,15 @@ def _safe_email_message(message: dict[str, Any]) -> dict[str, Any]:
         }.items()
         if not _is_empty_tool_value(value)
     }
+
+
+def _is_boss_search_container_url_only_import(payload: dict[str, Any]) -> bool:
+    if str(payload.get("description") or "").strip():
+        return False
+    url = str(payload.get("url") or "").strip()
+    if not url:
+        return False
+    return "zhipin.com" in url.lower() and "/web/geek/jobs" in url
 
 
 def _safe_job_summary(job: dict[str, Any]) -> dict[str, Any]:

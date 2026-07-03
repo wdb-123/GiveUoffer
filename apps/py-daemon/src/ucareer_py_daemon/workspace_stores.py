@@ -366,6 +366,40 @@ class ResumeStore:
             })
         return {"file": file, "title": title, "markdown": markdown}
 
+    def save_diagnosis(self, payload: dict[str, Any]) -> dict[str, Any]:
+        title = str(payload.get("title") or "").strip() or "简历诊断报告"
+        markdown = _normalize_diagnosis_markdown(
+            title,
+            str(payload.get("markdown") or ""),
+            str(payload.get("resumeFile") or ""),
+            str(payload.get("targetJobId") or ""),
+        )
+        requested_file = str(payload.get("file") or "").strip()
+        file = requested_file if _is_diagnosis_markdown_file(requested_file) else _diagnosis_file_name(title, str(payload.get("resumeFile") or ""))
+        diagnostics_dir = workspace_data_path(self.workspace_root, "resumeDiagnostics")
+        path = safe_child(diagnostics_dir, file)
+        diagnostics_dir.mkdir(parents=True, exist_ok=True)
+        path.write_text(markdown, encoding="utf-8")
+        return {
+            "file": file,
+            "title": title,
+            "path": f"workspace/resumes/diagnostics/{file}",
+            "resumeFile": str(payload.get("resumeFile") or ""),
+            "targetJobId": str(payload.get("targetJobId") or ""),
+            "updatedAt": _now_iso(),
+        }
+
+    def delete_resume(self, file: str) -> str:
+        if not _is_resume_markdown_file(file):
+            raise ValueError("Invalid resume file")
+        resumes_dir = workspace_data_path(self.workspace_root, "resumeLibrary")
+        path = safe_child(resumes_dir, file)
+        if not path.exists() or not path.is_file():
+            raise ValueError(f"Resume not found: {file}")
+        path.unlink()
+        _remove_resume_job_link(workspace_data_path(self.workspace_root, "resumeJobLinks"), file)
+        return file
+
 
 @dataclass
 class ExperienceStore:
@@ -399,6 +433,18 @@ class ExperienceStore:
         path.write_text(json.dumps(next_metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         return self.get_experience_overview()
 
+    def delete_experience(self, experience_id: str) -> str:
+        clean = str(experience_id or "").strip()
+        if not clean:
+            raise ValueError("Missing experience id")
+        overview = self.get_experience_overview()
+        existing = [_without_experience_content(item) for item in overview.get("experiences", []) if isinstance(item, dict)]
+        next_items = [item for item in existing if item.get("id") != clean]
+        if len(next_items) == len(existing):
+            raise ValueError(f"Experience not found: {clean}")
+        self.save_experience_metadata({"metadata": {"experiences": next_items}})
+        return clean
+
 
 @dataclass
 class MarketStore:
@@ -413,6 +459,33 @@ class MarketStore:
         legacy_jobs = base.get("jobs") if isinstance(base.get("jobs"), list) else []
         jobs = legacy_jobs if legacy_jobs else chunk_jobs
         return {**base, "jobs": jobs, "jobsCount": len(jobs)}
+
+    def record_link(self, payload: dict[str, Any]) -> dict[str, Any]:
+        url = str(payload.get("url") or "").strip()
+        if not url:
+            raise ValueError("请提供要记录的链接")
+        normalized_url = _normalize_url(url)
+        if not normalized_url:
+            raise ValueError("链接格式不正确")
+        pipeline_path = resolve_inside(self.workspace_root, "workspace/ops/data/pipeline.md")
+        current = read_text(pipeline_path)
+        existing_urls = [_normalize_url(item) for item in re.findall(r"https?://[^\s|)>\]]+", current)]
+        if normalized_url in existing_urls:
+            return {
+                "url": url,
+                "recorded": False,
+                "pipelinePath": "workspace/ops/data/pipeline.md",
+                "message": "链接已存在于待处理列表，没有重复记录。",
+            }
+        source = _sanitize_pipeline_field(str(payload.get("source") or "agent_link"))
+        note = _sanitize_pipeline_field(str(payload.get("note") or "用户粘贴链接，仅记录，等待后续处理"))
+        _write_pipeline_pending_line(pipeline_path, current, f"- [ ] {url} | {source} | {note}")
+        return {
+            "url": url,
+            "recorded": True,
+            "pipelinePath": "workspace/ops/data/pipeline.md",
+            "message": "已记录到待处理链接列表。",
+        }
 
     def import_job(self, payload: dict[str, Any]) -> dict[str, Any]:
         url = str(payload.get("url") or "").strip()
@@ -503,6 +576,21 @@ class MarketStore:
         _write_recruitment_market(market_path, {**market, "jobs": next_jobs, "updatedAt": _local_date()})
         return clean
 
+    def update_job(self, job_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+        clean = str(job_id or "").strip()
+        if not clean:
+            raise ValueError("Missing job id")
+        market_path = workspace_data_path(self.workspace_root, "recruitmentMarket")
+        market = self.get_recruitment_market()
+        jobs = [job for job in market.get("jobs", []) if isinstance(job, dict)]
+        index = next((idx for idx, job in enumerate(jobs) if job.get("id") == clean), -1)
+        if index < 0:
+            raise ValueError(f"Job not found: {clean}")
+        updated = _normalize_market_job_patch(jobs[index], patch, _local_date())
+        jobs[index] = updated
+        _write_recruitment_market(market_path, {**market, "jobs": jobs, "updatedAt": updated["updatedAt"]})
+        return updated
+
 
 @dataclass
 class EvidenceStore:
@@ -568,6 +656,25 @@ class EvidenceStore:
         requests = [request, *[item for item in overview.get("requests", []) if isinstance(item, dict)]]
         _write_evidence_requests(workspace_data_path(self.workspace_root, "evidenceRequests"), {**overview, "requests": requests})
         return {"noteId": note_id, "targetFile": target_file, "appended": True, "appendedAt": appended_at}
+
+    def upsert_evidence_request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        overview = self.list_evidence_requests()
+        request = _normalize_evidence_request(payload)
+        requests = [item for item in overview.get("requests", []) if isinstance(item, dict) and item.get("id") != request["id"]]
+        requests.append(request)
+        _write_evidence_requests(workspace_data_path(self.workspace_root, "evidenceRequests"), {**overview, "requests": requests})
+        return request
+
+    def delete_evidence_request(self, request_id: str) -> str:
+        clean = str(request_id or "").strip()
+        if not clean:
+            raise ValueError("Missing evidence request id")
+        overview = self.list_evidence_requests()
+        requests = [item for item in overview.get("requests", []) if isinstance(item, dict) and item.get("id") != clean]
+        if len(requests) == len([item for item in overview.get("requests", []) if isinstance(item, dict)]):
+            raise ValueError(f"Evidence request not found: {clean}")
+        _write_evidence_requests(workspace_data_path(self.workspace_root, "evidenceRequests"), {**overview, "requests": requests})
+        return clean
 
 
 def _yaml_scalar(text: str, key: str) -> str:
@@ -1387,6 +1494,115 @@ def _upsert_resume_job_link(path: Path, link: dict[str, Any]) -> None:
     next_links.append(link)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"updatedAt": _now_iso(), "links": next_links}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _remove_resume_job_link(path: Path, file: str) -> None:
+    store = _read_json(path, {"links": []})
+    links = store.get("links") if isinstance(store, dict) and isinstance(store.get("links"), list) else []
+    next_links = [item for item in links if isinstance(item, dict) and item.get("file") != file]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"updatedAt": _now_iso(), "links": next_links}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _is_diagnosis_markdown_file(file: str) -> bool:
+    return _is_markdown_file(file) and file not in {"README.md", "ARCHITECTURE.md"}
+
+
+def _normalize_diagnosis_markdown(title: str, markdown: str, resume_file: str, target_job_id: str) -> str:
+    text = str(markdown or "").strip()
+    if not text:
+        raise ValueError("Resume diagnosis markdown is required")
+    body = text if text.startswith("# ") else f"# {title}\n\n{text}"
+    metadata = "\n".join([
+        f"**Resume:** {resume_file or '待补充'}",
+        f"**Target Job:** {target_job_id or '未绑定'}",
+        f"**Generated At:** {_now_iso()}",
+    ])
+    return f"{body.strip()}\n\n---\n\n{metadata}\n"
+
+
+def _diagnosis_file_name(title: str, resume_file: str) -> str:
+    date = _today_china()
+    base = re.sub(r"\.md$", "", resume_file) if resume_file else title
+    return f"{_slugify_filename(base)}-diagnosis-{date}.md"
+
+
+def _without_experience_content(item: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in item.items() if key != "sourceContent"}
+
+
+def _sanitize_pipeline_field(value: str) -> str:
+    return re.sub(r"\s+", " ", str(value or "").replace("|", "/").replace("\n", " ")).strip()[:240]
+
+
+def _normalize_pipeline_document(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "# URL Pipeline\n\n## Pending\n\n## Processed\n"
+    if not re.search(r"^#\s+", text, re.M):
+        return f"# URL Pipeline\n\n## Pending\n{text}\n\n## Processed\n"
+    if not re.search(r"^## Pending\s*$", text, re.M):
+        return f"{text}\n\n## Pending\n\n## Processed\n"
+    if not re.search(r"^## Processed\s*$", text, re.M):
+        return f"{text}\n\n## Processed\n"
+    return f"{text}\n"
+
+
+def _write_pipeline_pending_line(path: Path, current: str, line: str) -> None:
+    normalized = _normalize_pipeline_document(current)
+    match = re.search(r"^## Processed\s*$", normalized, re.M)
+    if match:
+        next_text = f"{normalized[:match.start()].rstrip()}\n{line}\n\n{normalized[match.start():]}"
+    else:
+        next_text = f"{normalized.rstrip()}\n{line}\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(next_text, encoding="utf-8")
+
+
+def _normalize_market_job_patch(current: dict[str, Any], patch: dict[str, Any], updated_at: str) -> dict[str, Any]:
+    next_job = {**current, "updatedAt": updated_at}
+    for key in ["company", "role", "location", "salary", "source", "url", "direction", "fitReason", "evidenceGap", "platform", "importedAt", "discoveredAt", "createdAt"]:
+        if key in patch:
+            next_job[key] = str(patch.get(key) or "").strip()
+    if "matchScore" in patch:
+        try:
+            next_job["matchScore"] = max(0, min(5, float(patch.get("matchScore"))))
+        except (TypeError, ValueError):
+            pass
+    if "keywords" in patch:
+        value = patch.get("keywords")
+        if isinstance(value, list):
+            next_job["keywords"] = [str(item).strip() for item in value if str(item).strip()][:30]
+        else:
+            next_job["keywords"] = []
+    return next_job
+
+
+def _normalize_evidence_request(payload: dict[str, Any]) -> dict[str, Any]:
+    direction = str(payload.get("direction") or "").strip()
+    gap = str(payload.get("gap") or "").strip()
+    if not direction:
+        raise ValueError("Evidence direction is required")
+    if not gap:
+        raise ValueError("Evidence gap is required")
+    request_id = str(payload.get("id") or f"ev-{int(datetime.now(UTC).timestamp() * 1000):x}").strip()
+    ask_human = payload.get("askHuman")
+    if isinstance(ask_human, list):
+        ask_human_items = [str(item).strip() for item in ask_human if str(item).strip()]
+    else:
+        ask_human_items = [item.strip() for item in re.split(r"\r?\n|,", str(ask_human or "")) if item.strip()]
+    return {
+        "id": request_id,
+        "priority": str(payload.get("priority") or "medium").strip(),
+        "status": str(payload.get("status") or "open").strip(),
+        "direction": direction,
+        "gap": gap,
+        "marketSignal": str(payload.get("marketSignal") or "").strip(),
+        "currentEvidence": str(payload.get("currentEvidence") or "").strip(),
+        "askHuman": ask_human_items,
+        "targetFile": str(payload.get("targetFile") or "workspace/jobs/project-notes/evidence.md").strip(),
+        "resumeImpact": str(payload.get("resumeImpact") or "").strip(),
+    }
 
 
 def _score(value: str) -> float:
