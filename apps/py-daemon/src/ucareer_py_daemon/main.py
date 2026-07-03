@@ -14,7 +14,7 @@ from .db import probe_database
 from .envelope import error, ok
 from .route_manifest import ROUTE_GROUPS
 from .workspace import tenant_workspace_root
-from .workspace_stores import ApplicationStore, EvidenceStore, ExperienceStore, MarketStore, ProfileStore, ReportStore, ResumeStore
+from .workspace_stores import ApplicationStore, EvidenceStore, ExperienceStore, MarketStore, ProfileStore, ReportStore, ResumeStore, WorkspaceFileStore
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -129,6 +129,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings,
             "workspace.read",
             lambda root: ProfileStore(root).get_profile_overview(),
+        )
+
+    @app.get("/api/workspace-file")
+    async def workspace_file(request: Request, path: str = "") -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: _require_found(
+                WorkspaceFileStore(root).get_file_preview(path),
+                f"File not found or not readable: {path}",
+            ),
         )
 
     @app.get("/api/applications")

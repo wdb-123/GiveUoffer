@@ -13,6 +13,45 @@ from typing import Any
 
 from .workspace import read_text, resolve_inside, safe_child, workspace_data_path
 
+MAX_PREVIEW_BYTES = 128 * 1024
+MAX_PDF_PREVIEW_BYTES = 12 * 1024 * 1024
+MAX_IMAGE_PREVIEW_BYTES = 12 * 1024 * 1024
+IMAGE_MIME_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+}
+TEXT_EXTENSIONS = {
+    ".md",
+    ".txt",
+    ".json",
+    ".jsonl",
+    ".yml",
+    ".yaml",
+    ".tsv",
+    ".csv",
+    ".log",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".css",
+    ".html",
+    ".xml",
+    ".sh",
+    ".zsh",
+    ".py",
+    ".rb",
+    ".java",
+    ".go",
+    ".rs",
+    ".sql",
+}
+
 
 @dataclass
 class ProfileStore:
@@ -36,6 +75,93 @@ class ProfileStore:
             "cvMarkdown": cv,
             "profileYaml": profile,
             "profileOverlayMarkdown": overlay,
+        }
+
+
+@dataclass
+class WorkspaceFileStore:
+    workspace_root: Path
+
+    def get_file_preview(self, input_path: str) -> dict[str, Any] | None:
+        resolved = _resolve_workspace_preview_path(self.workspace_root, input_path)
+        if not resolved or not resolved.is_file():
+            return None
+
+        size_bytes = resolved.stat().st_size
+        extension = resolved.suffix.lower()
+        relative_path = str(resolved.resolve().relative_to(self.workspace_root.resolve()))
+        base = {
+            "path": str(resolved.resolve()),
+            "relativePath": relative_path,
+            "fileName": resolved.name,
+            "sizeBytes": size_bytes,
+            "updatedAt": datetime.fromtimestamp(resolved.stat().st_mtime, tz=UTC).isoformat().replace("+00:00", "Z"),
+            "languageHint": extension.lstrip(".") or "text",
+        }
+
+        image_mime_type = IMAGE_MIME_TYPES.get(extension)
+        if image_mime_type:
+            if size_bytes > MAX_IMAGE_PREVIEW_BYTES:
+                return {
+                    **base,
+                    "content": "图片文件过大，暂不在侧栏内嵌预览。",
+                    "previewType": "unsupported",
+                    "truncated": False,
+                    "encoding": "binary",
+                }
+            return {
+                **base,
+                "content": "",
+                "previewType": "image",
+                "truncated": False,
+                "encoding": "binary",
+                "dataUrl": f"data:{image_mime_type};base64,{base64.b64encode(resolved.read_bytes()).decode('ascii')}",
+            }
+
+        if extension == ".pdf":
+            if size_bytes > MAX_PDF_PREVIEW_BYTES:
+                return {
+                    **base,
+                    "content": "PDF 文件过大，暂不在侧栏内嵌预览。",
+                    "previewType": "unsupported",
+                    "truncated": False,
+                    "encoding": "binary",
+                }
+            return {
+                **base,
+                "content": "",
+                "previewType": "pdf",
+                "truncated": False,
+                "encoding": "binary",
+                "dataUrl": f"data:application/pdf;base64,{base64.b64encode(resolved.read_bytes()).decode('ascii')}",
+            }
+
+        if extension == ".docx":
+            return {
+                **base,
+                "content": "DOCX 预览暂未在 Python 后端启用，请导出为 PDF 后预览。",
+                "previewType": "unsupported",
+                "truncated": False,
+                "encoding": "binary",
+            }
+
+        if extension not in TEXT_EXTENSIONS:
+            return {
+                **base,
+                "content": "This file preview is unavailable because the file is not recognized as a text document.",
+                "previewType": "unsupported",
+                "truncated": False,
+                "encoding": "binary",
+            }
+
+        content = resolved.read_bytes()
+        truncated = len(content) > MAX_PREVIEW_BYTES
+        return {
+            **base,
+            "content": content[:MAX_PREVIEW_BYTES].decode("utf-8", errors="replace"),
+            "previewType": "text",
+            "truncated": truncated,
+            "encoding": "utf8",
         }
 
 
@@ -1115,6 +1241,17 @@ def _first_meaningful_line(content: str) -> str:
 
 def _is_markdown_file(file: str) -> bool:
     return bool(re.match(r"^[^/\\]+\.md$", file)) and not file.startswith(".")
+
+
+def _resolve_workspace_preview_path(workspace_root: Path, input_path: str) -> Path | None:
+    trimmed = str(input_path or "").strip()
+    if not trimmed:
+        return None
+    base = workspace_root.resolve()
+    candidate = Path(trimmed).resolve() if Path(trimmed).is_absolute() else (base / trimmed).resolve()
+    if candidate == base or base not in candidate.parents:
+        return None
+    return candidate
 
 
 def _is_resume_markdown_file(file: str) -> bool:

@@ -54,6 +54,7 @@ ROUTE_GROUPS: list[dict[str, object]] = [
         "nodeModule": "apps/daemon/src/routes/*-routes.ts",
         "pythonStatus": "partial-readonly",
         "routes": [
+            "GET /api/workspace-file",
             "GET /api/profile-overview",
             "GET /api/resumes",
             "GET /api/resume",

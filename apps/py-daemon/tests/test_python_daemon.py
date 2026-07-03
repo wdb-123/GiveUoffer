@@ -200,6 +200,24 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertTrue(report["ok"])
             self.assertIn("Demo report body", report["data"]["markdown"])
 
+            preview = client.get("/api/workspace-file?path=workspace/jobs/reports/001-demo-2026-07-03.md", headers=headers).json()
+            self.assertTrue(preview["ok"])
+            self.assertEqual(preview["data"]["previewType"], "text")
+            self.assertEqual(preview["data"]["encoding"], "utf8")
+            self.assertEqual(preview["data"]["relativePath"], "workspace/jobs/reports/001-demo-2026-07-03.md")
+            self.assertIn("Demo report body", preview["data"]["content"])
+
+            absolute_preview = client.get(
+                f"/api/workspace-file?path={tenant_workspace / 'profile' / 'cv.md'}",
+                headers=headers,
+            ).json()
+            self.assertTrue(absolute_preview["ok"])
+            self.assertEqual(absolute_preview["data"]["fileName"], "cv.md")
+
+            outside_preview = client.get(f"/api/workspace-file?path={Path(tmp) / 'outside.md'}", headers=headers).json()
+            self.assertFalse(outside_preview["ok"])
+            self.assertEqual(outside_preview["error"]["code"], "bad_request")
+
             resumes = client.get("/api/resumes", headers=headers).json()
             self.assertTrue(resumes["ok"])
             self.assertEqual(resumes["data"][0]["targetJobId"], "001")
