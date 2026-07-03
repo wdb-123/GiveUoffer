@@ -5,6 +5,7 @@ from pathlib import Path
 DATA_PATHS: dict[str, str] = {
     "applications": "workspace/ops/data/applications.md",
     "applicationEvents": "workspace/ops/data/application-events.jsonl",
+    "evidenceRequests": "workspace/ops/data/evidence-requests.json",
     "experienceMetadata": "workspace/ops/data/experience-metadata.json",
     "headshots": "workspace/profile/headshots",
     "intentions": "workspace/profile/intentions",

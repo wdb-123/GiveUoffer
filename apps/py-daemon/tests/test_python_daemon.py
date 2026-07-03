@@ -173,6 +173,30 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertEqual(market["data"]["jobsCount"], 1)
             self.assertEqual(market["data"]["jobs"][0]["id"], "MJ-001")
 
+            evidence = client.get("/api/evidence-requests", headers=headers).json()
+            self.assertTrue(evidence["ok"])
+            self.assertEqual(evidence["data"]["summary"]["open"], 1)
+            self.assertEqual(evidence["data"]["requests"][0]["id"], "ev-1")
+
+            fulfilled = client.post(
+                "/api/evidence-requests/fulfill",
+                headers=headers,
+                json={"requestId": "ev-1", "content": "Added evidence.", "source": "test"},
+            ).json()
+            self.assertTrue(fulfilled["ok"])
+            self.assertEqual(fulfilled["data"]["targetFile"], "workspace/jobs/project-notes/evidence.md")
+            self.assertIn("Added evidence.", (tenant_workspace / "jobs" / "project-notes" / "evidence.md").read_text(encoding="utf-8"))
+
+            note = client.post(
+                "/api/evidence-notes",
+                headers=headers,
+                json={"title": "Manual note", "content": "Useful review note."},
+            ).json()
+            self.assertTrue(note["ok"])
+            self.assertEqual(note["data"]["targetFile"], "workspace/jobs/project-notes/evidence.md")
+            updated_evidence = client.get("/api/evidence-requests", headers=headers).json()
+            self.assertEqual(updated_evidence["data"]["requests"][0]["direction"], "Manual note")
+
     def _write_tenant_workspace_fixture(self, root: Path) -> None:
         (root / "profile").mkdir(parents=True)
         (root / "ops" / "data").mkdir(parents=True)
@@ -271,6 +295,29 @@ class PythonDaemonContractTest(unittest.TestCase):
         )
         (root / "ops" / "data" / "recruitment-market.json.jobs.d" / "0000.json").write_text(
             '[{"id":"MJ-001","company":"Demo Corp","role":"Robot Engineer","updatedAt":"2026-07-03"}]',
+            encoding="utf-8",
+        )
+        (root / "ops" / "data" / "evidence-requests.json").write_text(
+            "\n".join([
+                "{",
+                '  "updatedAt": "2026-07-03T00:00:00Z",',
+                '  "summary": { "open": 1, "highPriority": 1 },',
+                '  "requests": [',
+                "    {",
+                '      "id": "ev-1",',
+                '      "priority": "high",',
+                '      "status": "open",',
+                '      "direction": "Robot proof",',
+                '      "gap": "Need proof",',
+                '      "marketSignal": "interview",',
+                '      "currentEvidence": "",',
+                '      "askHuman": ["Add evidence"],',
+                '      "targetFile": "workspace/jobs/project-notes/evidence.md",',
+                '      "resumeImpact": "strong"',
+                "    }",
+                "  ]",
+                "}",
+            ]),
             encoding="utf-8",
         )
 

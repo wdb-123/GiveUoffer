@@ -153,6 +153,72 @@ class MarketStore:
         return {**base, "jobs": jobs, "jobsCount": len(jobs)}
 
 
+@dataclass
+class EvidenceStore:
+    workspace_root: Path
+
+    def list_evidence_requests(self) -> dict[str, Any]:
+        return _read_json(workspace_data_path(self.workspace_root, "evidenceRequests"), _empty_evidence_overview())
+
+    def fulfill_evidence_request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        request_id = str(payload.get("requestId") or "").strip()
+        content = str(payload.get("content") or "").strip()
+        if not request_id:
+            raise ValueError("Evidence request id is required")
+        if not content:
+            raise ValueError("Evidence content is required")
+        overview = self.list_evidence_requests()
+        request = next((item for item in overview.get("requests", []) if item.get("id") == request_id), None)
+        if not request:
+            raise ValueError(f"Evidence request not found: {request_id}")
+        target_file = str(request.get("targetFile") or "")
+        if not re.match(r"^workspace/jobs/project-notes/[^/]+\.(md|txt)$", target_file, re.I):
+            raise ValueError("Invalid evidence target file")
+        target_path = resolve_inside(self.workspace_root, target_file)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        appended_at = _now_iso()
+        markdown = "\n\n".join([
+            "",
+            f"## 证据补充 {request_id} - {appended_at}",
+            f"来源：{str(payload.get('source') or 'Ucareer 复盘中心').strip()}",
+            content,
+            "",
+        ])
+        with target_path.open("a", encoding="utf-8") as handle:
+            handle.write(markdown)
+        return {"requestId": request_id, "targetFile": target_file, "appended": True, "appendedAt": appended_at}
+
+    def save_evidence_note(self, payload: dict[str, Any]) -> dict[str, Any]:
+        content = str(payload.get("content") or "").strip()
+        if not content:
+            raise ValueError("Evidence note content is required")
+        overview = self.list_evidence_requests()
+        appended_at = _now_iso()
+        note_id = f"note-{int(datetime.now(UTC).timestamp() * 1000):x}"
+        title = (str(payload.get("title") or "") or _first_meaningful_line(content) or "复盘笔记").strip()[:80]
+        target_file = "workspace/jobs/project-notes/evidence.md"
+        target_path = resolve_inside(self.workspace_root, target_file)
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        markdown = "\n\n".join(["", f"## {title} - {appended_at}", "来源：Ucareer 复盘中心", content, ""])
+        with target_path.open("a", encoding="utf-8") as handle:
+            handle.write(markdown)
+        request = {
+            "id": note_id,
+            "priority": "low",
+            "status": "fulfilled",
+            "direction": title,
+            "gap": content[:240],
+            "marketSignal": "manual_review_note",
+            "currentEvidence": content,
+            "askHuman": [],
+            "targetFile": target_file,
+            "resumeImpact": "",
+        }
+        requests = [request, *[item for item in overview.get("requests", []) if isinstance(item, dict)]]
+        _write_evidence_requests(workspace_data_path(self.workspace_root, "evidenceRequests"), {**overview, "requests": requests})
+        return {"noteId": note_id, "targetFile": target_file, "appended": True, "appendedAt": appended_at}
+
+
 def _yaml_scalar(text: str, key: str) -> str:
     match = re.search(rf"^\s*{re.escape(key)}:\s*(.+?)\s*$", text, re.M)
     if not match:
@@ -223,6 +289,26 @@ def _read_json(path: Path, fallback: Any) -> Any:
         return json.loads(text) if text else fallback
     except json.JSONDecodeError:
         return fallback
+
+
+def _write_evidence_requests(path: Path, overview: dict[str, Any]) -> None:
+    requests = [item for item in overview.get("requests", []) if isinstance(item, dict)]
+    next_overview = {
+        **overview,
+        "updatedAt": _now_iso(),
+        "summary": {
+            **(overview.get("summary") if isinstance(overview.get("summary"), dict) else {}),
+            "open": len([item for item in requests if item.get("status") == "open"]),
+            "highPriority": len([item for item in requests if item.get("priority") == "high"]),
+        },
+        "requests": requests,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(next_overview, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _empty_evidence_overview() -> dict[str, Any]:
+    return {"updatedAt": "", "summary": {"open": 0, "highPriority": 0}, "requests": []}
 
 
 def _merge_application_events(applications: list[dict[str, Any]], events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -455,6 +541,14 @@ def _normalize_relative_path(value: str) -> str:
 
 def _mtime_iso(path: Path) -> str:
     return datetime.fromtimestamp(path.stat().st_mtime, UTC).isoformat().replace("+00:00", "Z")
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _first_meaningful_line(content: str) -> str:
+    return next((line.strip() for line in content.splitlines() if line.strip()), "")
 
 
 def _is_markdown_file(file: str) -> bool:

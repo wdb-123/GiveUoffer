@@ -13,7 +13,7 @@ from .db import probe_database
 from .envelope import error, ok
 from .route_manifest import ROUTE_GROUPS
 from .workspace import tenant_workspace_root
-from .workspace_stores import ApplicationStore, ExperienceStore, MarketStore, ProfileStore, ReportStore, ResumeStore
+from .workspace_stores import ApplicationStore, EvidenceStore, ExperienceStore, MarketStore, ProfileStore, ReportStore, ResumeStore
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -208,6 +208,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings,
             "workspace.read",
             lambda root: MarketStore(root).get_recruitment_market(),
+        )
+
+    @app.get("/api/evidence-requests")
+    async def evidence_requests(request: Request) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: EvidenceStore(root).list_evidence_requests(),
+        )
+
+    @app.post("/api/evidence-requests/fulfill")
+    async def fulfill_evidence_request(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.write",
+            lambda root: EvidenceStore(root).fulfill_evidence_request(payload),
+        )
+
+    @app.post("/api/evidence-notes")
+    async def save_evidence_note(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.write",
+            lambda root: EvidenceStore(root).save_evidence_note(payload),
         )
 
     return app
