@@ -237,6 +237,7 @@ function assertUcareerNamespace() {
     "CREATE TABLE IF NOT EXISTS tenant_memberships",
     "CREATE TABLE IF NOT EXISTS tenant_billing",
     "CREATE TABLE IF NOT EXISTS tenant_token_usage_monthly",
+    "CREATE TABLE IF NOT EXISTS tenant_token_usage_events",
     "CREATE TABLE IF NOT EXISTS connector_credentials",
     "CREATE TABLE IF NOT EXISTS sync_events",
   ], "Python daemon owns local SQLite schema");

@@ -8,6 +8,7 @@ import threading
 import unittest
 import json
 import time
+from datetime import UTC, datetime
 from unittest import mock
 from pathlib import Path
 
@@ -1335,6 +1336,85 @@ class PythonDaemonContractTest(unittest.TestCase):
                 self.assertIn("无界智航", output_text)
                 self.assertIn("current job imported", output_text)
                 import_mock.assert_called_once()
+
+    def test_provider_usage_updates_tenant_billing_and_quota_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_codex = root / "fake-codex-usage"
+            fake_codex.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json\n"
+                "print('完成。')\n"
+                "print('UC_USAGE ' + json.dumps({'inputTokens': 1200, 'cachedInputTokens': 300, 'outputTokens': 500, 'totalTokens': 2000, 'model': 'fake-usage-model'}))\n",
+                encoding="utf-8",
+            )
+            fake_codex.chmod(0o755)
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=root,
+                daemon_db_path=root / ".ucareer" / "daemon.sqlite",
+            )
+            with mock.patch.dict("os.environ", {"CODEX_BIN": str(fake_codex)}):
+                client = TestClient(create_app(settings))
+                created = client.post(
+                    "/api/auth/create-account",
+                    json={
+                        "email": "usage@example.com",
+                        "password": "Password123",
+                        "displayName": "Usage",
+                        "tenantName": "Usage Workspace",
+                    },
+                ).json()
+                self.assertTrue(created["ok"])
+                headers = {"x-ucareer-session": created["data"]["token"]}
+
+                created_task = client.post(
+                    "/api/agent-tasks",
+                    headers=headers,
+                    json={"providerId": "codex", "prompt": "统计真实 usage"},
+                ).json()
+                self.assertTrue(created_task["ok"])
+                task_id = created_task["data"]["task"]["id"]
+                approval_id = created_task["data"]["approval"]["id"]
+                decision = client.post(f"/api/approvals/{approval_id}/decision", headers=headers, json={"decision": "allow_once"}).json()
+                self.assertTrue(decision["ok"])
+
+                events = client.get(f"/api/agent-tasks/{task_id}/events", headers=headers).json()
+                usage_events = [event for event in events["data"] if event.get("type") == "usage"]
+                self.assertEqual(len(usage_events), 1)
+                self.assertEqual(usage_events[0]["totalTokens"], 2000)
+                self.assertEqual(usage_events[0]["model"], "fake-usage-model")
+
+                billing = client.get("/api/billing/tenant", headers=headers).json()
+                self.assertTrue(billing["ok"])
+                self.assertEqual(billing["data"]["usage"]["inputTokens"], 1200)
+                self.assertEqual(billing["data"]["usage"]["cachedInputTokens"], 300)
+                self.assertEqual(billing["data"]["usage"]["outputTokens"], 500)
+                self.assertEqual(billing["data"]["usage"]["totalTokens"], 2000)
+                self.assertEqual(billing["data"]["usage"]["taskCount"], 1)
+
+                tenant_id = created["data"]["activeTenant"]["id"]
+                current_month = datetime.now(UTC).strftime("%Y-%m")
+                with connect_database(settings.daemon_db_path) as conn:
+                    conn.execute(
+                        """
+                        UPDATE tenant_token_usage_monthly
+                        SET total_tokens = ?, input_tokens = ?
+                        WHERE tenant_id = ? AND month = ?
+                        """,
+                        (200_000, 200_000, tenant_id, current_month),
+                    )
+                    conn.commit()
+
+                blocked = client.post(
+                    "/api/agent-tasks",
+                    headers=headers,
+                    json={"providerId": "codex", "prompt": "应该被 quota 阻止"},
+                ).json()
+                self.assertFalse(blocked["ok"])
+                self.assertEqual(blocked["error"]["code"], "forbidden")
+                self.assertIn("quota", blocked["error"]["message"].lower())
 
     def test_provider_tool_loop_handles_market_and_resume_admin_tools(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

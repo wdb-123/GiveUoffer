@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -59,6 +60,11 @@ class BillingStore:
             )
             conn.commit()
         return self.get_tenant_billing(tenant_id)
+
+    def assert_tenant_can_run_agent(self, tenant_id: str) -> None:
+        billing = self.get_tenant_billing(tenant_id)
+        if billing.get("quota", {}).get("exceeded"):
+            raise PermissionError("Tenant token quota exceeded")
 
     def _tenant(self, conn: sqlite3.Connection, tenant_id: str) -> sqlite3.Row:
         row = conn.execute("SELECT * FROM tenants WHERE id = ?", (tenant_id,)).fetchone()
@@ -130,3 +136,49 @@ def _positive_int(value: Any) -> int:
         return 0
     return numeric if numeric > 0 else 0
 
+
+def record_token_usage_event(conn: sqlite3.Connection, tenant_id: str, task_id: str | None, event: dict[str, Any]) -> None:
+    input_tokens = _positive_int(event.get("inputTokens"))
+    cached_input_tokens = _positive_int(event.get("cachedInputTokens"))
+    output_tokens = _positive_int(event.get("outputTokens"))
+    total_tokens = _positive_int(event.get("totalTokens")) or input_tokens + cached_input_tokens + output_tokens
+    if total_tokens <= 0:
+        return
+    created_at = str(event.get("createdAt") or datetime.now(UTC).isoformat().replace("+00:00", "Z"))
+    month = created_at[:7] if len(created_at) >= 7 else datetime.now(UTC).strftime("%Y-%m")
+    provider_id = str(event.get("providerId") or "") or None
+    model = str(event.get("model") or "") or None
+    conn.execute(
+        """
+        INSERT INTO tenant_token_usage_events
+          (id, tenant_id, task_id, provider_id, model, input_tokens, cached_input_tokens, output_tokens, total_tokens, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            str(uuid.uuid4()),
+            tenant_id,
+            task_id,
+            provider_id,
+            model,
+            input_tokens,
+            cached_input_tokens,
+            output_tokens,
+            total_tokens,
+            created_at,
+        ),
+    )
+    conn.execute(
+        """
+        INSERT INTO tenant_token_usage_monthly
+          (tenant_id, month, input_tokens, cached_input_tokens, output_tokens, total_tokens, task_count, last_used_at)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+        ON CONFLICT(tenant_id, month) DO UPDATE SET
+          input_tokens = input_tokens + excluded.input_tokens,
+          cached_input_tokens = cached_input_tokens + excluded.cached_input_tokens,
+          output_tokens = output_tokens + excluded.output_tokens,
+          total_tokens = total_tokens + excluded.total_tokens,
+          task_count = task_count + 1,
+          last_used_at = excluded.last_used_at
+        """,
+        (tenant_id, month, input_tokens, cached_input_tokens, output_tokens, total_tokens, created_at),
+    )

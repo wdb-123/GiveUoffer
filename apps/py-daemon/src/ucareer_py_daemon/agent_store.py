@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .billing import record_token_usage_event
 from .connectors import ConnectorCredentialStore, import_qq_email_messages
 from .chrome_bridge import ChromeBridgeService
 from .db import connect_database
@@ -510,6 +511,9 @@ class AgentStore:
         with connect_database(self.db_path) as conn:
             if assistant_output:
                 self._append_event(conn, task_id, {"type": "message", "role": "assistant", "text": assistant_output, "createdAt": finished_at})
+                usage = _parse_usage_event(assistant_output, provider_id, finished_at)
+                if usage:
+                    self._append_event(conn, task_id, usage)
             if system_output:
                 self._append_event(conn, task_id, {"type": "message", "role": "system", "text": system_output, "createdAt": finished_at})
             self._append_event(conn, task_id, {"type": "command", "command": command_text, "cwd": str(cwd), "status": "done" if completed.returncode == 0 else "failed", "createdAt": finished_at})
@@ -596,6 +600,8 @@ class AgentStore:
         )
 
     def _append_event(self, conn: Any, task_id: str, event: dict[str, Any]) -> None:
+        if event.get("type") == "usage":
+            record_token_usage_event(conn, self.tenant_id, task_id, event)
         conn.execute(
             "INSERT INTO agent_events (id, tenant_id, task_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
             (
@@ -975,6 +981,43 @@ def _parse_agent_tool_call(output: str) -> dict[str, Any] | None:
         "tool": parsed["tool"],
         "input": parsed.get("input") if isinstance(parsed.get("input"), dict) else {},
     }
+
+
+def _parse_usage_event(output: str, provider_id: str, created_at: str) -> dict[str, Any] | None:
+    matches = list(re.finditer(r"UC_USAGE\s+({[^\n\r]+})", output))
+    raw = matches[-1].group(1) if matches else ""
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    input_tokens = _positive_int(parsed.get("inputTokens", parsed.get("input_tokens")))
+    cached_input_tokens = _positive_int(parsed.get("cachedInputTokens", parsed.get("cached_input_tokens", parsed.get("cache_read_input_tokens"))))
+    output_tokens = _positive_int(parsed.get("outputTokens", parsed.get("output_tokens")))
+    total_tokens = _positive_int(parsed.get("totalTokens", parsed.get("total_tokens"))) or input_tokens + cached_input_tokens + output_tokens
+    if total_tokens <= 0:
+        return None
+    return _drop_empty({
+        "type": "usage",
+        "providerId": str(parsed.get("providerId") or provider_id),
+        "model": str(parsed.get("model") or ""),
+        "inputTokens": input_tokens,
+        "cachedInputTokens": cached_input_tokens,
+        "outputTokens": output_tokens,
+        "totalTokens": total_tokens,
+        "createdAt": created_at,
+    })
+
+
+def _positive_int(value: Any) -> int:
+    try:
+        numeric = int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+    return numeric if numeric > 0 else 0
 
 
 def _execute_agent_tool(

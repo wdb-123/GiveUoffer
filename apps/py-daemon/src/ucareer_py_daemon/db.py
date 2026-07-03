@@ -105,6 +105,25 @@ def ensure_core_schema(conn: sqlite3.Connection) -> None:
           PRIMARY KEY (tenant_id, month)
         );
 
+        CREATE TABLE IF NOT EXISTS tenant_token_usage_events (
+          id TEXT PRIMARY KEY,
+          tenant_id TEXT NOT NULL,
+          task_id TEXT,
+          provider_id TEXT,
+          model TEXT,
+          input_tokens INTEGER NOT NULL DEFAULT 0,
+          cached_input_tokens INTEGER NOT NULL DEFAULT 0,
+          output_tokens INTEGER NOT NULL DEFAULT 0,
+          total_tokens INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_tenant_token_usage_events_tenant_created_at
+          ON tenant_token_usage_events (tenant_id, created_at);
+
+        CREATE INDEX IF NOT EXISTS idx_tenant_token_usage_events_task_id
+          ON tenant_token_usage_events (task_id);
+
         CREATE TABLE IF NOT EXISTS agent_tasks (
           id TEXT PRIMARY KEY,
           tenant_id TEXT,

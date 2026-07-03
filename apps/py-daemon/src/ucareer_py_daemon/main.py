@@ -805,9 +805,7 @@ def _require_found(value: Any, message: str) -> Any:
 
 
 def _create_agent_task_with_quota(billing_store: BillingStore, tenant_id: str, store: AgentStore, payload: dict[str, Any]) -> Any:
-    billing = billing_store.get_tenant_billing(tenant_id)
-    if billing.get("quota", {}).get("exceeded"):
-        raise PermissionError("Tenant token quota exceeded")
+    billing_store.assert_tenant_can_run_agent(tenant_id)
     return store.create_or_continue_task(payload)
 
 
