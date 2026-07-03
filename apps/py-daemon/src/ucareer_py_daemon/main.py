@@ -12,6 +12,8 @@ from .config import Settings, load_settings
 from .db import probe_database
 from .envelope import error, ok
 from .route_manifest import ROUTE_GROUPS
+from .workspace import tenant_workspace_root
+from .workspace_stores import ApplicationStore, ProfileStore, ReportStore, ResumeStore
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -118,6 +120,76 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             lambda session: billing_store.update_tenant_plan(session["activeTenant"]["id"], str(payload.get("planId") or "")),
         )
 
+    @app.get("/api/profile-overview")
+    async def profile_overview(request: Request) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: ProfileStore(root).get_profile_overview(),
+        )
+
+    @app.get("/api/applications")
+    async def applications(request: Request) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "applications.read",
+            lambda root: ApplicationStore(root).list_applications(),
+        )
+
+    @app.get("/api/reports")
+    async def reports(request: Request) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: ReportStore(root).list_reports(),
+        )
+
+    @app.get("/api/report")
+    async def report(request: Request, file: str = "") -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: _require_found(ReportStore(root).get_report(file), "Report not found"),
+        )
+
+    @app.get("/api/resumes")
+    async def resumes(request: Request) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: ResumeStore(root).list_resumes(),
+        )
+
+    @app.get("/api/resume")
+    async def resume(request: Request, file: str = "") -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: _require_found(ResumeStore(root).get_resume(file), "Resume not found"),
+        )
+
+    @app.get("/api/resumes/diagnostics")
+    async def resume_diagnostics(request: Request, resumeFile: str = "") -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.read",
+            lambda root: ResumeStore(root).list_diagnostics(resumeFile),
+        )
+
     return app
 
 
@@ -149,3 +221,20 @@ def _handle_permission(request: Request, auth_store: AuthStore, permission: str,
         return operation(session)
 
     return _handle(run_with_session)
+
+
+def _handle_workspace(request: Request, auth_store: AuthStore, settings: Settings, permission: str, operation) -> dict[str, object]:
+    def run_with_root() -> Any:
+        session = auth_store.require_session(_session_token(request))
+        if permission not in session.get("permissions", []):
+            raise PermissionError(f"Permission required: {permission}")
+        root = tenant_workspace_root(settings.workspace_root, session["activeTenant"]["id"])
+        return operation(root)
+
+    return _handle(run_with_root)
+
+
+def _require_found(value: Any, message: str) -> Any:
+    if value is None:
+        raise ValueError(message)
+    return value

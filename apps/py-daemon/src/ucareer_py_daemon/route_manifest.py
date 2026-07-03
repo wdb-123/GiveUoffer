@@ -46,13 +46,16 @@ ROUTE_GROUPS: list[dict[str, object]] = [
     {
         "domain": "workspace-data",
         "nodeModule": "apps/daemon/src/routes/*-routes.ts",
-        "pythonStatus": "pending",
+        "pythonStatus": "partial-readonly",
         "routes": [
             "GET /api/profile-overview",
             "GET /api/resumes",
+            "GET /api/resume",
+            "GET /api/resumes/diagnostics",
             "GET /api/applications",
-            "GET /api/experience-overview",
             "GET /api/reports",
+            "GET /api/report",
+            "GET /api/experience-overview",
             "GET /api/recruitment-market",
         ],
     },
