@@ -12,7 +12,7 @@ from typing import Any
 from .db import connect_database
 from .providers import get_provider_definition, list_providers
 from .routing import preview_agent_route
-from .workspace_stores import ApplicationStore
+from .workspace_stores import ApplicationStore, EvidenceStore, ExperienceStore, MarketStore, ResumeStore
 
 
 @dataclass
@@ -985,7 +985,77 @@ def _execute_agent_tool(tenant_workspace_root: Path, call: dict[str, Any]) -> di
         return {"tool": tool, "event": applications.update_application_event(payload)}
     if tool == "applications.delete_event":
         return {"tool": tool, "deletedEventId": applications.delete_application_event(payload)}
+    if tool == "market.list":
+        return {"tool": tool, **MarketStore(tenant_workspace_root).get_recruitment_market()}
+    if tool == "market.import":
+        return {"tool": tool, **MarketStore(tenant_workspace_root).import_job(payload)}
+    if tool == "market.delete":
+        return {"tool": tool, "deletedJobId": MarketStore(tenant_workspace_root).delete_job(str(payload.get("id") or ""))}
+    if tool == "resumes.list":
+        return {"tool": tool, "resumes": ResumeStore(tenant_workspace_root).list_resumes()}
+    if tool == "resumes.get":
+        file = str(payload.get("file") or "").strip()
+        resume = ResumeStore(tenant_workspace_root).get_resume(file)
+        if not resume:
+            raise ValueError("Resume not found")
+        return {"tool": tool, "resume": resume}
+    if tool == "resumes.save":
+        resume = ResumeStore(tenant_workspace_root).save_resume(payload)
+        return {"tool": tool, "resume": {"file": resume["file"], "title": resume["title"]}}
+    if tool == "experience.list":
+        overview = ExperienceStore(tenant_workspace_root).get_experience_overview()
+        return {
+            "tool": tool,
+            "updatedAt": overview.get("updatedAt", ""),
+            "files": [_without_large_fields(item, {"content"}) for item in overview.get("files", [])],
+            "photos": [_without_large_fields(item, {"content", "dataUrl"}) for item in overview.get("photos", [])],
+            "intentions": [_without_large_fields(item, {"content"}) for item in overview.get("intentions", [])],
+            "experiences": [_without_large_fields(item, {"sourceContent"}) for item in overview.get("experiences", [])],
+        }
+    if tool == "experience.upsert":
+        overview = ExperienceStore(tenant_workspace_root).get_experience_overview()
+        existing = [_without_large_fields(item, {"sourceContent"}) for item in overview.get("experiences", []) if isinstance(item, dict)]
+        next_item = {
+            "id": str(payload.get("id") or _slugify_tool_id(str(payload.get("title") or "experience"))),
+            "title": str(payload.get("title") or "").strip(),
+            "category": str(payload.get("category") or "").strip(),
+            "role": str(payload.get("role") or "").strip(),
+            "sourceFile": str(payload.get("sourceFile") or "").strip(),
+            "summary": str(payload.get("summary") or "").strip(),
+            "tags": _string_list_tool(payload.get("tags")),
+            "evidence": _string_list_tool(payload.get("evidence")),
+            "gaps": _string_list_tool(payload.get("gaps")),
+            "publicLevel": str(payload.get("publicLevel") or "").strip(),
+        }
+        if not next_item["title"]:
+            raise ValueError("Experience title is required")
+        merged = [item for item in existing if item.get("id") != next_item["id"]]
+        merged.insert(0, next_item)
+        updated = ExperienceStore(tenant_workspace_root).save_experience_metadata({"metadata": {"experiences": merged}})
+        return {"tool": tool, "experience": next_item, "updatedAt": updated.get("updatedAt", "")}
+    if tool == "evidence.list":
+        return {"tool": tool, **EvidenceStore(tenant_workspace_root).list_evidence_requests()}
+    if tool == "evidence.note":
+        return {"tool": tool, **EvidenceStore(tenant_workspace_root).save_evidence_note(payload)}
+    if tool == "evidence.fulfill":
+        return {"tool": tool, **EvidenceStore(tenant_workspace_root).fulfill_evidence_request(payload)}
     raise ValueError(f"Unsupported tool: {tool}")
+
+
+def _without_large_fields(item: Any, fields: set[str]) -> dict[str, Any]:
+    if not isinstance(item, dict):
+        return {}
+    return {key: value for key, value in item.items() if key not in fields}
+
+
+def _string_list_tool(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()]
+
+
+def _slugify_tool_id(value: str) -> str:
+    return re.sub(r"[^a-zA-Z0-9_-]+", "-", value.strip().lower()).strip("-") or "experience"
 
 
 def _drop_empty(value: dict[str, Any]) -> dict[str, Any]:

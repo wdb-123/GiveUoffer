@@ -1095,6 +1095,74 @@ class PythonDaemonContractTest(unittest.TestCase):
                 self.assertEqual(written["company"], "无界智航")
                 self.assertEqual(written["statusKey"], "offer")
 
+    def test_provider_tool_loop_handles_resume_experience_and_evidence_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_codex = root / "fake-codex-workspace-tools"
+            fake_codex.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, sys\n"
+                "prompt = sys.argv[2] if len(sys.argv) > 2 else ''\n"
+                "def call(tool, data): print('UC_TOOL_CALL ' + json.dumps({'tool': tool, 'input': data}, ensure_ascii=False))\n"
+                "if 'UC_TOOL_RESULT for evidence.note' in prompt:\n"
+                "    print('workspace tools done')\n"
+                "elif 'UC_TOOL_RESULT for experience.upsert' in prompt:\n"
+                "    call('evidence.note', {'title': '复盘记录', 'content': 'Python evidence note'})\n"
+                "elif 'UC_TOOL_RESULT for resumes.save' in prompt:\n"
+                "    call('experience.upsert', {'id': 'exp-python-agent', 'title': 'Python Agent 工具循环', 'summary': '由 Python 后端写入'})\n"
+                "else:\n"
+                "    call('resumes.save', {'file': 'agent-python-resume.md', 'title': 'Agent Python Resume', 'markdown': '# Agent Python Resume\\n\\n由 Python 后端保存。'})\n",
+                encoding="utf-8",
+            )
+            fake_codex.chmod(0o755)
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=root,
+                daemon_db_path=root / ".ucareer" / "daemon.sqlite",
+            )
+            with mock.patch.dict("os.environ", {"CODEX_BIN": str(fake_codex)}):
+                client = TestClient(create_app(settings))
+                created = client.post(
+                    "/api/auth/create-account",
+                    json={
+                        "email": "workspace-tools@example.com",
+                        "password": "Password123",
+                        "displayName": "Workspace Tools",
+                        "tenantName": "Workspace Tools",
+                    },
+                ).json()
+                self.assertTrue(created["ok"])
+                headers = {"x-ucareer-session": created["data"]["token"]}
+                tenant_workspace = root / "workspace" / "tenants" / created["data"]["activeTenant"]["id"] / "workspace"
+
+                created_task = client.post(
+                    "/api/agent-tasks",
+                    headers=headers,
+                    json={"providerId": "codex", "prompt": "保存简历、经历和证据笔记"},
+                ).json()
+                self.assertTrue(created_task["ok"])
+                task_id = created_task["data"]["task"]["id"]
+                approval_id = created_task["data"]["approval"]["id"]
+                decision = client.post(f"/api/approvals/{approval_id}/decision", headers=headers, json={"decision": "allow_once"}).json()
+                self.assertTrue(decision["ok"])
+
+                task = client.get(f"/api/agent-tasks/{task_id}", headers=headers).json()
+                self.assertTrue(task["ok"])
+                self.assertEqual(task["data"]["status"], "completed")
+                events = client.get(f"/api/agent-tasks/{task_id}/events", headers=headers).json()
+                output_text = "\n".join(str(event.get("text") or "") for event in events["data"])
+                self.assertIn("UC_TOOL_RESULT", output_text)
+                self.assertIn("workspace tools done", output_text)
+
+                resume_path = tenant_workspace / "resumes" / "library" / "agent-python-resume.md"
+                self.assertTrue(resume_path.exists())
+                self.assertIn("Agent Python Resume", resume_path.read_text(encoding="utf-8"))
+                experience_path = tenant_workspace / "ops" / "data" / "experience-metadata.json"
+                self.assertIn("exp-python-agent", experience_path.read_text(encoding="utf-8"))
+                evidence_path = tenant_workspace / "jobs" / "project-notes" / "evidence.md"
+                self.assertIn("Python evidence note", evidence_path.read_text(encoding="utf-8"))
+
     def test_jobsearch_routes_run_from_python_daemon_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
