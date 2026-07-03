@@ -58,6 +58,8 @@ ROUTE_GROUPS: list[dict[str, object]] = [
             "GET /api/resumes",
             "GET /api/resume",
             "GET /api/resumes/diagnostics",
+            "POST /api/resumes/save-generated",
+            "POST /api/resumes/save",
             "GET /api/applications",
             "POST /api/application-events",
             "POST /api/application-events/update",

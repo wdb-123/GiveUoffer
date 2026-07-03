@@ -221,6 +221,26 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             lambda root: ResumeStore(root).list_diagnostics(resumeFile),
         )
 
+    @app.post("/api/resumes/save-generated")
+    async def save_generated_resume(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.write",
+            lambda root: ResumeStore(root).save_generated_resume(payload),
+        )
+
+    @app.post("/api/resumes/save")
+    async def save_resume(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.write",
+            lambda root: ResumeStore(root).save_resume(payload),
+        )
+
     @app.get("/api/experience-overview")
     async def experience_overview(request: Request) -> dict[str, object]:
         return _handle_workspace(

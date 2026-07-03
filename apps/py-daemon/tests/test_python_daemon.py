@@ -208,6 +208,38 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertTrue(resume["ok"])
             self.assertEqual(resume["data"]["title"], "Robot Resume")
 
+            saved_generated = client.post(
+                "/api/resumes/save-generated",
+                headers=headers,
+                json={
+                    "title": "韦东波 - 机器人软件工程师",
+                    "markdown": "## Summary\nRobot resume.",
+                    "baseFile": "robot-resume.md",
+                    "targetJobId": "MJ-001",
+                    "targetJobTitle": "Demo Corp · Robot Engineer",
+                },
+            ).json()
+            self.assertTrue(saved_generated["ok"])
+            self.assertTrue(saved_generated["data"]["file"].endswith(".md"))
+            self.assertIn("# 韦东波 - 机器人软件工程师", (tenant_workspace / "resumes" / "library" / saved_generated["data"]["file"]).read_text(encoding="utf-8"))
+
+            saved_resume = client.post(
+                "/api/resumes/save",
+                headers=headers,
+                json={
+                    "file": "custom-resume.md",
+                    "title": "Custom Resume",
+                    "markdown": "Custom content.",
+                    "targetJobId": "MJ-001",
+                    "targetJobTitle": "Demo Corp · Robot Engineer",
+                },
+            ).json()
+            self.assertTrue(saved_resume["ok"])
+            self.assertEqual(saved_resume["data"]["file"], "custom-resume.md")
+            self.assertIn("# Custom Resume", saved_resume["data"]["markdown"])
+            links_text = (tenant_workspace / "ops" / "data" / "resume-job-links.json").read_text(encoding="utf-8")
+            self.assertIn("custom-resume.md", links_text)
+
             diagnostics = client.get("/api/resumes/diagnostics?resumeFile=robot-resume.md", headers=headers).json()
             self.assertTrue(diagnostics["ok"])
             self.assertEqual(diagnostics["data"][0]["resumeFile"], "robot-resume.md")

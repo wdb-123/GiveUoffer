@@ -160,6 +160,63 @@ class ResumeStore:
             reports = [item for item in reports if item.get("resumeFile") == resume_file or item["file"].startswith(Path(resume_file).stem)]
         return sorted(reports, key=lambda item: item.get("updatedAt", ""), reverse=True)
 
+    def save_generated_resume(self, payload: dict[str, Any]) -> dict[str, Any]:
+        title = str(payload.get("title") or "").strip() or _markdown_title(str(payload.get("markdown") or "")) or "generated-resume"
+        markdown = _normalize_resume_markdown(title, str(payload.get("markdown") or ""))
+        resumes_dir = workspace_data_path(self.workspace_root, "resumeLibrary")
+        resumes_dir.mkdir(parents=True, exist_ok=True)
+        existing = [item["file"] for item in self.list_resumes()]
+        target_job_title = str(payload.get("targetJobTitle") or "").strip()
+        file = _next_readable_resume_file(title, target_job_title, existing)
+        (resumes_dir / file).write_text(markdown, encoding="utf-8")
+        generated_at = _now_iso()
+        company, role = _split_target_job_title(target_job_title)
+        _upsert_resume_job_link(workspace_data_path(self.workspace_root, "resumeJobLinks"), {
+            "file": file,
+            "title": title,
+            "baseFile": str(payload.get("baseFile") or ""),
+            "jobId": str(payload.get("targetJobId") or ""),
+            "jobTitle": target_job_title,
+            "company": company,
+            "role": role,
+            "generatedAt": generated_at,
+            "engine": "local-preview",
+        })
+        return {
+            "file": file,
+            "title": title,
+            "baseFile": str(payload.get("baseFile") or ""),
+            "targetJobId": str(payload.get("targetJobId") or ""),
+            "targetJobTitle": target_job_title,
+            "generatedAt": generated_at,
+        }
+
+    def save_resume(self, payload: dict[str, Any]) -> dict[str, Any]:
+        title = str(payload.get("title") or "").strip() or _markdown_title(str(payload.get("markdown") or "")) or "generated-resume"
+        markdown = _normalize_resume_markdown(title, str(payload.get("markdown") or ""))
+        resumes_dir = workspace_data_path(self.workspace_root, "resumeLibrary")
+        existing = [item["file"] for item in self.list_resumes()]
+        target_job_title = str(payload.get("targetJobTitle") or "").strip()
+        requested_file = str(payload.get("file") or "").strip()
+        file = requested_file if _is_resume_markdown_file(requested_file) else _next_readable_resume_file(title, target_job_title, existing)
+        path = safe_child(resumes_dir, file)
+        resumes_dir.mkdir(parents=True, exist_ok=True)
+        path.write_text(markdown, encoding="utf-8")
+        if payload.get("targetJobId") or target_job_title or payload.get("baseFile"):
+            company, role = _split_target_job_title(target_job_title)
+            _upsert_resume_job_link(workspace_data_path(self.workspace_root, "resumeJobLinks"), {
+                "file": file,
+                "title": title,
+                "baseFile": str(payload.get("baseFile") or ""),
+                "jobId": str(payload.get("targetJobId") or ""),
+                "jobTitle": target_job_title,
+                "company": company,
+                "role": role,
+                "generatedAt": _now_iso(),
+                "engine": "agent-tool",
+            })
+        return {"file": file, "title": title, "markdown": markdown}
+
 
 @dataclass
 class ExperienceStore:
@@ -1058,6 +1115,62 @@ def _first_meaningful_line(content: str) -> str:
 
 def _is_markdown_file(file: str) -> bool:
     return bool(re.match(r"^[^/\\]+\.md$", file)) and not file.startswith(".")
+
+
+def _is_resume_markdown_file(file: str) -> bool:
+    return _is_markdown_file(file) and file not in {"README.md", "ARCHITECTURE.md"}
+
+
+def _normalize_resume_markdown(title: str, markdown: str) -> str:
+    text = str(markdown or "").strip()
+    if not text:
+        raise ValueError("Generated resume markdown is required")
+    normalized = text if text.startswith("# ") else f"# {title}\n\n{text}"
+    return f"{normalized.strip()}\n"
+
+
+def _next_readable_resume_file(title: str, target_job_title: str, existing_files: list[str]) -> str:
+    base = _readable_resume_name(title, target_job_title)
+    used = set(existing_files)
+    candidate = f"{base}.md"
+    index = 2
+    while candidate in used:
+        candidate = f"{base}-{index}.md"
+        index += 1
+    return candidate
+
+
+def _readable_resume_name(title: str, target_job_title: str) -> str:
+    cleaned_title = _strip_person_name(title)
+    company, role = _split_target_job_title(target_job_title)
+    target_role = _resume_name_part(role or cleaned_title or "机器人系统工程师")
+    suffix = _resume_name_part(company) if company else "通用"
+    return _slugify_filename(f"简历-{target_role}-{suffix}")
+
+
+def _strip_person_name(title: str) -> str:
+    return re.sub(r"^[\u4e00-\u9fa5]{2,4}\s*[-—–]\s*", "", str(title or "")).strip()
+
+
+def _resume_name_part(value: str) -> str:
+    cleaned = re.sub(r"[\\/|:*?\"<>]", "-", re.sub(r"\s+", "", re.sub(r"[【】\[\]（）()]", " ", str(value or ""))))
+    return re.sub(r"-+", "-", cleaned).strip("-")[:32] or "通用"
+
+
+def _split_target_job_title(value: str) -> tuple[str, str]:
+    parts = [part.strip() for part in re.split(r"\s*[·|-]\s*", str(value or ""), maxsplit=1) if part.strip()]
+    if len(parts) >= 2:
+        return parts[0], parts[1]
+    return "", parts[0] if parts else ""
+
+
+def _upsert_resume_job_link(path: Path, link: dict[str, Any]) -> None:
+    store = _read_json(path, {"links": []})
+    links = store.get("links") if isinstance(store, dict) and isinstance(store.get("links"), list) else []
+    next_links = [item for item in links if isinstance(item, dict) and item.get("file") != link.get("file")]
+    next_links.append(link)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"updatedAt": _now_iso(), "links": next_links}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def _score(value: str) -> float:
