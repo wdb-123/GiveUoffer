@@ -37,6 +37,20 @@ ROUTE_GROUPS: list[dict[str, object]] = [
         "routes": ["GET /api/sync/outbox", "POST /api/sync/mark-pushed", "POST /api/sync/push-to-cloud"],
     },
     {
+        "domain": "connectors",
+        "nodeModule": "apps/daemon/src/routes/connector-routes.ts",
+        "pythonStatus": "implemented",
+        "routes": [
+            "GET /api/connectors",
+            "GET /api/connectors/:connectorId",
+            "POST /api/connectors/qq-email/test",
+            "GET /api/connectors/qq-email/credential",
+            "POST /api/connectors/qq-email/credential",
+            "POST /api/connectors/qq-email/messages",
+            "POST /api/connectors/qq-email/attachments",
+        ],
+    },
+    {
         "domain": "agent-execution",
         "nodeModule": "apps/daemon/src/routes/agent-routes.ts",
         "pythonStatus": "partial-readonly",

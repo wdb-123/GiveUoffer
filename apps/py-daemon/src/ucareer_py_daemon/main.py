@@ -11,6 +11,7 @@ from .attachments import AttachmentStore
 from .auth import AuthStore
 from .billing import BillingStore
 from .config import Settings, load_settings
+from .connectors import ConnectorCredentialStore, get_connector, import_qq_email_attachments, import_qq_email_messages, list_connectors, test_qq_email_connection
 from .db import probe_database
 from .envelope import error, ok
 from .memory import get_memory_snapshot
@@ -136,6 +137,72 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not status:
             return error("provider_not_found", f"Provider not found: {provider_id}")
         return ok(status)
+
+    @app.get("/api/connectors")
+    async def connectors() -> dict[str, object]:
+        return ok(list_connectors())
+
+    @app.get("/api/connectors/{connector_id}")
+    async def connector(connector_id: str) -> dict[str, object]:
+        value = get_connector(connector_id)
+        if not value:
+            return error("connector_not_found", f"Connector not found: {connector_id}")
+        return ok(value)
+
+    @app.post("/api/connectors/qq-email/test")
+    async def qq_email_test(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_permission(
+            request,
+            auth_store,
+            "applications.read",
+            lambda _session: test_qq_email_connection(payload),
+        )
+
+    @app.get("/api/connectors/qq-email/credential")
+    async def qq_email_credential(request: Request) -> dict[str, object]:
+        return _handle_connector_store(
+            request,
+            auth_store,
+            settings,
+            "applications.read",
+            lambda store, _root: store.get_summary("qq-email"),
+        )
+
+    @app.post("/api/connectors/qq-email/credential")
+    async def save_qq_email_credential(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_connector_store(
+            request,
+            auth_store,
+            settings,
+            "applications.write",
+            lambda store, _root: store.save_qq_email(payload),
+        )
+
+    @app.post("/api/connectors/qq-email/messages")
+    async def qq_email_messages(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        def run(store: ConnectorCredentialStore, _root) -> Any:
+            credential = store.get_secret("qq-email")
+            if not credential:
+                raise LookupError("请先连接并保存 QQ 邮箱 IMAP 授权码")
+            return import_qq_email_messages(credential, payload)
+
+        result = _handle_connector_store(request, auth_store, settings, "applications.read", run)
+        if not result.get("ok") and result.get("error", {}).get("code") == "not_found":
+            return error("qq_email_credential_missing", str(result.get("error", {}).get("message", "")))
+        return result
+
+    @app.post("/api/connectors/qq-email/attachments")
+    async def qq_email_attachments(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        def run(store: ConnectorCredentialStore, root) -> Any:
+            credential = store.get_secret("qq-email")
+            if not credential:
+                raise LookupError("请先连接并保存 QQ 邮箱 IMAP 授权码")
+            return import_qq_email_attachments(credential, payload, root)
+
+        result = _handle_connector_store(request, auth_store, settings, "applications.write", run)
+        if not result.get("ok") and result.get("error", {}).get("code") == "not_found":
+            return error("qq_email_credential_missing", str(result.get("error", {}).get("message", "")))
+        return result
 
     @app.get("/api/sync/outbox")
     async def sync_outbox(request: Request, limit: int = 100) -> dict[str, object]:
@@ -535,6 +602,8 @@ def _session_token(request: Request) -> str:
 def _handle(operation) -> dict[str, object]:
     try:
         return ok(operation())
+    except LookupError as cause:
+        return error("not_found", str(cause))
     except PermissionError as cause:
         return error("forbidden", str(cause))
     except ValueError as cause:
@@ -588,6 +657,17 @@ def _handle_agent_store_with_session(request: Request, auth_store: AuthStore, se
             raise PermissionError(f"Permission required: {permission}")
         root = tenant_workspace_root(settings.workspace_root, session["activeTenant"]["id"])
         return operation(AgentStore(settings.daemon_db_path, session["activeTenant"]["id"], root), session)
+
+    return _handle(run_with_store)
+
+
+def _handle_connector_store(request: Request, auth_store: AuthStore, settings: Settings, permission: str, operation) -> dict[str, object]:
+    def run_with_store() -> Any:
+        session = auth_store.require_session(_session_token(request))
+        if permission not in session.get("permissions", []):
+            raise PermissionError(f"Permission required: {permission}")
+        root = tenant_workspace_root(settings.workspace_root, session["activeTenant"]["id"])
+        return operation(ConnectorCredentialStore(settings.daemon_db_path, root, session["activeTenant"]["id"]), root)
 
     return _handle(run_with_store)
 

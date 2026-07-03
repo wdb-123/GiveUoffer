@@ -171,6 +171,83 @@ class PythonDaemonContractTest(unittest.TestCase):
         self.assertEqual(items["applications.history"]["summary"], "2/3 source path(s) available")
         self.assertTrue(items["runtime.workflow_traces"]["available"])
 
+    def test_connector_registry_and_qq_email_credentials_are_tenant_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=Path(tmp),
+                daemon_db_path=Path(tmp) / ".ucareer" / "daemon.sqlite",
+            )
+            client = TestClient(create_app(settings))
+
+            connectors = client.get("/api/connectors").json()
+            self.assertTrue(connectors["ok"])
+            self.assertIn("qq-email", {connector["id"] for connector in connectors["data"]["connectors"]})
+
+            qq_email = client.get("/api/connectors/qq-email").json()
+            self.assertTrue(qq_email["ok"])
+            self.assertEqual(qq_email["data"]["protocol"]["host"], "imap.qq.com")
+
+            missing_connector = client.get("/api/connectors/missing").json()
+            self.assertFalse(missing_connector["ok"])
+            self.assertEqual(missing_connector["error"]["code"], "connector_not_found")
+
+            tenant_a = client.post(
+                "/api/auth/create-account",
+                json={"email": "connector-a@example.com", "password": "Password123", "displayName": "A", "tenantName": "A Workspace"},
+            ).json()
+            tenant_b = client.post(
+                "/api/auth/create-account",
+                json={"email": "connector-b@example.com", "password": "Password123", "displayName": "B", "tenantName": "B Workspace"},
+            ).json()
+            self.assertTrue(tenant_a["ok"])
+            self.assertTrue(tenant_b["ok"])
+            headers_a = {"x-ucareer-session": tenant_a["data"]["token"]}
+            headers_b = {"x-ucareer-session": tenant_b["data"]["token"]}
+
+            before_save = client.get("/api/connectors/qq-email/credential", headers=headers_a).json()
+            self.assertTrue(before_save["ok"])
+            self.assertIsNone(before_save["data"])
+
+            saved = client.post(
+                "/api/connectors/qq-email/credential",
+                headers=headers_a,
+                json={"email": "USER@qq.com", "authorizationCode": " abcd efgh ", "verifiedAt": "2026-07-03T00:00:00Z"},
+            ).json()
+            self.assertTrue(saved["ok"])
+            self.assertEqual(saved["data"]["connectorId"], "qq-email")
+            self.assertEqual(saved["data"]["account"], "user@qq.com")
+            self.assertTrue(saved["data"]["secretStored"])
+            self.assertNotIn("authorizationCode", saved["data"])
+            self.assertNotIn("secret", saved["data"])
+
+            summary_a = client.get("/api/connectors/qq-email/credential", headers=headers_a).json()
+            self.assertTrue(summary_a["ok"])
+            self.assertEqual(summary_a["data"]["account"], "user@qq.com")
+
+            summary_b = client.get("/api/connectors/qq-email/credential", headers=headers_b).json()
+            self.assertTrue(summary_b["ok"])
+            self.assertIsNone(summary_b["data"])
+
+            missing_messages = client.post(
+                "/api/connectors/qq-email/messages",
+                headers=headers_b,
+                json={"query": "all", "limit": 1},
+            ).json()
+            self.assertFalse(missing_messages["ok"])
+            self.assertEqual(missing_messages["error"]["code"], "qq_email_credential_missing")
+
+            with connect_database(settings.daemon_db_path) as conn:
+                row = conn.execute(
+                    "SELECT * FROM connector_credentials WHERE tenant_id = ? AND connector_id = ?",
+                    (tenant_a["data"]["activeTenant"]["id"], "qq-email"),
+                ).fetchone()
+            self.assertIsNotNone(row)
+            self.assertEqual(row["account"], "user@qq.com")
+            self.assertNotEqual(row["secret_ciphertext"], "abcdefgh")
+            self.assertTrue((Path(tmp) / "workspace" / "tenants" / tenant_a["data"]["activeTenant"]["id"] / ".ucareer" / "connector.key").exists())
+
     def test_auth_tenant_and_billing_routes_use_shared_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = Settings(

@@ -222,6 +222,22 @@ def ensure_core_schema(conn: sqlite3.Connection) -> None:
 
         CREATE INDEX IF NOT EXISTS idx_sync_events_tenant_pushed_id
           ON sync_events (tenant_id, pushed_at, id);
+
+        CREATE TABLE IF NOT EXISTS connector_credentials (
+          tenant_id TEXT NOT NULL DEFAULT 'legacy',
+          connector_id TEXT NOT NULL,
+          account TEXT NOT NULL,
+          secret_ciphertext TEXT NOT NULL,
+          secret_iv TEXT NOT NULL,
+          secret_auth_tag TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          verified_at TEXT,
+          PRIMARY KEY (tenant_id, connector_id)
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_connector_credentials_tenant_connector
+          ON connector_credentials (tenant_id, connector_id);
         """
     )
     conn.commit()

@@ -6,8 +6,8 @@ requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115",
   "uvicorn>=0.30",
+  "cryptography>=42",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-
