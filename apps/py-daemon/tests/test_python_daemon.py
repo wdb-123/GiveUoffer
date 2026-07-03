@@ -1163,6 +1163,92 @@ class PythonDaemonContractTest(unittest.TestCase):
                 evidence_path = tenant_workspace / "jobs" / "project-notes" / "evidence.md"
                 self.assertIn("Python evidence note", evidence_path.read_text(encoding="utf-8"))
 
+    def test_provider_tool_loop_handles_mailbox_and_jobsearch_tools(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fake_codex = root / "fake-codex-mailbox-jobsearch"
+            fake_codex.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json, sys\n"
+                "prompt = sys.argv[2] if len(sys.argv) > 2 else ''\n"
+                "def call(tool, data): print('UC_TOOL_CALL ' + json.dumps({'tool': tool, 'input': data}, ensure_ascii=False))\n"
+                "if 'UC_TOOL_RESULT for jobsearch.search_jobs' in prompt:\n"
+                "    print('mailbox and jobsearch done')\n"
+                "elif 'UC_TOOL_RESULT for mailbox.search_messages' in prompt:\n"
+                "    call('jobsearch.search_jobs', {'source': 'portals', 'queries': ['机器人'], 'max': 1, 'dryRun': True})\n"
+                "else:\n"
+                "    call('mailbox.search_messages', {'query': 'all', 'limit': 2, 'subject': 'offer'})\n",
+                encoding="utf-8",
+            )
+            fake_codex.chmod(0o755)
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=root,
+                daemon_db_path=root / ".ucareer" / "daemon.sqlite",
+            )
+            fake_mailbox_result = {
+                "connectorId": "qq-email",
+                "account": "tester@qq.com",
+                "mailbox": "INBOX",
+                "importedAt": "2026-07-03T00:00:00Z",
+                "messages": [
+                    {
+                        "uid": "1",
+                        "mailbox": "INBOX",
+                        "from": "hr@example.com",
+                        "subject": "Offer",
+                        "date": "2026-07-03",
+                        "snippet": "offer attached",
+                    }
+                ],
+            }
+            with (
+                mock.patch.dict("os.environ", {"CODEX_BIN": str(fake_codex)}),
+                mock.patch("ucareer_py_daemon.agent_store.import_qq_email_messages", return_value=fake_mailbox_result) as mailbox_mock,
+            ):
+                client = TestClient(create_app(settings))
+                created = client.post(
+                    "/api/auth/create-account",
+                    json={
+                        "email": "mailbox-jobsearch@example.com",
+                        "password": "Password123",
+                        "displayName": "Mailbox Jobsearch",
+                        "tenantName": "Mailbox Jobsearch",
+                    },
+                ).json()
+                self.assertTrue(created["ok"])
+                headers = {"x-ucareer-session": created["data"]["token"]}
+                credential = client.post(
+                    "/api/connectors/qq-email/credential",
+                    headers=headers,
+                    json={"email": "tester@qq.com", "authorizationCode": "abcdefghijklmnop"},
+                ).json()
+                self.assertTrue(credential["ok"])
+
+                created_task = client.post(
+                    "/api/agent-tasks",
+                    headers=headers,
+                    json={"providerId": "codex", "prompt": "查邮箱 offer，再搜岗位"},
+                ).json()
+                self.assertTrue(created_task["ok"])
+                task_id = created_task["data"]["task"]["id"]
+                approval_id = created_task["data"]["approval"]["id"]
+
+                decision = client.post(f"/api/approvals/{approval_id}/decision", headers=headers, json={"decision": "allow_once"}).json()
+                self.assertTrue(decision["ok"])
+
+                task = client.get(f"/api/agent-tasks/{task_id}", headers=headers).json()
+                self.assertTrue(task["ok"])
+                self.assertEqual(task["data"]["status"], "completed")
+                events = client.get(f"/api/agent-tasks/{task_id}/events", headers=headers).json()
+                output_text = "\n".join(str(event.get("text") or "") for event in events["data"])
+                self.assertIn('"tool": "mailbox.search_messages"', output_text)
+                self.assertIn('"tool": "jobsearch.search_jobs"', output_text)
+                self.assertIn("te***@qq.com", output_text)
+                self.assertIn("mailbox and jobsearch done", output_text)
+                mailbox_mock.assert_called_once()
+
     def test_jobsearch_routes_run_from_python_daemon_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

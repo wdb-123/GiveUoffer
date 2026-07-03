@@ -9,7 +9,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .connectors import ConnectorCredentialStore, import_qq_email_messages
 from .db import connect_database
+from .jobsearch import JobSearchService
 from .providers import get_provider_definition, list_providers
 from .routing import preview_agent_route
 from .workspace_stores import ApplicationStore, EvidenceStore, ExperienceStore, MarketStore, ResumeStore
@@ -463,7 +465,7 @@ class AgentStore:
                 self.update_task_status(task_id, "completed")
                 return
             try:
-                tool_result = _execute_agent_tool(self.tenant_workspace_root, tool_call)
+                tool_result = _execute_agent_tool(self.db_path, self.tenant_id, self.tenant_workspace_root, tool_call)
             except Exception as cause:
                 failure = str(cause)
                 self._append_error_event(task_id, failure, str(provider["id"]))
@@ -973,7 +975,7 @@ def _parse_agent_tool_call(output: str) -> dict[str, Any] | None:
     }
 
 
-def _execute_agent_tool(tenant_workspace_root: Path, call: dict[str, Any]) -> dict[str, Any]:
+def _execute_agent_tool(db_path: Path, tenant_id: str, tenant_workspace_root: Path, call: dict[str, Any]) -> dict[str, Any]:
     tool = str(call.get("tool") or "")
     payload = call.get("input") if isinstance(call.get("input"), dict) else {}
     applications = ApplicationStore(tenant_workspace_root)
@@ -1039,7 +1041,82 @@ def _execute_agent_tool(tenant_workspace_root: Path, call: dict[str, Any]) -> di
         return {"tool": tool, **EvidenceStore(tenant_workspace_root).save_evidence_note(payload)}
     if tool == "evidence.fulfill":
         return {"tool": tool, **EvidenceStore(tenant_workspace_root).fulfill_evidence_request(payload)}
+    if tool == "mailbox.search_messages":
+        credential = ConnectorCredentialStore(db_path, tenant_workspace_root, tenant_id).get_secret("qq-email")
+        if not credential:
+            raise ValueError("QQ 邮箱尚未连接：请先在邮箱连接器里保存 QQ 邮箱 IMAP 授权码，然后重试。")
+        result = import_qq_email_messages(credential, payload)
+        messages = result.get("messages") if isinstance(result.get("messages"), list) else []
+        return {
+            "tool": tool,
+            "input": payload,
+            "connectorKind": "mailbox",
+            "connectorId": result.get("connectorId", "qq-email"),
+            "connectorLabel": "QQ邮箱",
+            "protocol": "IMAP readonly",
+            "account": _redact_email(str(result.get("account") or credential.get("account") or "")),
+            "mailbox": result.get("mailbox", "INBOX"),
+            "importedAt": result.get("importedAt", ""),
+            "messages": [_safe_email_message(message) for message in messages[:40] if isinstance(message, dict)],
+            "omittedMessages": max(0, len(messages) - 40),
+        }
+    if tool == "jobsearch.search_jobs":
+        result = JobSearchService(tenant_workspace_root).search(payload)
+        jobs = result.get("jobs") if isinstance(result.get("jobs"), list) else []
+        return {
+            "tool": tool,
+            "input": payload,
+            "connectorKind": "job_board",
+            "connectorId": "jobsearch",
+            "connectorLabel": "jobsearch",
+            "protocol": "local search module",
+            "runId": result.get("runId", ""),
+            "status": result.get("status", ""),
+            "startedAt": result.get("startedAt", ""),
+            "completedAt": result.get("completedAt", ""),
+            "stats": {
+                "added": result.get("added", 0),
+                "candidatesSeen": result.get("candidatesSeen", 0),
+                "duplicatesSkipped": result.get("duplicatesSkipped", 0),
+                "failedQueries": result.get("failedQueries", 0),
+            },
+            "message": result.get("message", ""),
+            "jobs": [_safe_job_summary(job) for job in jobs[:20] if isinstance(job, dict)],
+            "omittedJobs": max(0, len(jobs) - 20),
+        }
     raise ValueError(f"Unsupported tool: {tool}")
+
+
+def _safe_email_message(message: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in {
+            "uid": message.get("uid"),
+            "mailbox": message.get("mailbox"),
+            "date": message.get("date"),
+            "from": message.get("from"),
+            "subject": message.get("subject"),
+            "snippet": message.get("snippet"),
+            "attachments": message.get("attachments"),
+        }.items()
+        if not _is_empty_tool_value(value)
+    }
+
+
+def _safe_job_summary(job: dict[str, Any]) -> dict[str, Any]:
+    keys = ["id", "company", "role", "title", "location", "salary", "source", "platform", "url", "jdPath", "direction", "keywords", "matchScore", "fitReason", "evidenceGap"]
+    return {key: job[key] for key in keys if key in job and not _is_empty_tool_value(job[key])}
+
+
+def _is_empty_tool_value(value: Any) -> bool:
+    return value is None or value == "" or value == []
+
+
+def _redact_email(value: str) -> str:
+    if "@" not in value:
+        return value
+    name, domain = value.split("@", 1)
+    return f"{name[:2]}***@{domain}"
 
 
 def _without_large_fields(item: Any, fields: set[str]) -> dict[str, Any]:
