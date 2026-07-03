@@ -250,6 +250,41 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertEqual(market["data"]["jobsCount"], 1)
             self.assertEqual(market["data"]["jobs"][0]["id"], "MJ-001")
 
+            imported_job = client.post(
+                "/api/recruitment-market/import",
+                headers=headers,
+                json={
+                    "url": "https://example.com/jobs/robot",
+                    "description": "职位: 机器人软件工程师\n公司: Future Robot\n薪资: 30-45K\n地点: 深圳\n岗位职责: ROS2 MoveIt 控制算法",
+                    "source": "manual-test",
+                },
+            ).json()
+            self.assertTrue(imported_job["ok"])
+            self.assertTrue(imported_job["data"]["imported"])
+            self.assertEqual(imported_job["data"]["job"]["id"], "MJ-002")
+            self.assertEqual(imported_job["data"]["job"]["company"], "Future Robot")
+            self.assertTrue((tenant_workspace / "jobs" / "jds").exists())
+
+            duplicate_job = client.post(
+                "/api/recruitment-market/import",
+                headers=headers,
+                json={
+                    "url": "https://example.com/jobs/robot",
+                    "description": "职位: 机器人软件工程师\n公司: Future Robot\n岗位职责: ROS2",
+                    "source": "manual-test",
+                },
+            ).json()
+            self.assertTrue(duplicate_job["ok"])
+            self.assertFalse(duplicate_job["data"]["imported"])
+            after_import = client.get("/api/recruitment-market", headers=headers).json()
+            self.assertEqual(after_import["data"]["jobsCount"], 2)
+
+            deleted_job = client.delete("/api/recruitment-market/MJ-002", headers=headers).json()
+            self.assertTrue(deleted_job["ok"])
+            self.assertEqual(deleted_job["data"]["deletedJobId"], "MJ-002")
+            after_delete = client.get("/api/recruitment-market", headers=headers).json()
+            self.assertEqual(after_delete["data"]["jobsCount"], 1)
+
             evidence = client.get("/api/evidence-requests", headers=headers).json()
             self.assertTrue(evidence["ok"])
             self.assertEqual(evidence["data"]["summary"]["open"], 1)

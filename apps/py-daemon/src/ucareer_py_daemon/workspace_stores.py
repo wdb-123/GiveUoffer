@@ -208,6 +208,95 @@ class MarketStore:
         jobs = legacy_jobs if legacy_jobs else chunk_jobs
         return {**base, "jobs": jobs, "jobsCount": len(jobs)}
 
+    def import_job(self, payload: dict[str, Any]) -> dict[str, Any]:
+        url = str(payload.get("url") or "").strip()
+        description = str(payload.get("description") or payload.get("rawText") or "").strip()
+        if not url and not description:
+            raise ValueError("请粘贴岗位链接或岗位描述")
+        if _is_boss_list_summary(description, url):
+            raise ValueError("当前内容是 Boss 列表/首页摘要。请打开具体岗位详情页后再导入。")
+        if url and not description:
+            raise ValueError("没有读取到岗位页面正文，已停止导入以避免生成待解析占位岗位。请打开可见岗位详情页后重试，或粘贴完整 JD 文本。")
+
+        market_path = workspace_data_path(self.workspace_root, "recruitmentMarket")
+        market = self.get_recruitment_market()
+        jobs = [job for job in market.get("jobs", []) if isinstance(job, dict)]
+        now = _local_date()
+        normalized_url = _normalize_url(url)
+        existing_index = next((index for index, job in enumerate(jobs) if normalized_url and _normalize_url(str(job.get("url") or "")) == normalized_url), -1)
+        if existing_index >= 0:
+            current = jobs[existing_index]
+            parsed = _parse_job_text(description, url) if description else {}
+            jd_path = current.get("jdPath")
+            if description and not jd_path:
+                jd_path = _write_job_description_file(self.workspace_root, {
+                    "description": description,
+                    "id": str(current.get("id") or "MJ-001"),
+                    "source": str(current.get("source") or payload.get("source") or "手工导入"),
+                    "url": str(current.get("url") or url),
+                    "company": str(current.get("company") or parsed.get("company") or ""),
+                    "role": str(current.get("role") or parsed.get("role") or ""),
+                    "salary": str(current.get("salary") or parsed.get("salary") or ""),
+                })
+            updated = {
+                **current,
+                "source": str(current.get("source") or payload.get("source") or "手工导入"),
+                "importedAt": str(current.get("importedAt") or now),
+                "updatedAt": now,
+            }
+            if jd_path:
+                updated["jdPath"] = jd_path
+            jobs[existing_index] = updated
+            updated_market = _write_recruitment_market(market_path, {**market, "jobs": jobs, "updatedAt": now})
+            return {"job": updated, "imported": False, "marketUpdatedAt": updated_market["updatedAt"]}
+
+        parsed = _parse_job_text(description, url)
+        job_id = _next_market_job_id(jobs)
+        jd_path = _write_job_description_file(self.workspace_root, {
+            "description": description,
+            "id": job_id,
+            "source": str(payload.get("source") or "手工导入"),
+            "url": url,
+            "company": str(parsed.get("company") or ""),
+            "role": str(parsed.get("role") or ""),
+            "salary": str(parsed.get("salary") or ""),
+        }) if description else ""
+        job = {
+            "id": job_id,
+            "role": str(parsed.get("role") or "待解析岗位"),
+            "salary": str(parsed.get("salary") or "待复核"),
+            "source": str(payload.get("source") or "手工导入"),
+            "direction": str(parsed.get("direction") or "待复核"),
+            "keywords": parsed.get("keywords") or [],
+            "fitReason": str(parsed.get("fitReason") or ("手工粘贴链接导入，等待解析 JD。" if url else "手工粘贴岗位描述导入，等待解析 JD。")),
+            "evidenceGap": str(parsed.get("evidenceGap") or "需要复核职责、薪资、年限和真实匹配度。"),
+            "importedAt": now,
+            "updatedAt": now,
+        }
+        for key in ["company", "location", "platform"]:
+            if parsed.get(key):
+                job[key] = parsed[key]
+        if url:
+            job["url"] = url
+        if jd_path:
+            job["jdPath"] = jd_path
+        jobs.insert(0, job)
+        updated_market = _write_recruitment_market(market_path, {**market, "jobs": jobs, "updatedAt": now})
+        return {"job": job, "imported": True, "marketUpdatedAt": updated_market["updatedAt"]}
+
+    def delete_job(self, job_id: str) -> str:
+        clean = str(job_id or "").strip()
+        if not clean:
+            raise ValueError("Missing job id")
+        market_path = workspace_data_path(self.workspace_root, "recruitmentMarket")
+        market = self.get_recruitment_market()
+        jobs = [job for job in market.get("jobs", []) if isinstance(job, dict)]
+        next_jobs = [job for job in jobs if job.get("id") != clean]
+        if len(next_jobs) == len(jobs):
+            raise ValueError(f"Job not found: {clean}")
+        _write_recruitment_market(market_path, {**market, "jobs": next_jobs, "updatedAt": _local_date()})
+        return clean
+
 
 @dataclass
 class EvidenceStore:
@@ -764,6 +853,173 @@ def _read_chunk_jobs(jobs_dir: Path) -> list[dict[str, Any]]:
         if isinstance(chunk, list):
             jobs.extend([item for item in chunk if isinstance(item, dict)])
     return jobs
+
+
+def _write_recruitment_market(market_path: Path, market: dict[str, Any]) -> dict[str, Any]:
+    jobs = market.get("jobs") if isinstance(market.get("jobs"), list) else []
+    jobs_dir = Path(f"{market_path}.jobs.d")
+    jobs_dir.mkdir(parents=True, exist_ok=True)
+    for file in jobs_dir.iterdir() if jobs_dir.exists() else []:
+        if file.is_file() and re.match(r"^\d{4}\.json$", file.name):
+            file.unlink()
+    for index in range(0, len(jobs), 25):
+        chunk = jobs[index:index + 25]
+        (jobs_dir / f"{index // 25:04d}.json").write_text(json.dumps(chunk, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    payload = {
+        **market,
+        "jobs": [],
+        "jobs_file": str(jobs_dir),
+        "jobsCount": len(jobs),
+        "lastUpdatedFromShardsAt": _now_iso(),
+    }
+    market_path.parent.mkdir(parents=True, exist_ok=True)
+    market_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return payload
+
+
+def _parse_job_text(description: str, url: str) -> dict[str, Any]:
+    lines = _normalize_text_lines(description)
+    lower = f"{url}\n{description}".lower()
+    company = _first_explicit_value(lines, "公司")
+    role = _first_explicit_value(lines, "职位") or _infer_role(lines)
+    salary = _first_explicit_value(lines, "薪资") or _infer_salary(lines)
+    location = _first_explicit_value(lines, "地点") or _infer_location(lines)
+    keywords = _infer_keywords(lines)
+    parsed: dict[str, Any] = {
+        "keywords": keywords,
+        "direction": _infer_direction(" ".join([*keywords, role, description])),
+        "fitReason": "已读取网页可见 JD 文本，等待生成评估报告。" if description else "",
+        "evidenceGap": "需要复核岗位真实性、薪资口径、年限要求和项目证据匹配。",
+    }
+    if company:
+        parsed["company"] = company
+    if role:
+        parsed["role"] = role
+    if salary:
+        parsed["salary"] = salary
+    if location:
+        parsed["location"] = location
+    if re.search(r"zhipin\.com|boss直聘|boss", lower):
+        parsed["platform"] = "Boss直聘"
+    return parsed
+
+
+def _write_job_description_file(workspace_root: Path, input: dict[str, str]) -> str:
+    jds_dir = workspace_data_path(workspace_root, "jobDescriptions")
+    jds_dir.mkdir(parents=True, exist_ok=True)
+    title = "-".join(part for part in [input.get("company", ""), input.get("role", "")] if part)
+    filename = f"{input['id']}-{_slugify_filename(title or input.get('role') or 'job-description')}.md"
+    relative_path = f"workspace/jobs/jds/{filename}"
+    lines = [
+        f"# {input.get('role') or '待解析岗位'}",
+        "",
+        f"- ID: {input['id']}",
+        f"- 公司: {input['company']}" if input.get("company") else "",
+        f"- 薪资: {input['salary']}" if input.get("salary") else "",
+        f"- URL: {input['url']}" if input.get("url") else "",
+        f"- 来源: {input.get('source') or '手工导入'}",
+        f"- 入库时间: {_now_iso()}",
+        "",
+        "## JD 原文",
+        "",
+        input.get("description", "").strip(),
+        "",
+    ]
+    (jds_dir / filename).write_text("\n".join(line for line in lines if line != ""), encoding="utf-8")
+    return relative_path
+
+
+def _next_market_job_id(jobs: list[dict[str, Any]]) -> str:
+    values = []
+    for job in jobs:
+        match = re.match(r"^MJ-(\d+)$", str(job.get("id") or ""))
+        if match:
+            values.append(int(match.group(1)))
+    return f"MJ-{(max(values) + 1 if values else 1):03d}"
+
+
+def _normalize_url(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return re.sub(r"/$", "", re.sub(r"#.*$", "", text))
+
+
+def _is_boss_list_summary(description: str, url: str) -> bool:
+    text = f"{url}\n{description}"
+    if not re.search(r"zhipin\.com|boss直聘", text, re.I):
+        return False
+    if "BOSS直聘岗位列表（仅列表摘要" in description:
+        return True
+    head = " ".join(_normalize_text_lines(description)[:80])
+    return bool(re.search(r"职位类型.*地图.*搜索", head) and re.search(r"精选职位|最新职位|热招职位|根据求职期望匹配", head) and not re.search(r"职位描述|岗位职责|职位详情|任职要求|岗位要求|工作职责", description))
+
+
+def _normalize_text_lines(text: str) -> list[str]:
+    output = []
+    previous = ""
+    for line in str(text or "").replace("\u00a0", " ").splitlines():
+        clean = re.sub(r"[ \t]+", " ", line).strip()
+        if clean and clean != previous:
+            output.append(clean)
+            previous = clean
+        if len(output) >= 500:
+            break
+    return output
+
+
+def _first_explicit_value(lines: list[str], label: str) -> str:
+    for line in lines:
+        match = re.match(rf"^{re.escape(label)}[：:]\s*(.+)$", line)
+        if match:
+            return match.group(1).strip()
+    return ""
+
+
+def _infer_role(lines: list[str]) -> str:
+    return next((line for line in lines if _is_role_like_line(line)), "")
+
+
+def _is_role_like_line(line: str) -> bool:
+    if len(line) < 3 or len(line) > 60:
+        return False
+    if re.search(r"首页|职位|公司|校园|APP|消息|简历|推荐|搜索|地图|薪资|经验|学历|热门", line):
+        return False
+    return bool(re.search(r"工程师|开发|算法|机器人|软件|硬件|后端|前端|架构|测试|产品|经理|运维|数据|AI|C\+\+|Python|Java|Linux|ROS", line, re.I))
+
+
+def _infer_salary(lines: list[str]) -> str:
+    return next((line for line in lines if re.search(r"[Kk]|薪|万|千|面议", line) and len(line) <= 40), "")
+
+
+def _infer_location(lines: list[str]) -> str:
+    return next((line for line in lines if re.search(r"深圳|北京|上海|广州|杭州|成都|武汉|南京|苏州|远程", line) and len(line) <= 80), "")
+
+
+def _infer_keywords(lines: list[str]) -> list[str]:
+    known = ["Python", "Java", "C++", "Linux", "ROS", "ROS2", "MoveIt", "URDF", "EtherCAT", "CANopen", "PyTorch", "TensorFlow", "Docker", "K8s", "RAG", "Agent", "机器人", "自动化", "嵌入式", "控制", "算法", "分布式"]
+    text = "\n".join(lines).lower()
+    return [keyword for keyword in known if keyword.lower() in text][:16]
+
+
+def _infer_direction(text: str) -> str:
+    lower = text.lower()
+    if re.search(r"机器人|ros|moveit|urdf|ethercat|canopen", lower):
+        return "机器人/智能硬件生态业务"
+    if re.search(r"rag|agent|llm|openai|gpt|ai", lower):
+        return "企业级 AI / RAG / Agent"
+    if re.search(r"数据|pipeline|标注|清洗|质检", lower):
+        return "具身智能数据基建"
+    return "待复核"
+
+
+def _slugify_filename(value: str) -> str:
+    slug = re.sub(r"[^\w\u4e00-\u9fff]+", "-", value.lower()).strip("-")
+    return (slug[:80] or "job-description")
+
+
+def _local_date() -> str:
+    return datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d")
 
 
 def _dedupe_by_path(items: list[dict[str, Any]]) -> list[dict[str, Any]]:

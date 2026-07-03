@@ -10,6 +10,7 @@ DATA_PATHS: dict[str, str] = {
     "experienceMetadata": "workspace/ops/data/experience-metadata.json",
     "headshots": "workspace/profile/headshots",
     "intentions": "workspace/profile/intentions",
+    "jobDescriptions": "workspace/jobs/jds",
     "profileCv": "workspace/profile/cv.md",
     "profileOverlay": "workspace/profile/_profile.md",
     "profileYaml": "workspace/profile/profile.yml",

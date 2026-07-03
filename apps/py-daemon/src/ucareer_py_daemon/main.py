@@ -251,6 +251,40 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             lambda root: MarketStore(root).get_recruitment_market(),
         )
 
+    @app.post("/api/recruitment-market/import")
+    async def import_recruitment_market_job(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.write",
+            lambda root: MarketStore(root).import_job(payload),
+        )
+
+    @app.post("/api/recruitment-market/manual-jobs")
+    async def import_manual_recruitment_market_job(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.write",
+            lambda root: MarketStore(root).import_job({
+                "source": payload.get("source") or "手工网页读取",
+                "url": payload.get("url") or "",
+                "description": payload.get("rawText") or payload.get("description") or "",
+            }),
+        )
+
+    @app.delete("/api/recruitment-market/{job_id}")
+    async def delete_recruitment_market_job(request: Request, job_id: str) -> dict[str, object]:
+        return _handle_workspace(
+            request,
+            auth_store,
+            settings,
+            "workspace.write",
+            lambda root: {"deletedJobId": MarketStore(root).delete_job(job_id)},
+        )
+
     @app.get("/api/evidence-requests")
     async def evidence_requests(request: Request) -> dict[str, object]:
         return _handle_workspace(
