@@ -5,9 +5,14 @@ from pathlib import Path
 DATA_PATHS: dict[str, str] = {
     "applications": "workspace/ops/data/applications.md",
     "applicationEvents": "workspace/ops/data/application-events.jsonl",
+    "experienceMetadata": "workspace/ops/data/experience-metadata.json",
+    "headshots": "workspace/profile/headshots",
+    "intentions": "workspace/profile/intentions",
     "profileCv": "workspace/profile/cv.md",
     "profileOverlay": "workspace/profile/_profile.md",
     "profileYaml": "workspace/profile/profile.yml",
+    "projectNotes": "workspace/jobs/project-notes",
+    "recruitmentMarket": "workspace/ops/data/recruitment-market.json",
     "reports": "workspace/jobs/reports",
     "resumeDiagnostics": "workspace/resumes/diagnostics",
     "resumeJobLinks": "workspace/ops/data/resume-job-links.json",
@@ -46,4 +51,3 @@ def read_text(path: Path) -> str:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
         return ""
-

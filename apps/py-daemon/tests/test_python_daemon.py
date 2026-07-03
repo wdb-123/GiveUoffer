@@ -163,10 +163,22 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertTrue(diagnostics["ok"])
             self.assertEqual(diagnostics["data"][0]["resumeFile"], "robot-resume.md")
 
+            experience = client.get("/api/experience-overview", headers=headers).json()
+            self.assertTrue(experience["ok"])
+            self.assertEqual(len(experience["data"]["files"]), 1)
+            self.assertEqual(experience["data"]["experiences"][0]["sourceContent"], "# Robot Project\n\nBuilt a robot demo.")
+
+            market = client.get("/api/recruitment-market", headers=headers).json()
+            self.assertTrue(market["ok"])
+            self.assertEqual(market["data"]["jobsCount"], 1)
+            self.assertEqual(market["data"]["jobs"][0]["id"], "MJ-001")
+
     def _write_tenant_workspace_fixture(self, root: Path) -> None:
         (root / "profile").mkdir(parents=True)
         (root / "ops" / "data").mkdir(parents=True)
         (root / "jobs" / "reports").mkdir(parents=True)
+        (root / "jobs" / "project-notes").mkdir(parents=True)
+        (root / "profile" / "intentions").mkdir(parents=True)
         (root / "resumes" / "library").mkdir(parents=True)
         (root / "resumes" / "diagnostics").mkdir(parents=True)
         (root / "profile" / "profile.yml").write_text(
@@ -226,6 +238,39 @@ class PythonDaemonContractTest(unittest.TestCase):
                 "",
                 "Looks aligned.",
             ]),
+            encoding="utf-8",
+        )
+        (root / "jobs" / "project-notes" / "robot-project.md").write_text("# Robot Project\n\nBuilt a robot demo.", encoding="utf-8")
+        (root / "profile" / "intentions" / "targeting.md").write_text("# Targeting\n\nRobot roles.", encoding="utf-8")
+        (root / "ops" / "data" / "experience-metadata.json").write_text(
+            "\n".join([
+                "{",
+                '  "updatedAt": "2026-07-03T00:00:00Z",',
+                '  "experiences": [',
+                "    {",
+                '      "id": "exp-robot",',
+                '      "title": "Robot demo",',
+                '      "category": "project",',
+                '      "role": "owner",',
+                '      "sourceFile": "workspace/jobs/project-notes/robot-project.md",',
+                '      "summary": "Built a robot demo.",',
+                '      "tags": ["robot"],',
+                '      "evidence": ["demo"],',
+                '      "gaps": [],',
+                '      "publicLevel": "private"',
+                "    }",
+                "  ]",
+                "}",
+            ]),
+            encoding="utf-8",
+        )
+        (root / "ops" / "data" / "recruitment-market.json.jobs.d").mkdir(parents=True)
+        (root / "ops" / "data" / "recruitment-market.json").write_text(
+            '{"updatedAt":"2026-07-03","jobs":[],"jobs_file":"recruitment-market.json.jobs.d"}',
+            encoding="utf-8",
+        )
+        (root / "ops" / "data" / "recruitment-market.json.jobs.d" / "0000.json").write_text(
+            '[{"id":"MJ-001","company":"Demo Corp","role":"Robot Engineer","updatedAt":"2026-07-03"}]',
             encoding="utf-8",
         )
 

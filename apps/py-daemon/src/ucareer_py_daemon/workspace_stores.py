@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .workspace import read_text, safe_child, workspace_data_path
+from .workspace import read_text, resolve_inside, safe_child, workspace_data_path
 
 
 @dataclass
@@ -113,6 +116,43 @@ class ResumeStore:
         return sorted(reports, key=lambda item: item.get("updatedAt", ""), reverse=True)
 
 
+@dataclass
+class ExperienceStore:
+    workspace_root: Path
+
+    def get_experience_overview(self) -> dict[str, Any]:
+        metadata = _read_json(workspace_data_path(self.workspace_root, "experienceMetadata"), {"updatedAt": "", "experiences": []})
+        experiences = [_hydrate_experience(self.workspace_root, item) for item in _normalize_experiences(metadata.get("experiences"))]
+        return {
+            "updatedAt": str(metadata.get("updatedAt") or ""),
+            "files": _list_experience_files(workspace_data_path(self.workspace_root, "projectNotes")),
+            "photos": _list_headshot_assets(
+                resolve_inside(self.workspace_root, "workspace"),
+                workspace_data_path(self.workspace_root, "headshots"),
+            ),
+            "intentions": _list_intention_assets(
+                resolve_inside(self.workspace_root, "workspace"),
+                workspace_data_path(self.workspace_root, "intentions"),
+            ),
+            "experiences": experiences,
+        }
+
+
+@dataclass
+class MarketStore:
+    workspace_root: Path
+
+    def get_recruitment_market(self) -> dict[str, Any]:
+        market_path = workspace_data_path(self.workspace_root, "recruitmentMarket")
+        base = _read_json(market_path, {"updatedAt": "", "jobs": []})
+        if not isinstance(base, dict):
+            base = {"updatedAt": "", "jobs": []}
+        chunk_jobs = _read_chunk_jobs(_resolve_jobs_dir(self.workspace_root, market_path, base.get("jobs_file")))
+        legacy_jobs = base.get("jobs") if isinstance(base.get("jobs"), list) else []
+        jobs = legacy_jobs if legacy_jobs else chunk_jobs
+        return {**base, "jobs": jobs, "jobsCount": len(jobs)}
+
+
 def _yaml_scalar(text: str, key: str) -> str:
     match = re.search(rf"^\s*{re.escape(key)}:\s*(.+?)\s*$", text, re.M)
     if not match:
@@ -175,6 +215,14 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
         except json.JSONDecodeError:
             continue
     return rows
+
+
+def _read_json(path: Path, fallback: Any) -> Any:
+    try:
+        text = read_text(path).strip()
+        return json.loads(text) if text else fallback
+    except json.JSONDecodeError:
+        return fallback
 
 
 def _merge_application_events(applications: list[dict[str, Any]], events: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -263,6 +311,152 @@ def _markdown_files(directory: Path) -> list[Path]:
     return sorted([item for item in directory.iterdir() if item.is_file() and _is_markdown_file(item.name)], key=lambda item: item.name)
 
 
+def _text_files(directory: Path, rel: str, include_name=None) -> list[dict[str, Any]]:
+    if not directory.exists() or not directory.is_dir():
+        return []
+    output: list[dict[str, Any]] = []
+    for file in sorted(directory.iterdir(), key=lambda item: item.name):
+        if not file.is_file() or not re.search(r"\.(md|txt)$", file.name, re.I):
+            continue
+        if include_name and not include_name(file.name):
+            continue
+        content = read_text(file)
+        output.append({
+            "name": file.name,
+            "path": _normalize_relative_path(f"{rel}/{file.name}"),
+            "title": _markdown_title(content) or re.sub(r"\.(md|txt)$", "", file.name, flags=re.I),
+            "kind": file.suffix.replace(".", "").lower(),
+            "updatedAt": _mtime_iso(file),
+            "content": content,
+        })
+    return output
+
+
+def _list_experience_files(project_notes_dir: Path) -> list[dict[str, Any]]:
+    return _text_files(project_notes_dir, "workspace/jobs/project-notes")
+
+
+def _list_intention_assets(workspace_assets_dir: Path, intentions_dir: Path) -> list[dict[str, Any]]:
+    explicit = _text_files(intentions_dir, "workspace/profile/intentions")
+    root_candidates = _text_files(workspace_assets_dir, "workspace", lambda name: bool(re.search(r"投递|偏好|意向|提示词|记忆导出", name, re.I)))
+    return _dedupe_by_path([*explicit, *root_candidates])
+
+
+def _list_headshot_assets(workspace_assets_dir: Path, headshots_dir: Path) -> list[dict[str, Any]]:
+    photos: list[dict[str, Any]] = []
+    for directory, rel in [(workspace_assets_dir, "workspace"), (headshots_dir, "workspace/profile/headshots")]:
+        if not directory.exists() or not directory.is_dir():
+            continue
+        for file in sorted(directory.iterdir(), key=lambda item: item.name):
+            if not file.is_file() or not re.search(r"\.(png|jpe?g|webp)$", file.name, re.I):
+                continue
+            kind = file.suffix.replace(".", "").lower()
+            mime = mimetypes.types_map.get(file.suffix.lower()) or "image/png"
+            photos.append({
+                "name": file.name,
+                "path": _normalize_relative_path(f"{rel}/{file.name}"),
+                "title": re.sub(r"\.(png|jpe?g|webp)$", "", file.name, flags=re.I),
+                "kind": kind,
+                "updatedAt": _mtime_iso(file),
+                "content": "",
+                "dataUrl": f"data:{mime};base64,{base64.b64encode(file.read_bytes()).decode('ascii')}",
+            })
+    return _dedupe_by_path(photos)
+
+
+def _normalize_experiences(value: Any) -> list[dict[str, Any]]:
+    rows = value if isinstance(value, list) else []
+    output: list[dict[str, Any]] = []
+    for index, item in enumerate(rows):
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        if not title:
+            continue
+        output.append({
+            "id": re.sub(r"[^a-zA-Z0-9_-]", "-", str(item.get("id") or f"exp-{index + 1}")).strip("-") or f"exp-{index + 1}",
+            "title": title,
+            "category": str(item.get("category") or "").strip(),
+            "role": str(item.get("role") or "").strip(),
+            "sourceFile": _normalize_relative_path(str(item.get("sourceFile") or "")),
+            "summary": str(item.get("summary") or "").strip(),
+            "tags": _string_list(item.get("tags")),
+            "evidence": _string_list(item.get("evidence")),
+            "gaps": _string_list(item.get("gaps")),
+            "publicLevel": str(item.get("publicLevel") or "").strip(),
+        })
+    return output
+
+
+def _hydrate_experience(workspace_root: Path, item: dict[str, Any]) -> dict[str, Any]:
+    source_file = str(item.get("sourceFile") or "")
+    if not source_file:
+        return {**item, "sourceContent": "", "sourceError": ""}
+    try:
+        if not re.match(r"^workspace/jobs/project-notes/[^/]+\.(md|txt)$", source_file, re.I):
+            raise ValueError("Invalid source path")
+        return {**item, "sourceContent": read_text(resolve_inside(workspace_root, source_file)), "sourceError": ""}
+    except Exception as cause:
+        return {**item, "sourceContent": "", "sourceError": str(cause)}
+
+
+def _resolve_jobs_dir(workspace_root: Path, market_path: Path, jobs_file: Any) -> Path:
+    candidate = ""
+    if jobs_file:
+        candidate = str(jobs_file)
+        path = Path(candidate)
+        if path.is_absolute():
+            resolved = path.resolve()
+            root = workspace_root.resolve()
+            if resolved == root or root in resolved.parents:
+                return resolved
+        else:
+            resolved = (market_path.parent / candidate).resolve()
+            root = workspace_root.resolve()
+            if resolved == root or root in resolved.parents:
+                return resolved
+    return Path(f"{market_path}.jobs.d")
+
+
+def _read_chunk_jobs(jobs_dir: Path) -> list[dict[str, Any]]:
+    if not jobs_dir.exists() or not jobs_dir.is_dir():
+        return []
+    jobs: list[dict[str, Any]] = []
+    for file in sorted(jobs_dir.iterdir(), key=lambda item: item.name):
+        if not file.is_file() or not re.match(r"^\d{4}\.json$", file.name):
+            continue
+        chunk = _read_json(file, [])
+        if isinstance(chunk, list):
+            jobs.extend([item for item in chunk if isinstance(item, dict)])
+    return jobs
+
+
+def _dedupe_by_path(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    output: list[dict[str, Any]] = []
+    for item in items:
+        path = str(item.get("path") or "")
+        if path in seen:
+            continue
+        seen.add(path)
+        output.append(item)
+    return output
+
+
+def _string_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [item.strip() for item in str(value or "").replace("\n", ",").split(",") if item.strip()]
+
+
+def _normalize_relative_path(value: str) -> str:
+    return re.sub(r"/+$", "", re.sub(r"/+", "/", str(value or "").replace("\\", "/").lstrip("/")))
+
+
+def _mtime_iso(path: Path) -> str:
+    return datetime.fromtimestamp(path.stat().st_mtime, UTC).isoformat().replace("+00:00", "Z")
+
+
 def _is_markdown_file(file: str) -> bool:
     return bool(re.match(r"^[^/\\]+\.md$", file)) and not file.startswith(".")
 
@@ -315,4 +509,3 @@ def _excerpt(markdown: str) -> str:
     text = re.sub(r"^\*\*.+?\*\*.*$", "", text, flags=re.M)
     text = re.sub(r"^#+\s+", "", text, flags=re.M)
     return " ".join(line.strip() for line in text.splitlines() if line.strip())[:260]
-
