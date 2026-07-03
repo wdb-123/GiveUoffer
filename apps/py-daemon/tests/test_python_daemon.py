@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import http.server
 import base64
+import sys
 import tempfile
 import threading
 import unittest
@@ -904,6 +905,63 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertEqual(snapshot["events"][0]["role"], "user")
             self.assertEqual(snapshot["turns"][0]["status"], "answered")
             self.assertEqual(snapshot["approvals"], [])
+
+    def test_local_command_approval_executes_from_python_daemon(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=Path(tmp),
+                daemon_db_path=Path(tmp) / ".ucareer" / "daemon.sqlite",
+            )
+            client = TestClient(create_app(settings))
+            created = client.post(
+                "/api/auth/create-account",
+                json={
+                    "email": "shell@example.com",
+                    "password": "Password123",
+                    "displayName": "Shell",
+                    "tenantName": "Shell Workspace",
+                },
+            ).json()
+            self.assertTrue(created["ok"])
+            headers = {"x-ucareer-session": created["data"]["token"]}
+
+            local = client.post(
+                "/api/local-commands",
+                headers=headers,
+                json={
+                    "command": sys.executable,
+                    "args": ["-c", "print('py-local-ok')"],
+                    "cwd": ".",
+                    "label": "Python local command",
+                },
+            ).json()
+            self.assertTrue(local["ok"])
+            task_id = local["data"]["task"]["id"]
+            approval_id = local["data"]["approval"]["id"]
+
+            decision = client.post(
+                f"/api/approvals/{approval_id}/decision",
+                headers=headers,
+                json={"decision": "allow_once"},
+            ).json()
+            self.assertTrue(decision["ok"])
+
+            task = client.get(f"/api/agent-tasks/{task_id}", headers=headers).json()
+            self.assertTrue(task["ok"])
+            self.assertEqual(task["data"]["status"], "completed")
+
+            events = client.get(f"/api/agent-tasks/{task_id}/events", headers=headers).json()
+            self.assertTrue(events["ok"])
+            command_events = [event for event in events["data"] if event.get("type") == "command"]
+            self.assertEqual(command_events[0]["status"], "running")
+            self.assertEqual(command_events[-1]["status"], "done")
+            self.assertIn("py-local-ok", "\n".join(str(event.get("text") or "") for event in events["data"]))
+
+            approvals = client.get("/api/approvals", headers=headers).json()
+            self.assertTrue(approvals["ok"])
+            self.assertEqual(approvals["data"], [])
 
     def test_jobsearch_routes_run_from_python_daemon_contract(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

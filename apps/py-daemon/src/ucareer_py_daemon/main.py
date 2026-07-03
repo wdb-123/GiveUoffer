@@ -4,7 +4,7 @@ import asyncio
 import json
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 import uvicorn
@@ -726,8 +726,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return _handle_agent_store(request, auth_store, settings, "agent.approve", lambda store: store.list_approvals())
 
     @app.post("/api/approvals/{approval_id}/decision")
-    async def approval_decision(request: Request, approval_id: str, payload: dict[str, Any]) -> dict[str, object]:
-        return _handle_agent_store(request, auth_store, settings, "agent.approve", lambda store: store.decide_approval(approval_id, payload))
+    async def approval_decision(request: Request, approval_id: str, payload: dict[str, Any], background_tasks: BackgroundTasks) -> dict[str, object]:
+        def decide(store: AgentStore) -> dict[str, Any]:
+            record, local_execution = store.decide_approval_with_followup(approval_id, payload)
+            if local_execution:
+                background_tasks.add_task(store.run_approved_local_command, local_execution)
+            return record
+
+        return _handle_agent_store(request, auth_store, settings, "agent.approve", decide)
 
     @app.get("/api/workflow-runs")
     async def workflow_runs(request: Request) -> dict[str, object]:

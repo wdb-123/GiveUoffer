@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -278,11 +279,16 @@ class AgentStore:
             return [_approval_from_row(row) for row in rows]
 
     def decide_approval(self, approval_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        record, _local_execution = self.decide_approval_with_followup(approval_id, payload)
+        return record
+
+    def decide_approval_with_followup(self, approval_id: str, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
         decision = str(payload.get("decision") or "").strip()
         if decision == "allow":
             decision = "allow_once"
         if decision not in {"allow_once", "allow_task", "allow_workspace", "deny"}:
             raise ValueError("Approval decision must be allow_once, allow_task, allow_workspace, or deny")
+        local_execution: dict[str, Any] | None = None
         with connect_database(self.db_path) as conn:
             row = conn.execute(
                 "SELECT * FROM approval_requests WHERE id = ? AND tenant_id = ?",
@@ -341,11 +347,73 @@ class AgentStore:
                 "INSERT INTO agent_events (id, tenant_id, task_id, event_type, payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
                 (str(uuid.uuid4()), self.tenant_id, approval["taskId"], "message", json.dumps(system_event, ensure_ascii=False), decided_at),
             )
+            if decision != "deny" and approval.get("action") == "run_shell":
+                parsed = _parse_local_command_approval(str(approval.get("command") or ""))
+                if parsed:
+                    local_execution = {"taskId": approval["taskId"], **parsed}
             conn.commit()
 
         next_status = "cancelled" if decision == "deny" else "queued"
         self.update_task_status(str(approval["taskId"]), next_status)
-        return record
+        return record, local_execution
+
+    def run_approved_local_command(self, execution: dict[str, Any]) -> None:
+        task_id = str(execution.get("taskId") or "")
+        command = str(execution.get("command") or "").strip()
+        args = [str(arg) for arg in execution.get("args", [])] if isinstance(execution.get("args"), list) else []
+        cwd = self._resolve_workspace_path(execution.get("cwd"))
+        task = self.get_task(task_id)
+        if not task or task.get("providerId") != "local-shell":
+            return
+        if task.get("status") not in {"queued", "waiting_approval", "running"}:
+            return
+        if not command:
+            self._append_error_event(task_id, "Local command approval payload is invalid")
+            self.update_task_status(task_id, "failed")
+            return
+
+        cwd.mkdir(parents=True, exist_ok=True)
+        command_text = " ".join([command, *args])
+        started_at = _now_iso()
+        with connect_database(self.db_path) as conn:
+            self._append_event(conn, task_id, {"type": "command", "command": command_text, "cwd": str(cwd), "status": "running", "createdAt": started_at})
+            conn.commit()
+        self.update_task_status(task_id, "running")
+
+        try:
+            completed = subprocess.run(
+                [command, *args],
+                cwd=str(cwd),
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError as cause:
+            self._append_error_event(task_id, str(cause))
+            self.update_task_status(task_id, "failed")
+            return
+
+        finished_at = _now_iso()
+        with connect_database(self.db_path) as conn:
+            stdout = (completed.stdout or "").strip()
+            stderr = (completed.stderr or "").strip()
+            if stdout:
+                self._append_event(conn, task_id, {"type": "message", "role": "assistant", "text": stdout, "createdAt": finished_at})
+            if stderr:
+                self._append_event(conn, task_id, {"type": "message", "role": "system", "text": stderr, "createdAt": finished_at})
+            self._append_event(
+                conn,
+                task_id,
+                {
+                    "type": "command",
+                    "command": command_text,
+                    "cwd": str(cwd),
+                    "status": "done" if completed.returncode == 0 else "failed",
+                    "createdAt": finished_at,
+                },
+            )
+            conn.commit()
+        self.update_task_status(task_id, "completed" if completed.returncode == 0 else "failed")
 
     def list_workflow_runs(self) -> list[dict[str, Any]]:
         with connect_database(self.db_path) as conn:
@@ -438,6 +506,12 @@ class AgentStore:
                 str(event.get("createdAt") or _now_iso()),
             ),
         )
+
+    def _append_error_event(self, task_id: str, message: str) -> None:
+        now = _now_iso()
+        with connect_database(self.db_path) as conn:
+            self._append_event(conn, task_id, {"type": "error", "message": message, "provider": "local-shell", "createdAt": now})
+            conn.commit()
 
     def _insert_workflow_run(self, conn: Any, task: dict[str, Any], route_metadata: dict[str, Any]) -> None:
         workflow_run_id = task.get("workflowRunId")
@@ -744,6 +818,26 @@ def _parse_start_agent_grant(command: str, source_approval_id: str) -> dict[str,
         "providerId": provider_id,
         "workspacePath": workspace_path,
         "sourceApprovalId": source_approval_id,
+    }
+
+
+def _parse_local_command_approval(command: str) -> dict[str, Any] | None:
+    if not command:
+        return None
+    try:
+        parsed = json.loads(command)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    executable = parsed.get("command")
+    cwd = parsed.get("cwd")
+    if not isinstance(executable, str) or not isinstance(cwd, str):
+        return None
+    return {
+        "command": executable,
+        "args": [str(arg) for arg in parsed.get("args", [])] if isinstance(parsed.get("args"), list) else [],
+        "cwd": cwd,
     }
 
 
