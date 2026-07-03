@@ -186,8 +186,11 @@ function assertUcareerNamespace() {
     "\"daemon\": \"npm run daemon:python\"",
     "\"daemon:api\": \"npm run daemon:python\"",
     "\"daemon:node\": \"npm --workspace @ucareer/daemon run dev\"",
+    "\"api\": \"npm run api:python\"",
+    "\"api:python\": \"PYTHONPATH=apps/py-api/src python3 -m ucareer_py_api\"",
+    "\"api:node\": \"npm --workspace @ucareer/api run dev\"",
     "npm --workspace @ucareer/web run build",
-  ], "root npm scripts start the Python daemon by default and keep the Node daemon explicit");
+  ], "root npm scripts start Python backends by default and keep Node backends explicit");
 
   assertContains("scripts/dev/dev-ucareer.mjs", [
     "daemon:python",
@@ -221,6 +224,35 @@ function assertUcareerNamespace() {
     "uvicorn",
     "cryptography",
   ], "Python daemon declares backend runtime dependencies");
+
+  assertExists([
+    "apps/py-api/README.md",
+    "apps/py-api/pyproject.toml",
+    "apps/py-api/src/ucareer_py_api/main.py",
+    "apps/py-api/src/ucareer_py_api/config.py",
+    "apps/py-api/tests/test_python_api.py",
+  ], "Python cloud API architecture modules");
+
+  assertContains("apps/py-api/src/ucareer_py_api/main.py", [
+    "FastAPI(title=\"Ucareer Python Cloud API\"",
+    "@app.get(\"/health\")",
+    "@app.post(\"/auth/device-pairing\")",
+    "@app.get(\"/sync/pull\")",
+    "@app.post(\"/sync/push\")",
+    "@app.post(\"/approvals/{approval_id}/decision\")",
+  ], "Python cloud API owns sync and relay routes");
+
+  assertContains("apps/py-api/README.md", [
+    "default cloud/API backend",
+    "FastAPI",
+    "npm run api:node",
+  ], "Python cloud API README documents default backend ownership");
+
+  assertContains("apps/api/README.md", [
+    "Legacy TypeScript Cloud API",
+    "default cloud/API backend is now the FastAPI service",
+    "npm run api:node",
+  ], "legacy TypeScript cloud API is documented as non-default");
 
   assertContains("apps/py-daemon/src/ucareer_py_daemon/main.py", [
     "FastAPI(title=\"Ucareer Python Daemon\"",

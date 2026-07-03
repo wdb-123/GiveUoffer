@@ -1,6 +1,8 @@
-# Ucareer Cloud API
+# Ucareer Legacy TypeScript Cloud API
 
-SaaS-ready sync and relay API.
+The default cloud/API backend is now the FastAPI service in `apps/py-api`.
+This TypeScript Fastify API is kept only as a legacy reference while remaining
+Node backend surfaces are retired.
 
 Current state:
 
@@ -11,3 +13,9 @@ Current state:
 - Approval relay placeholder
 
 This service must not execute shell commands or read local source repositories.
+
+Run the legacy implementation explicitly with:
+
+```bash
+npm run api:node
+```

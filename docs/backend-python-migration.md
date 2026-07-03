@@ -4,7 +4,9 @@ The requested end state is a Python-maintained backend architecture. The default
 local backend is now `apps/py-daemon`, a FastAPI service started by
 `npm run daemon` and `npm run dev:ucareer`. The old TypeScript/Fastify daemon in
 `apps/daemon` is retained only as `npm run daemon:node` while remaining
-Node-specific adapter code is retired.
+Node-specific adapter code is retired. The cloud/API skeleton is now
+`apps/py-api`, a FastAPI service started by `npm run api`; the old TypeScript
+Fastify API in `apps/api` is retained only as `npm run api:node`.
 
 ## Target Shape
 
@@ -14,6 +16,10 @@ apps/py-daemon
     -> auth.py / billing.py / agent_store.py / workspace_stores.py
       -> connectors.py / jobsearch.py / resume_export.py / sync.py
         -> .ucareer/daemon.sqlite + workspace/*
+
+apps/py-api
+  -> main.py FastAPI cloud/API skeleton
+    -> health / device pairing / sync pull-push / approval relay
 ```
 
 The Python backend owns API routing, auth, tenants, billing, token usage,
@@ -46,12 +52,15 @@ for the React frontend and shared UI types.
    the current local UI/API surface; local provider runner retirement remains.
 7. Frontend cutover: `npm run daemon`, `npm run daemon:api` and `npm run
    dev:ucareer` start Python by default. Done.
+8. Cloud/API skeleton cutover: `npm run api` starts Python by default while the
+   TypeScript Fastify API is explicit `npm run api:node`. Done.
 
 ## Current Status
 
-`apps/py-daemon` is the default backend. `npm run test:all` verifies that all
-frontend API routes have FastAPI handlers, and `npm run daemon:python:test`
-covers the Python daemon contract. The route manifest uses `legacyNodeModule`
+`apps/py-daemon` is the default local backend, and `apps/py-api` is the default
+cloud/API skeleton. `npm run test:all` verifies that all frontend API routes have
+FastAPI handlers, and `npm run daemon:python:test` / `npm run api:python:test`
+cover the Python backend contracts. The route manifest uses `legacyNodeModule`
 for old TypeScript references so the architecture endpoint does not present Node
 as the active backend module.
 

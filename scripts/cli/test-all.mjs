@@ -631,6 +631,28 @@ if (
   fail('Python daemon README is missing default backend ownership notes');
 }
 
+const pythonApiMain = readFile('apps/py-api/src/ucareer_py_api/main.py');
+if (
+  pythonApiMain.includes('def create_app(settings: Settings | None = None) -> FastAPI:') &&
+  pythonApiMain.includes('@app.post("/sync/push")') &&
+  pythonApiMain.includes('@app.post("/approvals/{approval_id}/decision")') &&
+  !pythonApiMain.includes('subprocess')
+) {
+  pass('Python cloud API main stays as FastAPI composition root');
+} else {
+  fail('Python cloud API architecture boundary regressed');
+}
+
+const pythonApiTests = run('python3', ['-m', 'unittest', 'discover', 'apps/py-api/tests'], {
+  env: { ...process.env, PYTHONPATH: 'apps/py-api/src' },
+  stdio: ['pipe', 'pipe', 'pipe'],
+});
+if (pythonApiTests !== null) {
+  pass('Python cloud API contract tests pass');
+} else {
+  fail('Python cloud API contract tests failed');
+}
+
 const adapterReadme = readFile('apps/daemon/src/paperclip-adapters/README.md');
 if (
   adapterReadme.includes('Treat this directory as vendored runtime code') &&
