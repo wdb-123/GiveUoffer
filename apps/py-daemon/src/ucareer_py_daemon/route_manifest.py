@@ -60,6 +60,18 @@ ROUTE_GROUPS: list[dict[str, object]] = [
         ],
     },
     {
+        "domain": "workflow-routing",
+        "nodeModule": "apps/daemon/src/routes/workflow-routes.ts",
+        "pythonStatus": "implemented",
+        "routes": [
+            "GET /api/skills",
+            "GET /api/skills/file-management",
+            "GET /api/skills/ui-contracts",
+            "GET /api/skills/pages/:pageId",
+            "POST /api/agent-route/preview",
+        ],
+    },
+    {
         "domain": "workspace-data",
         "nodeModule": "apps/daemon/src/routes/*-routes.ts",
         "pythonStatus": "partial-readonly",

@@ -15,6 +15,7 @@ from .db import probe_database
 from .envelope import error, ok
 from .providers import check_provider, list_providers
 from .route_manifest import ROUTE_GROUPS
+from .routing import list_skills, list_workflows, preview_agent_route
 from .sync import SyncStore
 from .workspace import tenant_workspace_root
 from .workspace_stores import ApplicationStore, EvidenceStore, ExperienceStore, MarketStore, ProfileStore, ReportStore, ResumeStore, WorkspaceFileStore
@@ -173,6 +174,53 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             settings,
             "workspace.write",
             lambda root: AttachmentStore(root).upload(payload),
+        )
+
+    @app.get("/api/skills")
+    async def skills() -> dict[str, object]:
+        return ok({"skills": list_skills(), "workflows": list_workflows()})
+
+    @app.get("/api/skills/file-management")
+    async def skills_file_management() -> dict[str, object]:
+        return ok([
+            {
+                "skillId": skill["id"],
+                "label": skill["label"],
+                "domain": skill["domain"],
+                "fileManagement": skill["fileManagement"],
+            }
+            for skill in list_skills()
+        ])
+
+    @app.get("/api/skills/ui-contracts")
+    async def skills_ui_contracts() -> dict[str, object]:
+        return ok([
+            {
+                "skillId": skill["id"],
+                "label": skill["label"],
+                "domain": skill["domain"],
+                "risk": skill["risk"],
+                "ui": skill["ui"],
+            }
+            for skill in list_skills()
+            if skill.get("ui")
+        ])
+
+    @app.get("/api/skills/pages/{page_id}")
+    async def skills_for_page(page_id: str) -> dict[str, object]:
+        return ok([
+            skill
+            for skill in list_skills()
+            if page_id in skill.get("ui", {}).get("pages", [])
+        ])
+
+    @app.post("/api/agent-route/preview")
+    async def agent_route_preview(request: Request, payload: dict[str, Any]) -> dict[str, object]:
+        return _handle_permission(
+            request,
+            auth_store,
+            "workspace.read",
+            lambda _session: preview_agent_route(payload),
         )
 
     @app.get("/api/profile-overview")

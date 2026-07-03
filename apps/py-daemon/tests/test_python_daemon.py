@@ -71,6 +71,72 @@ class PythonDaemonContractTest(unittest.TestCase):
             self.assertFalse(missing["ok"])
             self.assertEqual(missing["error"]["code"], "provider_not_found")
 
+    def test_skill_registry_and_route_preview_match_frontend_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = Settings(
+                host="127.0.0.1",
+                port=54322,
+                workspace_root=Path(tmp),
+                daemon_db_path=Path(tmp) / ".ucareer" / "daemon.sqlite",
+            )
+            client = TestClient(create_app(settings))
+            created = client.post(
+                "/api/auth/create-account",
+                json={
+                    "email": "router@example.com",
+                    "password": "Password123",
+                    "displayName": "Router",
+                    "tenantName": "Router Workspace",
+                },
+            ).json()
+            self.assertTrue(created["ok"])
+            headers = {"x-ucareer-session": created["data"]["token"]}
+
+            skills = client.get("/api/skills").json()
+            self.assertTrue(skills["ok"])
+            skill_ids = {skill["id"] for skill in skills["data"]["skills"]}
+            self.assertIn("application.progress", skill_ids)
+            self.assertIn("resume.generate", skill_ids)
+            self.assertTrue(any(workflow["id"] == "application.import_progress" for workflow in skills["data"]["workflows"]))
+
+            application_page_skills = client.get("/api/skills/pages/applications").json()
+            self.assertTrue(application_page_skills["ok"])
+            self.assertIn("application.progress", {skill["id"] for skill in application_page_skills["data"]})
+
+            preview = client.post(
+                "/api/agent-route/preview",
+                headers=headers,
+                json={
+                    "text": "帮我看看qq邮箱里的offer情况，命中后更新投递进度。",
+                    "preferredProviderId": "codex",
+                },
+            ).json()
+            self.assertTrue(preview["ok"])
+            self.assertEqual(preview["data"]["skillId"], "application.progress")
+            self.assertEqual(preview["data"]["inputKind"], "application_update")
+            self.assertEqual(preview["data"]["workflowId"], "application.import_progress")
+            self.assertEqual(preview["data"]["recommendedProviderId"], "codex")
+            self.assertEqual(preview["data"]["nextAction"], "create_agent_task")
+            self.assertIn("applications.create_event", preview["data"]["agentPrompt"])
+
+            ocr_preview = client.post(
+                "/api/agent-route/preview",
+                headers=headers,
+                json={"text": "请提取这张截图里的文字"},
+            ).json()
+            self.assertTrue(ocr_preview["ok"])
+            self.assertEqual(ocr_preview["data"]["skillId"], "image.ocr")
+            self.assertEqual(ocr_preview["data"]["inputKind"], "image_ocr")
+
+            boss_url_preview = client.post(
+                "/api/agent-route/preview",
+                headers=headers,
+                json={"text": "https://www.zhipin.com/web/geek/jobs?query=机器人"},
+            ).json()
+            self.assertTrue(boss_url_preview["ok"])
+            self.assertEqual(boss_url_preview["data"]["skillId"], "job.evaluate")
+            self.assertEqual(boss_url_preview["data"]["inputKind"], "job_url")
+
     def test_auth_tenant_and_billing_routes_use_shared_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             settings = Settings(
